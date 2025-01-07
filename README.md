@@ -1,6 +1,7 @@
 # HOT Omni
 
-`npm i @hot-wallet/omni`
+Read more about HOT Omni in our blog:
+https://hot-labs.org/blog/omni
 
 ## Usage
 
@@ -34,6 +35,17 @@ const bridgeUsdtFromNearToBnb = async () => {
 };
 
 bridgeUsdtFromNearToBnb();
+```
+
+## Example enviroment
+
+```bash
+git clone https://github.com/hot-dao/omni-sdk
+cd omni-sdk
+
+yarn # install deps
+cp .env.example .env # then fill it
+yarn example # WARNING: IT WILL BRIDGE 1 USDT FROM NEAR TO BNB !!!
 ```
 
 ## Omni Tokens
