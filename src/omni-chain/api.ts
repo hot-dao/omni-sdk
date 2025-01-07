@@ -4,6 +4,16 @@ const OMNI_API = "https://rpc0.hotdao.ai";
 class OmniApi {
   static shared = new OmniApi();
 
+  async findDeposits(addresses: string[]) {
+    const res = await fetch(`https://api0.herewallet.app/api/v1/transactions/hot_bridges?addresses=${addresses.join(",")}`, {
+      headers: { "content-type": "application/json" },
+      method: "GET",
+    });
+
+    const { transactions } = (await res.json()) as any;
+    return transactions;
+  }
+
   async withdrawSign(nonce: string) {
     const res = await fetch(`${OMNI_API}/withdraw/sign`, {
       headers: { "content-type": "application/json" },

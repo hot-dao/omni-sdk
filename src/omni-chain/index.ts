@@ -31,9 +31,6 @@ interface Options {
 }
 
 class OmniService {
-  withdrawals: Record<string, PendingWithdraw> = {};
-  deposits: Record<string, PendingDeposit> = {};
-
   solana: SolanaOmniService;
   ton: TonOmniService;
   evm: EvmOmniService;
@@ -87,34 +84,6 @@ class OmniService {
     return sha256(Buffer.from(this.signers.near.accountId, "utf8"));
   }
 
-  removePendingDeposit(deposit: PendingDeposit) {
-    delete this.deposits[deposit.tx];
-    this.storage?.set("omni:deposits:v2", Object.values(this.deposits));
-  }
-
-  addPendingDeposit(deposit: PendingDeposit) {
-    this.deposits[deposit.tx] = deposit;
-    this.storage?.set("omni:deposits:v2", Object.values(this.deposits));
-    return deposit;
-  }
-
-  addPendingWithdraw(nonce: string, transfer: TransferType) {
-    this.withdrawals[String(nonce)] = {
-      receiver: transfer.receiver_id,
-      amount: transfer.amount,
-      token: transfer.token_id,
-      chain: transfer.chain_id,
-      nonce: String(nonce),
-      timestamp: Date.now(),
-      completed: false,
-    };
-  }
-
-  completeWithdraw(nonce: string) {
-    if (!this.withdrawals[nonce]) return;
-    this.withdrawals[nonce].completed = true;
-  }
-
   getReceiverRaw(chain: Network) {
     if (chain === Network.Near) return baseEncode(getBytes(sha256(Buffer.from(this.signers.near.accountId, "utf8"))));
 
@@ -160,43 +129,63 @@ class OmniService {
     return false;
   }
 
-  async updatePendingStatus(nonce: string) {
-    if (+nonce <= 1728526736_000_000_000_000) return this.completeWithdraw(nonce);
-
-    // More then 17 days -> expired nonce (non-refundable)
-    const currentNonce = Date.now() * 1_000_000_000;
-    const daysAgo = (currentNonce - +nonce) / 1_000_000_000_000 / 3600 / 24;
-    if (daysAgo >= 16) return this.completeWithdraw(nonce);
-
-    // already completed
-    if (this.withdrawals[nonce]?.completed) return;
-
-    const transfer = await this.signers.near.viewFunction({ methodName: "get_transfer", contractId: OMNI_HOT, args: { nonce } });
-    if (transfer == null) return this.completeWithdraw(nonce);
-
-    const isUsed = await this.isWithdrawUsed(transfer.chain_id, nonce);
-    if (isUsed) return this.completeWithdraw(nonce);
-
-    if (this.withdrawals[nonce] == null) {
-      this.addPendingWithdraw(nonce, transfer);
-    }
+  async parseDeposit(chain: number, tx: string) {
+    if (chain === Network.Ton) return await this.ton.parseDeposit(tx);
+    if (chain === Network.Solana) return await this.solana.parseDeposit(tx);
+    if (getChain(chain).isEvm) return await this.evm.parseDeposit(chain, tx);
+    throw "Unknown chain";
   }
 
-  async getLastPendings() {
-    const withdrawals = await this.signers.near.viewFunction({
+  async getActiveDeposits(): Promise<PendingDeposit[]> {
+    const addresses = [this.signer(Network.Ton), this.signer(Network.Eth), this.signer(Network.Solana)].filter((t) => t != null);
+    const transactions = await OmniApi.shared.findDeposits(addresses);
+    const pendings: PendingDeposit[] = [];
+    let i = 0;
+
+    for (const tx of transactions) {
+      console.log(`Check ${++i}/${transactions.length}: ${getChain(tx.chain_id).name}: ${tx.hash}`);
+      const deposit = await this.parseDeposit(tx.chain_id, tx.hash).catch((e) => console.log(e));
+      if (deposit) pendings.push(deposit);
+    }
+
+    return pendings;
+  }
+
+  async getActiveWithdrawals(): Promise<PendingWithdraw[]> {
+    const nonces = await this.signers.near.viewFunction({
       args: { account_id: this.omniAddress },
       methodName: "get_withdrawals",
       contractId: OMNI_HELPER,
     });
 
-    const ids = Object.values(this.withdrawals)
-      .filter((t) => !t.completed)
-      .map((t) => String(t.nonce));
+    let withdrawals: PendingWithdraw[] = [];
+    const promises = nonces.map(async (nonce: string) => {
+      // More then 17 days -> expired nonce (non-refundable)
+      if (+nonce <= 1728526736_000_000_000_000) return;
+      const currentNonce = Date.now() * 1_000_000_000;
+      const daysAgo = (currentNonce - +nonce) / 1_000_000_000_000 / 3600 / 24;
+      if (daysAgo >= 16) return;
 
-    const nonces = uniq(ids.concat(withdrawals || []));
-    const promises = nonces.map((nonce) => this.updatePendingStatus(nonce));
-    await Promise.allSettled(promises || []);
-    return this.withdrawals;
+      const transfer = await this.signers.near.viewFunction({ methodName: "get_transfer", contractId: OMNI_HOT, args: { nonce } });
+      if (transfer == null) return;
+
+      const isUsed = await this.isWithdrawUsed(transfer.chain_id, nonce);
+      if (isUsed) return;
+
+      console.log({ daysAgo });
+      withdrawals.push({
+        receiver: transfer.receiver_id,
+        amount: transfer.amount,
+        token: transfer.token_id,
+        chain: transfer.chain_id,
+        nonce: String(nonce),
+        timestamp: Date.now(),
+        completed: false,
+      });
+    });
+
+    await Promise.allSettled(promises);
+    return withdrawals;
   }
 
   isWithdrawNonceExpired(chain: Network, nonce: string) {
@@ -218,11 +207,7 @@ class OmniService {
       args: { nonce },
     });
 
-    if (transfer === null) {
-      this.completeWithdraw(nonce);
-      throw "Withdraw pending not found";
-    }
-
+    if (transfer === null) throw "Withdraw pending not found";
     const isExpired = this.isWithdrawNonceExpired(transfer.chain_id, nonce);
     if (isExpired === false) throw "nonce does not expire yet";
 
@@ -231,7 +216,7 @@ class OmniService {
 
     const receiver = this.getReceiverRaw(transfer.chain_id)!;
     const token = await this.token(transfer.token_id).metadata(transfer.chain_id);
-    const signature = OmniApi.shared.refundSign(transfer.chain_id, nonce, receiver, token.omniAddress, transfer.amount);
+    const signature = await OmniApi.shared.refundSign(transfer.chain_id, nonce, receiver, token.omniAddress, transfer.amount);
 
     await this.signers.near.functionCall({
       contractId: OMNI_HOT,
@@ -246,7 +231,6 @@ class OmniService {
       },
     });
 
-    this.completeWithdraw(nonce);
     return transfer;
   }
 
@@ -259,11 +243,10 @@ class OmniService {
 
     if (this.isWithdrawNonceExpired(transfer.chain_id, nonce)) {
       await this.cancelWithdraw(nonce);
-      throw "Withdraw expired";
+      return;
     }
 
     if (await this.isWithdrawUsed(transfer.chain_id, nonce)) {
-      this.completeWithdraw(nonce);
       throw "Already claimed";
     }
 
@@ -272,20 +255,17 @@ class OmniService {
     // SOLANA WITHDRAW
     if (+transfer.chain_id === Network.Solana) {
       await this.solana.withdraw({ nonce, signature, transfer });
-      this.completeWithdraw(nonce);
       return;
     }
 
     if (+transfer.chain_id === Network.Ton) {
       await this.ton.withdraw({ nonce, signature, transfer });
-      this.completeWithdraw(nonce);
       return;
     }
 
     // EVM WITHDRAW
     if (getChain(+transfer.chain_id).isEvm) {
       await this.evm.withdraw({ nonce, signature, transfer });
-      this.completeWithdraw(nonce);
       return;
     }
   }
@@ -308,7 +288,6 @@ class OmniService {
       if (deposit.chain === Network.Solana) await this.solana.clearDepositNonceIfNeeded(deposit).catch(() => {});
       if (deposit.chain === Network.Ton) await this.ton.clearDepositNonceIfNeeded(deposit).catch(() => {});
       if (getChain(deposit.chain).isEvm) await this.evm.clearDepositNonceIfNeeded(deposit).catch(() => {});
-      this.removePendingDeposit(deposit);
       return;
     }
 
@@ -356,7 +335,6 @@ class OmniService {
     if (deposit.chain === Network.Ton) await this.ton.clearDepositNonceIfNeeded(deposit).catch(() => {});
     if (deposit.chain === Network.Solana) await this.solana.clearDepositNonceIfNeeded(deposit).catch(() => {});
     if (getChain(deposit.chain).isEvm) await this.evm.clearDepositNonceIfNeeded(deposit).catch(() => {});
-    this.removePendingDeposit(deposit);
   }
 
   async depositToken(token: TokenInput, to?: string, pending = new PendingControl()) {
@@ -463,16 +441,6 @@ class OmniService {
     })();
 
     if (transfer == null) throw `Nonce not found, contact support please`;
-
-    const tokenDecimalDiff = 10n ** BigInt(24 - token.decimals);
-    this.addPendingWithdraw(transfer.nonce, {
-      amount: String(token.amount / tokenDecimalDiff),
-      receiver_id: this.getReceiverRaw(token.chain),
-      contract_id: token.address,
-      token_id: token.id,
-      chain_id: token.chain,
-    });
-
     pending?.step(`Depositting to ${getChain(token.chain).name}`);
     await this.finishWithdrawal(transfer.nonce);
   }

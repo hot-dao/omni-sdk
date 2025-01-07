@@ -10,6 +10,13 @@ const omni = new OmniService({
   evm: new EvmSigner(env.EVM_PRIVATE_KEY),
 });
 
+const finishWithdrawals = async () => {
+  const pendings = await omni.getActiveWithdrawals();
+  for (let pending of pendings) {
+    await omni.finishWithdrawal(pending.nonce);
+  }
+};
+
 const bridgeUsdtFromNearToBnb = async () => {
   const USDT = omni.token(TokenId.USDT);
   console.log("Bnb USDT:", await USDT.balance(Network.Bnb)); // Bnb USDT balance
@@ -27,6 +34,8 @@ const bridgeUsdtFromNearToBnb = async () => {
 
   console.log("OMNI USDT", await USDT.balance(Network.Hot)); // HOT USDT balance -1
   console.log("Bnb USDT", await USDT.balance(Network.Bnb)); // Bnb USDT balance +1
+
+  await finishWithdrawals();
 };
 
 bridgeUsdtFromNearToBnb();

@@ -3,8 +3,8 @@ import { baseDecode } from "@near-js/utils";
 import uuid4 from "uuid4";
 
 import { PendingDeposit, TransferType } from "../types";
-import { Network } from "../chains";
 import { PendingControl, wait } from "../utils";
+import { Network } from "../chains";
 import OmniService from "..";
 
 import { generateUserId, MIN_COMMISSION } from "./constants";
@@ -13,7 +13,7 @@ import { JettonWallet } from "./wrappers/jetton/JettonWallet";
 import { TonMetaWallet } from "./wrappers/TonMetaWallet";
 import { DepositJetton } from "./wrappers/DepositJetton";
 import { UserJetton } from "./wrappers/UserJetton";
-import OmniToken, { TokenInput } from "../token";
+import { TokenInput } from "../token";
 
 const MetaWallet = TonMetaWallet.createFromAddress(Address.parse("EQCuVv07tBHuJrgFrMcDJFHESoE6TpLLoNTuqdL2LkXi7JGM"));
 
@@ -100,7 +100,7 @@ class TonOmniService {
       return newNonce;
     };
 
-    const activeWithdrawals = Object.values(await this.omni.getLastPendings());
+    const activeWithdrawals = Object.values(await this.omni.getActiveWithdrawals());
     const existOlderWithdraw = activeWithdrawals.filter((t) => !t.completed && t.chain === Network.Ton);
 
     let maxLastUncompletedNonce = 0n;
@@ -202,8 +202,7 @@ class TonOmniService {
 
         try {
           pending?.step("Parse TON deposit");
-          const deposit = await waitParseDeposit();
-          resolve(this.omni.addPendingDeposit(deposit));
+          resolve(await waitParseDeposit());
         } catch (e) {
           reject(e);
         }
@@ -221,8 +220,6 @@ class TonOmniService {
   }
 
   async parseDeposit(hash: string): Promise<PendingDeposit> {
-    if (this.omni.deposits[hash]) return this.omni.deposits[hash];
-
     const events = await this.ton.tonApi.events.getEvent(hash);
     const deployTxHash = events.actions.find((t) => t.ContractDeploy != null)?.baseTransactions[0];
     if (deployTxHash == null) throw "Deposit address not found";

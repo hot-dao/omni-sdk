@@ -96,7 +96,7 @@ class SolanaOmniService {
       throw "Deposit alredy claimed, check your omni balance";
     }
 
-    return this.omni.addPendingDeposit(deposit);
+    return deposit;
   }
 
   async clearDepositNonceIfNeeded(deposit: PendingDeposit) {
@@ -112,7 +112,7 @@ class SolanaOmniService {
     const [depositAddress] = findDepositAddress(BigInt(deposit.nonce), this.solana.publicKey, receiver, mint, BigInt(deposit.amount));
 
     const isExist = await this.solana.connection.getAccountInfo(depositAddress, { commitment: "confirmed" });
-    if (isExist == null) return this.omni.removePendingDeposit(deposit);
+    if (isExist == null) return;
 
     try {
       const builder = this.env.program.methods.clearDepositInfo(Array.from(receiver), mint, bnAmount, bnNonce).accounts({
@@ -127,8 +127,6 @@ class SolanaOmniService {
     } catch (e) {
       console.error(e);
     }
-
-    this.omni.removePendingDeposit(deposit);
   }
 
   async deposit(token: TokenInput, to?: string) {
@@ -167,26 +165,18 @@ class SolanaOmniService {
         deposit: depositAddress,
       });
 
-      let deposit!: PendingDeposit;
       const instruction = await depositBuilder.instruction();
-      await this.solana.sendInstructions({
-        instructions: [instruction],
-        onHash: (hash) => {
-          deposit = this.omni.addPendingDeposit({
-            receiver: receiverAddr,
-            timestamp: Date.now(),
-            chain: Network.Solana,
-            amount: String(token.amount),
-            token: token.id,
-            nonce: "",
-            tx: hash,
-          });
-        },
-      });
+      const hash = await this.solana.sendInstructions({ instructions: [instruction] });
 
-      deposit.nonce = nonce.toString();
-      this.omni.addPendingDeposit(deposit);
-      return deposit;
+      return {
+        receiver: receiverAddr,
+        timestamp: Date.now(),
+        chain: Network.Solana,
+        amount: String(token.amount),
+        token: token.id,
+        nonce: nonce.toString(),
+        tx: hash,
+      };
     }
 
     const mint = new sol.PublicKey(token.address);
@@ -204,26 +194,18 @@ class SolanaOmniService {
       deposit: depositAddress,
     });
 
-    let deposit!: PendingDeposit;
     const instruction = await depositBuilder.instruction();
-    await this.solana.sendInstructions({
-      instructions: [instruction],
-      onHash: (hash) => {
-        deposit = this.omni.addPendingDeposit({
-          receiver: receiverAddr,
-          timestamp: Date.now(),
-          chain: Network.Solana,
-          nonce: nonce.toString(),
-          amount: String(token.amount),
-          token: token.id,
-          tx: hash,
-        });
-      },
-    });
+    const hash = await this.solana.sendInstructions({ instructions: [instruction] });
 
-    deposit.nonce = nonce.toString();
-    this.omni.addPendingDeposit(deposit);
-    return deposit;
+    return {
+      receiver: receiverAddr,
+      timestamp: Date.now(),
+      chain: Network.Solana,
+      nonce: nonce.toString(),
+      amount: String(token.amount),
+      token: token.id,
+      tx: hash,
+    };
   }
 
   async withdraw(args: { nonce: string; signature: string; transfer: TransferType }) {
@@ -233,7 +215,7 @@ class SolanaOmniService {
     const lastWithdrawNonce = await this.getLastWithdrawNonce();
     if (BigInt(args.nonce) <= lastWithdrawNonce) throw "Withdraw nonce already used";
 
-    const activeWithdrawals = Object.values(await this.omni.getLastPendings());
+    const activeWithdrawals = Object.values(await this.omni.getActiveWithdrawals());
     const existOlderWithdraw = activeWithdrawals.find((t) => {
       return !t.completed && t.chain === Network.Solana && BigInt(t.nonce) < BigInt(args.nonce);
     });

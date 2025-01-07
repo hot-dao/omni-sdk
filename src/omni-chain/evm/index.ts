@@ -3,9 +3,9 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 
 import { ERC20_ABI, OMNI_ABI, OMNI_CONTRACT, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
 import { PendingDeposit, TransferType } from "../types";
-import { parseAmount, wait } from "../utils";
+import { TokenInput } from "../token";
 import { Network } from "../chains";
-import OmniToken, { TokenInput } from "../token";
+import { wait } from "../utils";
 import OmniService from "..";
 
 class EvmOmniService {
@@ -61,8 +61,9 @@ class EvmOmniService {
     if (token.address === "native") {
       const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_NATIVE], wallet);
       const depositTx = await contract.deposit(receiver, { value: token.amount, gasPrice });
+      await depositTx.wait();
 
-      const deposit = this.omni.addPendingDeposit({
+      return {
         timestamp: Date.now(),
         amount: String(token.amount),
         tx: depositTx.hash,
@@ -70,17 +71,15 @@ class EvmOmniService {
         token: token.id,
         nonce: "",
         receiver,
-      });
-
-      await depositTx.wait();
-      return deposit;
+      };
     }
 
     await this.approveToken(token.chain, token.address, OMNI_CONTRACT, token.amount);
     const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_FT], wallet);
     const depositTx = await await contract.deposit(receiver, token.address, token.amount, { gasPrice });
+    await depositTx.wait();
 
-    const deposit = this.omni.addPendingDeposit({
+    return {
       timestamp: Date.now(),
       amount: String(token.amount),
       tx: depositTx.hash,
@@ -88,10 +87,7 @@ class EvmOmniService {
       token: token.id,
       nonce: "",
       receiver,
-    });
-
-    await depositTx.wait();
-    return deposit;
+    };
   }
 
   async approveToken(chain: number, token: string, allowed: string, need: bigint) {
@@ -106,7 +102,7 @@ class EvmOmniService {
   }
 
   async clearDepositNonceIfNeeded(deposit: PendingDeposit) {
-    await this.omni.removePendingDeposit(deposit);
+    //
   }
 
   async parseDeposit(chain: number, hash: string) {
@@ -144,7 +140,7 @@ class EvmOmniService {
       throw "Deposit alredy claimed, check your omni balance";
     }
 
-    return this.omni.addPendingDeposit(deposit);
+    return deposit;
   }
 }
 
