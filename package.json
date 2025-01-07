@@ -1,0 +1,28 @@
+{
+  "name": "omni-sdk",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {},
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@coral-xyz/anchor": "0.29.0",
+    "@near-js/utils": "^1.0.1",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.98.0",
+    "@ton-api/client": "^0.3.0",
+    "@ton-api/ton-adapter": "^0.3.0",
+    "@ton/core": "^0.59.1",
+    "@ton/crypto": "^3.3.0",
+    "@ton/ton": "^15.1.0",
+    "@tonconnect/protocol": "^2.2.6",
+    "ethers": "^6.13.5",
+    "lodash": "^4.17.21",
+    "near-api-js": "^5.0.1",
+    "rlp": "^3.0.0",
+    "solana-advanced-connection": "^1.1.0",
+    "tonapi-sdk-js": "^2.0.7",
+    "uuid4": "^2.0.3"
+  }
+}

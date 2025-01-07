@@ -1,0 +1,824 @@
+{
+  "version": "0.1.0",
+  "name": "solana_meta_wallet",
+  "instructions": [
+    {
+      "name": "initializeContractState",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "programAccount",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "programData",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "authority",
+          "type": "publicKey"
+        },
+        {
+          "name": "verifyingAddress",
+          "type": {
+            "array": ["u8", 64]
+          }
+        },
+        {
+          "name": "withdrawDelegate",
+          "type": "publicKey"
+        },
+        {
+          "name": "chainId",
+          "type": "u16"
+        },
+        {
+          "name": "refundDelay",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "clearDelay",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "bump",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "setAuthority",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "authority",
+          "type": "publicKey"
+        }
+      ]
+    },
+    {
+      "name": "setVerifyingAddress",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "verifyingAddress",
+          "type": {
+            "array": ["u8", 64]
+          }
+        }
+      ]
+    },
+    {
+      "name": "setWithdrawDelegate",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "withdrawDelegate",
+          "type": "publicKey"
+        }
+      ]
+    },
+    {
+      "name": "setChainId",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "chainId",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "setRefundDelay",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "refundDelay",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "setClearDelay",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "clearDelay",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "generateDepositNonce",
+      "accounts": [
+        {
+          "name": "sender",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "user",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "bump",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "tokenDeposit",
+      "accounts": [
+        {
+          "name": "sender",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "deposit",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "state",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "user",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "senderTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "smcTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "receiver",
+          "type": {
+            "array": ["u8", 32]
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "bump",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "nativeDeposit",
+      "accounts": [
+        {
+          "name": "sender",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "deposit",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "user",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "receiver",
+          "type": {
+            "array": ["u8", 32]
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "bump",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "clearDepositInfo",
+      "accounts": [
+        {
+          "name": "sender",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "deposit",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "state",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "receiver",
+          "type": {
+            "array": ["u8", 32]
+          }
+        },
+        {
+          "name": "mint",
+          "type": "publicKey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "nonce",
+          "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "tokenWithdraw",
+      "accounts": [
+        {
+          "name": "sender",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "user",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "state",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "receiverTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "smcTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "signature",
+          "type": {
+            "array": ["u8", 65]
+          }
+        },
+        {
+          "name": "nonce",
+          "type": "u128"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "receiver",
+          "type": "publicKey"
+        },
+        {
+          "name": "bump",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "nativeWithdraw",
+      "accounts": [
+        {
+          "name": "sender",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "user",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "signature",
+          "type": {
+            "array": ["u8", 65]
+          }
+        },
+        {
+          "name": "nonce",
+          "type": "u128"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "receiver",
+          "type": "publicKey"
+        },
+        {
+          "name": "bump",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "adminTokenWithdraw",
+      "accounts": [
+        {
+          "name": "sender",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "receiverTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "smcTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "adminNativeWithdraw",
+      "accounts": [
+        {
+          "name": "sender",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "hotVerify",
+      "accounts": [
+        {
+          "name": "signer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "deposit",
+          "isMut": false,
+          "isSigner": false,
+          "isOptional": true
+        },
+        {
+          "name": "user",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "verificationType",
+          "type": "u8"
+        },
+        {
+          "name": "msgHash",
+          "type": "bytes"
+        },
+        {
+          "name": "sender",
+          "type": "publicKey"
+        },
+        {
+          "name": "receiver",
+          "type": {
+            "array": ["u8", 32]
+          }
+        },
+        {
+          "name": "mint",
+          "type": "publicKey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "nonce",
+          "type": "u128"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "State",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": ["Account version"],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": ["Seed bump for PDA"],
+            "type": "u8"
+          },
+          {
+            "name": "authority",
+            "docs": ["Contract authority"],
+            "type": "publicKey"
+          },
+          {
+            "name": "verifyingAddress",
+            "docs": ["Public key that will be used for verifying the signature"],
+            "type": {
+              "array": ["u8", 64]
+            }
+          },
+          {
+            "name": "withdrawDelegate",
+            "docs": ["Public key of the delegate wallet that can be used for withdrawing funds"],
+            "type": "publicKey"
+          },
+          {
+            "name": "chainId",
+            "docs": ["Solana chain ID"],
+            "type": "u16"
+          },
+          {
+            "name": "refundDelay",
+            "docs": ["Delay in seconds before the deposit can be refunded"],
+            "type": "u64"
+          },
+          {
+            "name": "clearDelay",
+            "docs": ["Delay in seconds before the deposit can be cleared"],
+            "type": "u64"
+          },
+          {
+            "name": "nonceAdditive",
+            "docs": ["Additive used for generating deposit nonce"],
+            "type": "u32"
+          },
+          {
+            "name": "updatedAt",
+            "docs": ["Timestamp when the state was last updated"],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Deposit",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": ["Account version"],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": ["Seed bump for PDA"],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "User",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "docs": ["Account version"],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": ["Seed bump for PDA"],
+            "type": "u8"
+          },
+          {
+            "name": "lastDepositNonce",
+            "docs": ["Last generated deposit"],
+            "type": "u128"
+          },
+          {
+            "name": "lastWithdrawNonce",
+            "docs": ["Last used nonce"],
+            "type": "u128"
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "AuthorityMismatch",
+      "msg": "Authority mismatched"
+    },
+    {
+      "code": 6001,
+      "name": "IllegalOwner",
+      "msg": "Account has illegal owner"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidProgramData",
+      "msg": "Invalid program data account"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidProgramAccount",
+      "msg": "Invalid program account"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidToken",
+      "msg": "Invalid token account"
+    },
+    {
+      "code": 6005,
+      "name": "InvalidSender",
+      "msg": "Invalid deposit sender account"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidAddressData",
+      "msg": "Invalid address data"
+    },
+    {
+      "code": 6007,
+      "name": "VerificationFailed",
+      "msg": "ECDSA verification failed"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidVerificationType",
+      "msg": "Invalid verification type"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidMsg",
+      "msg": "Provided message is invalid"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidRecoveryId",
+      "msg": "Provided recovery id is invalid"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidSignature",
+      "msg": "Provided signature is invalid"
+    },
+    {
+      "code": 6012,
+      "name": "EarlyClose",
+      "msg": "Account can be closed only after close period"
+    },
+    {
+      "code": 6013,
+      "name": "EmptyPool",
+      "msg": "Solana pool is empty"
+    },
+    {
+      "code": 6014,
+      "name": "InsufficientFunds",
+      "msg": "Insufficient SOL balance"
+    },
+    {
+      "code": 6015,
+      "name": "InvalidNonce",
+      "msg": "Provided nonce is invalid"
+    },
+    {
+      "code": 6016,
+      "name": "NonceAlreadyUsed",
+      "msg": "Already used nonce"
+    },
+    {
+      "code": 6017,
+      "name": "ExpiredNonce",
+      "msg": "Provided nonce is expired, you can make a refund"
+    },
+    {
+      "code": 6018,
+      "name": "NotExpiredNonce",
+      "msg": "Nonce is not expired yet, you can't make a withdraw"
+    },
+    {
+      "code": 6019,
+      "name": "HotVerificationFailed",
+      "msg": "Provided hash doesn't match"
+    }
+  ],
+  "metadata": {
+    "address": "HHh8YRPymdQQD9pU248Si6JLQyCfzS5ygatcePxjfqj4"
+  }
+}
