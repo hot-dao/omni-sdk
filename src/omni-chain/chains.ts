@@ -1,16 +1,3 @@
-const image = (src: string) => `https://tgapp.herewallet.app/images/${src}`;
-
-export const EIP155_SIGNING_METHODS = {
-  ETH_SIGN: "eth_sign",
-  PERSONAL_SIGN: "personal_sign",
-  ETH_SIGN_TYPED_DATA: "eth_signTypedData",
-  ETH_SEND_TRANSACTION: "eth_sendTransaction",
-  ETH_SIGN_TRANSACTION: "eth_signTransaction",
-  ETH_SIGN_TYPED_DATA_V3: "eth_signTypedData_v3",
-  ETH_SIGN_TYPED_DATA_V4: "eth_signTypedData_v4",
-  ETH_SEND_RAW_TRANSACTION: "eth_sendRawTransaction",
-};
-
 export interface ChainType {
   id: Network;
   rpc: string[];
@@ -68,7 +55,7 @@ export const networks: ChainType[] = [
   {
     id: Network.Hot,
     rpc: [],
-    icon: image("hot/hot-icon.png"),
+    icon: "https://tgapp.herewallet.app/images/hot/hot-icon.png",
     wrapToken: "",
     name: "HOT",
     key: "hot",
@@ -150,7 +137,7 @@ export const networks: ChainType[] = [
   {
     id: Network.Ton,
     rpc: [],
-    icon: image("chains/ton.svg"),
+    icon: "https://tgapp.herewallet.app/images/chains/ton.svg",
     wrapToken: "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c",
     name: "TON",
     key: "ton",
@@ -200,7 +187,7 @@ export const networks: ChainType[] = [
       "https://g.w.lavanet.xyz:443/gateway/bsc/rpc-http/d201915962f57367c3c57baa1c72df72",
     ],
 
-    icon: image("chains/bnb.png"),
+    icon: "https://tgapp.herewallet.app/images/chains/bnb.png",
     wrapToken: "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
     name: "BNB",
     key: "smartchain",
@@ -264,7 +251,7 @@ export const networks: ChainType[] = [
   {
     id: Network.EbiChain,
     rpc: ["https://rpc.ebi.xyz", "https://rpc-1.ebi.xyz/"],
-    icon: image("apps/ebi-logo.png"),
+    icon: "https://tgapp.herewallet.app/images/apps/ebi-logo.png",
     wrapToken: "0x4200000000000000000000000000000000000006",
     name: "EbiChain",
     key: "ebi",
@@ -320,7 +307,7 @@ export const networks: ChainType[] = [
   {
     id: Network.BnbTestnet,
     rpc: ["https://bsc-testnet-rpc.publicnode.com"],
-    icon: image("chains/bnb.png"),
+    icon: "https://tgapp.herewallet.app/images/chains/bnb.png",
     wrapToken: "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
     name: "tBNB",
     key: "smartchain",
@@ -395,7 +382,7 @@ export const networks: ChainType[] = [
   {
     id: Network.OpBnb,
     rpc: ["https://opbnb-rpc.publicnode.com", "https://opbnb-mainnet.nodereal.io/v1/64a9df0874fb4a93b9d0a3849de012d3"],
-    icon: image("chains/opbnb.png"),
+    icon: "https://tgapp.herewallet.app/images/chains/opbnb.png",
     wrapToken: "0x4200000000000000000000000000000000000006",
     name: "opBNB",
     short: "BNB",

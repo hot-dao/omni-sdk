@@ -1,8 +1,12 @@
 {
   "name": "omni-sdk",
   "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {},
+  "type": "module",
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
   "author": "",
   "license": "ISC",
   "description": "",
@@ -24,5 +28,10 @@
     "solana-advanced-connection": "^1.1.0",
     "tonapi-sdk-js": "^2.0.7",
     "uuid4": "^2.0.3"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.17.14",
+    "@types/uuid4": "^2.0.3",
+    "typescript": "^5.7.2"
   }
 }

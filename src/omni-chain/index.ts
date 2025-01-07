@@ -3,7 +3,7 @@ import { baseEncode } from "@near-js/utils";
 import { Address } from "@ton/core";
 import { uniq } from "lodash";
 
-import { NearSigner } from "../signers/NearSigner";
+import NearSigner from "../signers/NearSigner";
 import SolanaSigner from "../signers/SolanaSigner";
 import TonSigner from "../signers/TonSigner";
 import EvmSigner from "../signers/EvmSigner";

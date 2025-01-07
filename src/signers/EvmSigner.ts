@@ -1,5 +1,16 @@
-import { AbstractProvider, FeeData, JsonRpcProvider, Network, PerformActionRequest, TransactionRequest, ethers, isError } from "ethers";
-import { Network as Chain, networks } from "../omni-chain/chains";
+import {
+  AbstractProvider,
+  FeeData,
+  JsonRpcProvider,
+  Network,
+  PerformActionRequest,
+  TransactionRequest,
+  Wallet,
+  ethers,
+  isError,
+} from "ethers";
+import { Network as Chain, getChain, networks } from "../omni-chain/chains";
+import { SigningKey } from "ethers";
 
 const blockchain = [
   //
@@ -26,7 +37,7 @@ let methods = [
   "getTransactionResult",
 ];
 
-export class Provider extends AbstractProvider {
+export class EvmProvider extends AbstractProvider {
   constructor(readonly providers: JsonRpcProvider[], readonly chain: number, readonly address?: string) {
     super(chain);
   }
@@ -89,9 +100,18 @@ export const createProvider = (n: (typeof networks)[0], address?: string) => {
         })
     );
 
-  return new Provider(providers, n.id, address);
+  return new EvmProvider(providers, n.id, address);
 };
 
-export default class EvmSigner {
-  address: string;
+export default class EvmSigner extends Wallet {
+  public providers: Record<number, EvmProvider> = {};
+
+  constructor(key: string | SigningKey, provider?: null | EvmProvider) {
+    super(key, provider);
+  }
+
+  async runner(chain: number): Promise<ethers.AbstractSigner> {
+    const provider = createProvider(getChain(chain), this.address);
+    return this.connect(provider);
+  }
 }

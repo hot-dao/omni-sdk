@@ -1,7 +1,7 @@
-import { Contract, getBytes, hexlify, Interface, TransactionReceipt } from "ethers";
+import { Contract, ethers, getBytes, hexlify, Interface, TransactionReceipt } from "ethers";
 import { baseDecode, baseEncode } from "@near-js/utils";
 
-import { OMNI_ABI, OMNI_CONTRACT, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
+import { ERC20_ABI, OMNI_ABI, OMNI_CONTRACT, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
 import { PendingDeposit, TransferType } from "../types";
 import { parseAmount, wait } from "../utils";
 import { Network } from "../chains";
@@ -17,13 +17,13 @@ class EvmOmniService {
   }
 
   async getWithdrawFee(chain: Network) {
-    const gasPrice = await this.evm.getGasPrice(chain);
+    const gasPrice = await this.getGasPrice(chain);
     return gasPrice * 400_000n;
   }
 
   async isNonceUsed(chain: number, nonce: string): Promise<boolean> {
     const contractId = OMNI_CONTRACT;
-    const provider = this.evm.provider(chain);
+    const provider = await this.evm.runner(chain);
     if (provider == null || contractId == null) return true;
 
     const contract = new Contract(contractId, OMNI_ABI, provider);
@@ -47,12 +47,20 @@ class EvmOmniService {
     await tx.wait();
   }
 
+  async getGasPrice(chain: number): Promise<bigint> {
+    if (chain === 56) return 1000000000n; // BNB 1 gwei always...
+    const wallet = await this.evm.runner(chain);
+    const feeData = await wallet.provider!.getFeeData();
+    const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || 0n;
+    return (gasPrice / 10n) * 13n;
+  }
+
   async deposit(chain: Network, token: OmniToken, amount: bigint, to?: string) {
     const receiver = to ? this.omni.getOmniAddressHex(to) : this.omni.omniAddressHex;
     const { address } = await token.metadata(chain);
 
     const wallet = await this.evm.runner(chain);
-    const gasPrice = await this.evm.getGasPrice(chain);
+    const gasPrice = await this.getGasPrice(chain);
 
     if (address === "native") {
       const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_NATIVE], wallet);
@@ -72,7 +80,7 @@ class EvmOmniService {
       return deposit;
     }
 
-    await this.evm.approveToken(chain, address, OMNI_CONTRACT, amount);
+    await this.approveToken(chain, address, OMNI_CONTRACT, amount);
     const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_FT], wallet);
     const depositTx = await await contract.deposit(receiver, address, amount, { gasPrice });
 
@@ -90,14 +98,25 @@ class EvmOmniService {
     return deposit;
   }
 
+  async approveToken(chain: number, token: string, allowed: string, need: bigint) {
+    const wallet = await this.evm.runner(chain);
+    const erc20 = new ethers.Contract(token, ERC20_ABI, wallet);
+    const allowance = await erc20.allowance(this.evm.address, allowed);
+    if (allowance >= need) return;
+
+    const MAX_APPROVE = 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
+    const tx = await erc20.approve(allowed, MAX_APPROVE, { gasLimit: 100_000n });
+    await tx.wait();
+  }
+
   async clearDepositNonceIfNeeded(deposit: PendingDeposit) {
     await this.omni.removePendingDeposit(deposit);
   }
 
   async parseDeposit(chain: number, hash: string) {
-    const wallet = this.evm.provider(chain);
+    const wallet = await this.evm.runner(chain);
     const waitReceipt = async (attemps = 0): Promise<null | TransactionReceipt> => {
-      const receipt = await wallet.getTransactionReceipt(hash);
+      const receipt = await wallet.provider!.getTransactionReceipt(hash);
       if (receipt || attemps > 2) return receipt;
       await wait(3000);
       return await waitReceipt(attemps + 1);

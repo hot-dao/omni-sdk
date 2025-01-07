@@ -14,7 +14,6 @@ import {
   WalletContractV3R2,
   WalletContractV4,
   WalletContractV5R1,
-  TonClient,
   Cell,
   storeMessage,
   StateInit,
@@ -22,6 +21,7 @@ import {
 } from "@ton/ton";
 
 import { wait } from "../omni-chain/utils";
+import { baseDecode, baseEncode } from "@near-js/utils";
 
 export const tonApi = new TonApiClient({ apiKey: "" });
 export const client = new ContractAdapter(tonApi);
@@ -102,17 +102,13 @@ class TonSigner {
 
   static async createFromMnemonic(mnemonic: string, walletType?: TonWalletType) {
     const keyPair = await mnemonicToPrivateKey(mnemonic.split(" "));
-    return await TonSigner.create(keyPair.secretKey, walletType);
-  }
-
-  static async create(privateKey: Buffer, walletType?: TonWalletType) {
-    return new TonSigner(privateKey, walletType);
+    return new TonSigner(baseEncode(keyPair.secretKey), walletType);
   }
 
   public pending: { event: any; messageHash: string; metadata?: object; seqno: number } | null = null;
 
-  constructor(privateKey: Buffer, readonly walletType: TonWalletType = "v5r1") {
-    this.keyPair = keyPairFromSecretKey(privateKey);
+  constructor(privateKey: string, readonly walletType: TonWalletType = "v5r1") {
+    this.keyPair = keyPairFromSecretKey(Buffer.from(baseDecode(privateKey)));
     this.wallet = client.open(createWallet(walletType, this.keyPair.publicKey));
   }
 

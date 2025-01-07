@@ -5,7 +5,6 @@ import * as sol from "@solana/web3.js";
 
 import OmniService, { OMNI_HOT } from ".";
 import { client } from "../signers/TonSigner";
-import { connection } from "../signers/SolanaSigner";
 import { createProvider } from "../signers/EvmSigner";
 
 import { getChain, Network, networks } from "./chains";
@@ -48,10 +47,11 @@ class OmniToken {
     const metadata = await this.metadata(chain);
 
     if (chain === Network.Solana) {
+      const rpc = this.omni.signers.solana.connection;
       const [stateAccount] = sol.PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], PROGRAM_ID);
-      if (metadata.address === "native") return BigInt(await connection.getBalance(stateAccount));
+      if (metadata.address === "native") return BigInt(await rpc.getBalance(stateAccount));
       const ATA = getAssociatedTokenAddressSync(new sol.PublicKey(metadata.address), stateAccount, true);
-      const meta = await connection.getTokenAccountBalance(ATA);
+      const meta = await rpc.getTokenAccountBalance(ATA);
       return BigInt(meta.value.amount);
     }
 

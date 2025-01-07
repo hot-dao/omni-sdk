@@ -10,7 +10,6 @@ import {
 } from "@solana/spl-token";
 
 import { PendingDeposit, TransferType } from "../types";
-import { connection } from "../../signers/SolanaSigner";
 import { Network } from "../chains";
 import { wait } from "../utils";
 import OmniToken from "../token";
@@ -43,7 +42,7 @@ class SolanaOmniService {
     );
 
     const [stateAccount, stateBump] = sol.PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], PROGRAM_ID);
-    const provider = new anchor.AnchorProvider(connection, this.solana.wallet, {});
+    const provider = new anchor.AnchorProvider(this.solana.connection, this.solana, {});
     const program = new anchor.Program(IDL as any, PROGRAM_ID, provider);
     return { program, PROGRAM_ID, userAccount, userBump, stateAccount, stateBump };
   }
@@ -56,7 +55,7 @@ class SolanaOmniService {
   }
 
   async getLastWithdrawNonce() {
-    const isExist = await connection.getAccountInfo(this.env.userAccount);
+    const isExist = await this.solana.connection.getAccountInfo(this.env.userAccount);
     if (!isExist) return 0n;
 
     const state: any = await this.env.program.account.user.fetch(this.env.userAccount);
@@ -65,7 +64,7 @@ class SolanaOmniService {
 
   async parseDeposit(hash: string) {
     const waitReceipt = async (attemps = 0): Promise<sol.ParsedTransactionWithMeta | null> => {
-      const status = await connection.getParsedTransaction(hash, { commitment: "confirmed" });
+      const status = await this.solana.connection.getParsedTransaction(hash, { commitment: "confirmed" });
       if (status || attemps > 2) return status || null;
       await wait(3000);
       return await waitReceipt(attemps + 1);
@@ -112,7 +111,7 @@ class SolanaOmniService {
     const mint = metadata.address === "native" ? sol.PublicKey.default : new sol.PublicKey(metadata.address);
     const [depositAddress] = findDepositAddress(BigInt(deposit.nonce), this.solana.publicKey, receiver, mint, BigInt(deposit.amount));
 
-    const isExist = await connection.getAccountInfo(depositAddress, { commitment: "confirmed" });
+    const isExist = await this.solana.connection.getAccountInfo(depositAddress, { commitment: "confirmed" });
     if (isExist == null) return this.omni.removePendingDeposit(deposit);
 
     try {
@@ -266,7 +265,7 @@ class SolanaOmniService {
     const owner = this.solana.publicKey;
     const mint = new sol.PublicKey(metadata.address);
     const ATA = getAssociatedTokenAddressSync(mint, this.solana.publicKey);
-    const isExist = await getAccount(connection, ATA, "confirmed", TOKEN_PROGRAM_ID).catch(() => null);
+    const isExist = await getAccount(this.solana.connection, ATA, "confirmed", TOKEN_PROGRAM_ID).catch(() => null);
 
     const instructionBuilder = this.env.program.methods.tokenWithdraw(
       sign,

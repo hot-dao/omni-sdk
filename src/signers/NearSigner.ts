@@ -1,3 +1,3 @@
 import { Account } from "near-api-js";
 
-export class NearSigner extends Account {}
+export default class NearSigner extends Account {}
