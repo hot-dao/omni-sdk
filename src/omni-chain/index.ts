@@ -1,7 +1,7 @@
 import { getBytes, sha256 } from "ethers";
 import { baseEncode } from "@near-js/utils";
 import { Address } from "@ton/core";
-import { uniq } from "lodash";
+import uniq from "lodash/uniq";
 
 import NearSigner from "../signers/NearSigner";
 import SolanaSigner from "../signers/SolanaSigner";
@@ -16,7 +16,7 @@ import SolanaOmniService from "./solana";
 import EvmOmniService from "./evm";
 import TonOmniService from "./ton";
 import OmniApi from "./api";
-import OmniToken from "./token";
+import OmniToken, { TokenInput } from "./token";
 import { TokenId } from "./tokens";
 
 export const OMNI_HOT = "v1-1.omni.hot.tg";
@@ -24,10 +24,10 @@ export const OMNI_HELPER = "v1-1.omni-helper.hot.tg";
 export const TGAS = 1000000000000n;
 
 interface Options {
-  solana: SolanaSigner;
+  solana?: SolanaSigner;
   near: NearSigner;
-  ton: TonSigner;
-  evm: EvmSigner;
+  ton?: TonSigner;
+  evm?: EvmSigner;
 }
 
 class OmniService {
@@ -51,9 +51,9 @@ class OmniService {
   signer(chain: Network) {
     if (chain === Network.Hot) return this.getOmniAddress(this.signers.near.accountId);
     if (chain === Network.Near) return this.signers.near.accountId;
-    if (chain === Network.Solana) return this.signers.solana.address;
-    if (chain === Network.Ton) return this.signers.ton.address;
-    return this.signers.evm.address;
+    if (chain === Network.Solana) return this.signers.solana!.address;
+    if (chain === Network.Ton) return this.signers.ton!.address;
+    return this.signers.evm!.address;
   }
 
   getOmniAddress(address: string) {
@@ -359,42 +359,41 @@ class OmniService {
     this.removePendingDeposit(deposit);
   }
 
-  async depositToken(token: OmniToken, chain: Network, amount: bigint, to?: string, pending?: PendingControl) {
-    if (chain === Network.Near) {
+  async depositToken(token: TokenInput, to?: string, pending = new PendingControl()) {
+    if (token.chain === Network.Near) {
       pending?.step(`Withdrawing from NEAR to HOT Omni`, 2);
-      const metadata = await token.metadata(chain);
       const receiver = to ? this.getOmniAddress(to) : this.omniAddress;
       return await this.signers.near.functionCall({
-        args: { amount: BigInt(amount), receiver_id: OMNI_HOT, msg: receiver },
+        args: { amount: token.amount, receiver_id: OMNI_HOT, msg: receiver },
         methodName: "ft_transfer_call",
-        contractId: metadata.address,
+        contractId: token.address,
         attachedDeposit: 1n,
         gas: 80n * TGAS,
       });
     }
 
     // EVM DEPOSIT
-    if (getChain(chain).isEvm) {
-      pending?.step(`Withdrawing from ${getChain(chain).name}`);
-      const deposit = await this.evm.deposit(chain, token, amount, to);
+    if (getChain(token.chain).isEvm) {
+      pending?.step(`Withdrawing from ${getChain(token.chain).name}`);
+      const deposit = await this.evm.deposit(token, to);
 
       pending?.step(`Receiving on HOT Omni`);
       return await this.finishDeposit(deposit);
     }
 
     // SOLANA DEPOSIT
-    if (chain === Network.Solana) {
+    if (token.chain === Network.Solana) {
       pending?.step(`Withdrawing from Solana`);
-      const deposit = await this.solana.deposit(token, amount, to);
+      const deposit = await this.solana.deposit(token, to);
 
       pending?.step(`Receiving on HOT Omni`);
       return await this.finishDeposit(deposit);
     }
 
     // TON DEPOSIT
-    if (chain === Network.Ton) {
+    if (token.chain === Network.Ton) {
       pending?.step(`Withdrawing from Ton`);
-      const deposit = await this.ton.deposit(token, amount, to);
+      const deposit = await this.ton.deposit(token, to, pending);
 
       pending?.step(`Receiving on HOT Omni`);
       return await this.finishDeposit(deposit);
@@ -403,40 +402,35 @@ class OmniService {
     throw "Unsupported chain";
   }
 
-  async withdrawToken(token: OmniToken, chain: Network, amount: bigint, options?: { takeFee?: boolean; pending?: PendingControl }) {
-    amount = bigIntMin(await token.balance(Network.Hot), amount);
-    if (amount === 0n) throw "Empty token balance";
-
-    if (chain === Network.Ton) {
-      options?.pending?.step("Creating TON bridge account", 0);
+  async withdrawToken(token: TokenInput, pending = new PendingControl()) {
+    if (token.chain === Network.Ton) {
+      pending?.step("Creating TON bridge account", 0);
       await this.ton.createUserIfNeeded();
     }
 
-    const metadata = await token.metadata(chain);
-
-    if (chain === Network.Near) {
-      options?.pending?.step("Depositting on NEAR", 2);
+    if (token.chain === Network.Near) {
+      pending?.step("Depositting on NEAR", 2);
       const needReg = await this.signers.near.viewFunction({
         args: { account_id: this.signers.near.accountId },
         methodName: "storage_balance_of",
-        contractId: metadata.address,
+        contractId: token.address,
       });
 
       return await this.signers.near.functionCall({
-        methodName: "withdraw_on_near",
         attachedDeposit: needReg == null ? 5000000000000000000000n : 1n,
+        methodName: "withdraw_on_near",
         contractId: OMNI_HOT,
         gas: 80n * TGAS,
         args: {
           account_id: this.omniAddress,
-          amount: amount,
-          token_id: token,
+          token_id: token.id,
+          amount: token.amount,
         },
       });
     }
 
     // Convert to 24 decimal for omni format
-    options?.pending?.step("Withdrawing from HOT Omni");
+    pending?.step("Withdrawing from HOT Omni");
     const tx = await this.signers.near.functionCall({
       contractId: OMNI_HOT,
       methodName: "withdraw",
@@ -444,11 +438,11 @@ class OmniService {
       gas: 80n * TGAS,
       args: {
         helper_contract_id: OMNI_HELPER,
-        receiver_id: this.getReceiverRaw(chain),
+        receiver_id: this.getReceiverRaw(token.chain),
         account_id: this.omniAddress,
-        token_id: token,
-        chain_id: chain,
-        amount: amount,
+        token_id: token.id,
+        chain_id: token.chain,
+        amount: token.amount,
       },
     });
 
@@ -470,16 +464,16 @@ class OmniService {
 
     if (transfer == null) throw `Nonce not found, contact support please`;
 
-    const tokenDecimalDiff = 10n ** BigInt(24 - metadata.decimals);
+    const tokenDecimalDiff = 10n ** BigInt(24 - token.decimals);
     this.addPendingWithdraw(transfer.nonce, {
-      amount: String(amount / tokenDecimalDiff),
-      receiver_id: this.getReceiverRaw(chain),
-      contract_id: metadata.address,
+      amount: String(token.amount / tokenDecimalDiff),
+      receiver_id: this.getReceiverRaw(token.chain),
+      contract_id: token.address,
       token_id: token.id,
-      chain_id: chain,
+      chain_id: token.chain,
     });
 
-    options?.pending?.step(`Depositting to ${getChain(chain).name}`);
+    pending?.step(`Depositting to ${getChain(token.chain).name}`);
     await this.finishWithdrawal(transfer.nonce);
   }
 }

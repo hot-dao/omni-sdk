@@ -5,6 +5,11 @@ import { getChain, Network } from "./chains";
 import { createAddressRlp, parseAddressRlp } from "./ton/constants";
 import { Address } from "@ton/core";
 
+// @ts-ignore
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
+
 export class PendingControl {
   count = 0;
   step(msg: string, step?: number) {

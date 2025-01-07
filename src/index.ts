@@ -1,7 +1,7 @@
 import OmniService from "./omni-chain";
 import OmniToken from "./omni-chain/token";
 import { TokenId, TokenIds } from "./omni-chain/tokens";
-import { ChainType, Network, networks, getChain } from "./omni-chain/chains";
+import { Network, networks, getChain } from "./omni-chain/chains";
 
 import EvmSigner, { EvmProvider, createProvider } from "./signers/EvmSigner";
 import SolanaSigner from "./signers/SolanaSigner";
@@ -15,7 +15,6 @@ export {
   OmniService,
   TokenId,
   TokenIds,
-  ChainType,
   Network,
   networks,
   getChain,

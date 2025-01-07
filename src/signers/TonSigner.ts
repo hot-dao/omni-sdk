@@ -23,14 +23,6 @@ import {
 import { wait } from "../omni-chain/utils";
 import { baseDecode, baseEncode } from "@near-js/utils";
 
-export const tonApi = new TonApiClient({ apiKey: "" });
-export const client = new ContractAdapter(tonApi);
-
-export const tonApiRequest = async (request: string, params: { body?: object; method?: "GET" | "POST" } = {}) => {
-  const res = await tonApi.http.request({ body: params.body, path: request, method: params.method || "GET", format: "json" });
-  return res;
-};
-
 function createStateInit(code: Cell, data: Cell) {
   return beginCell()
     .storeUint(0, 2) // split_depth:(Maybe (## 5)) special:(Maybe TickTock)
@@ -60,38 +52,6 @@ export const createWallet = (type: TonWalletType, publicKey: Buffer) => {
   }
 };
 
-export const tonWalletV5Address = (secret: Buffer) => {
-  const keyPair = keyPairFromSecretKey(secret);
-  const wallet = client.open(createWallet("v5r1", keyPair.publicKey));
-  const address = wallet.address.toString({ bounceable: false });
-  return { type: "v5r1", address, balance: 0n } as const;
-};
-
-export const findTonWallets = async (secret: Buffer) => {
-  const keyPair = keyPairFromSecretKey(secret);
-  const wallets = ["v5r1", "v4", "v3r2", "v3r1"] as const;
-  const accounts: { type: TonWalletType; address: string; balance: bigint }[] = [];
-
-  for (const type of wallets) {
-    const wallet = client.open(createWallet(type, keyPair.publicKey));
-    const seqno = await wallet.getSeqno().catch(() => 0);
-    if (seqno === 0) continue;
-
-    const balance = await wallet.getBalance().catch(() => 0n);
-    const address = wallet.address.toString({ bounceable: false });
-    accounts.push({ type, address, balance });
-  }
-
-  if (accounts.length === 0) {
-    const wallet = client.open(createWallet("v5r1", keyPair.publicKey));
-    const address = wallet.address.toString({ bounceable: false });
-    const balance = await wallet.getBalance().catch(() => 0n);
-    accounts.push({ type: "v5r1", address, balance });
-  }
-
-  return accounts;
-};
-
 class TonSigner {
   readonly keyPair: KeyPair;
   readonly wallet: OpenedContract<WalletContractV3R1 | WalletContractV3R2 | WalletContractV4 | WalletContractV5R1>;
@@ -100,17 +60,22 @@ class TonSigner {
     "transaction:failed": { metadata?: object; error: string };
   }>();
 
-  static async createFromMnemonic(mnemonic: string, walletType?: TonWalletType) {
-    const keyPair = await mnemonicToPrivateKey(mnemonic.split(" "));
-    return new TonSigner(baseEncode(keyPair.secretKey), walletType);
-  }
+  tonApi: TonApiClient;
+  client: ContractAdapter;
+  pending: { event: any; messageHash: string; metadata?: object; seqno: number } | null = null;
 
-  public pending: { event: any; messageHash: string; metadata?: object; seqno: number } | null = null;
+  constructor(privateKey: string, readonly walletType: TonWalletType = "v5r1", tonApiKey: string) {
+    this.tonApi = new TonApiClient({ apiKey: tonApiKey });
+    this.client = new ContractAdapter(this.tonApi);
 
-  constructor(privateKey: string, readonly walletType: TonWalletType = "v5r1") {
     this.keyPair = keyPairFromSecretKey(Buffer.from(baseDecode(privateKey)));
-    this.wallet = client.open(createWallet(walletType, this.keyPair.publicKey));
+    this.wallet = this.client.open(createWallet(walletType, this.keyPair.publicKey));
   }
+
+  tonApiRequest = async (request: string, params: { body?: object; method?: "GET" | "POST" } = {}) => {
+    const res = await this.tonApi.http.request({ body: params.body, path: request, method: params.method || "GET", format: "json" });
+    return res;
+  };
 
   get address() {
     return this.wallet.address.toString({ bounceable: false });
@@ -146,7 +111,7 @@ class TonSigner {
     // @ts-ignore
     return await this.wallet.createTransfer({
       sendMode: sendMode != null ? sendMode : SendMode.PAY_GAS_SEPARATELY + SendMode.IGNORE_ERRORS,
-      timeout: (await tonApi.liteServer.getRawTime()).time + 300,
+      timeout: (await this.tonApi.liteServer.getRawTime()).time + 300,
       secretKey: this.keyPair.secretKey,
       messages,
       seqno,
@@ -161,11 +126,11 @@ class TonSigner {
     if (this.pending != null) throw "Wait until the previous transaction on TON is completed";
     sendMode = sendMode ?? SendMode.PAY_GAS_SEPARATELY + SendMode.IGNORE_ERRORS;
 
-    const { seqno } = await tonApi.wallet.getAccountSeqno(this.wallet.address);
+    const { seqno } = await this.tonApi.wallet.getAccountSeqno(this.wallet.address);
     const transfer: Cell = await this.createTransfer(messages, sendMode, seqno);
 
     const external = externalMessage(this.wallet.address, this.wallet.init, seqno, transfer);
-    const { trace, event } = await tonApiRequest("/v2/wallet/emulate", {
+    const { trace, event } = await this.tonApiRequest("/v2/wallet/emulate", {
       body: { boc: external.toBoc().toString("base64") },
       method: "POST",
     });
@@ -176,7 +141,7 @@ class TonSigner {
     const messageHash = trace.transaction.in_msg?.hash;
     if (messageHash == null) throw `Message hash is undefined`;
 
-    await tonApi.blockchain.sendBlockchainMessage({ boc: external });
+    await this.tonApi.blockchain.sendBlockchainMessage({ boc: external });
     this.pending = { event: event, messageHash, metadata, seqno };
   }
 
@@ -189,7 +154,7 @@ class TonSigner {
     if (attemps > 3) return "";
 
     await wait(5000);
-    const tx = await tonApi.blockchain.getBlockchainTransactionByMessageHash(hash).catch(() => null);
+    const tx = await this.tonApi.blockchain.getBlockchainTransactionByMessageHash(hash).catch(() => null);
     if (tx == null) return await this.waitTransactionByMessageHash(hash, attemps + 1);
 
     if (!tx.success) throw tx.computePhase?.exitCodeDescription || "Transaction failed";
@@ -207,7 +172,7 @@ class TonSigner {
 
   async waitNextSeqno(seqno: number): Promise<number> {
     await wait(3000);
-    const nextSeqno = await tonApi.wallet.getAccountSeqno(this.wallet.address).catch(() => ({ seqno: 0 }));
+    const nextSeqno = await this.tonApi.wallet.getAccountSeqno(this.wallet.address).catch(() => ({ seqno: 0 }));
     if (seqno >= nextSeqno.seqno) return await this.waitNextSeqno(seqno);
     return nextSeqno.seqno;
   }
@@ -215,7 +180,7 @@ class TonSigner {
   async getBalance(address: string) {
     try {
       if (address === "native") return await this.wallet.getBalance();
-      const jetton = await tonApi.accounts.getAccountJettonBalance(this.wallet.address, Address.parse(address), {
+      const jetton = await this.tonApi.accounts.getAccountJettonBalance(this.wallet.address, Address.parse(address), {
         supported_extensions: ["custom_payload"],
       });
 

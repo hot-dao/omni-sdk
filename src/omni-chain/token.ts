@@ -4,7 +4,6 @@ import { Address } from "@ton/core";
 import * as sol from "@solana/web3.js";
 
 import OmniService, { OMNI_HOT } from ".";
-import { client } from "../signers/TonSigner";
 import { createProvider } from "../signers/EvmSigner";
 
 import { getChain, Network, networks } from "./chains";
@@ -12,10 +11,38 @@ import { JettonWallet } from "./ton/wrappers/jetton/JettonWallet";
 import { JettonMinter } from "./ton/wrappers/jetton/JettonMinter";
 import { ERC20_ABI, OMNI_CONTRACT } from "./evm/constants";
 import { PROGRAM_ID } from "./solana/helpers";
-import { omniToNative } from "./utils";
+import { bigIntMin, omniToNative, parseAmount } from "./utils";
+
+export interface TokenInput {
+  chain: number;
+  amount: bigint;
+  address: string;
+  omniAddress: string;
+  decimals: number;
+  id: number;
+}
 
 class OmniToken {
   constructor(readonly omni: OmniService, readonly id: number) {}
+
+  async input(chain: number, amt: number | bigint): Promise<TokenInput> {
+    const metadata = await this.metadata(chain);
+    const amount = typeof amt === "bigint" ? amt : BigInt(parseAmount(amt, metadata.decimals));
+    const adjusted = bigIntMin(amount, await this.balance(chain));
+
+    return {
+      ...metadata,
+      amount: adjusted,
+      id: this.id,
+      chain,
+    };
+  }
+
+  async output(chain: number, amt: number | bigint): Promise<TokenInput> {
+    const input = await this.input(Network.Hot, amt);
+    input.chain = chain;
+    return input;
+  }
 
   async liquidity(chain: Network) {
     if (chain === Network.Near) {
@@ -47,7 +74,7 @@ class OmniToken {
     const metadata = await this.metadata(chain);
 
     if (chain === Network.Solana) {
-      const rpc = this.omni.signers.solana.connection;
+      const rpc = this.omni.signers.solana!.connection;
       const [stateAccount] = sol.PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], PROGRAM_ID);
       if (metadata.address === "native") return BigInt(await rpc.getBalance(stateAccount));
       const ATA = getAssociatedTokenAddressSync(new sol.PublicKey(metadata.address), stateAccount, true);
@@ -66,9 +93,10 @@ class OmniToken {
     }
 
     if (chain === Network.Ton) {
-      const minter = client.open(JettonMinter.createFromAddress(Address.parse(metadata.address)));
+      const ton = this.omni.signers.ton!.client;
+      const minter = ton.open(JettonMinter.createFromAddress(Address.parse(metadata.address)));
       const metaJettonWalletAddress = await minter.getWalletAddressOf(Address.parse(account));
-      const userJetton = client.open(JettonWallet.createFromAddress(metaJettonWalletAddress));
+      const userJetton = ton.open(JettonWallet.createFromAddress(metaJettonWalletAddress));
       return await userJetton.getJettonBalance();
     }
 
@@ -85,7 +113,7 @@ class OmniToken {
 
   async metadata(chain: Network) {
     if (chain === Network.Hot) return { address: String(this.id), decimals: 24, omniAddress: this.id };
-    const data = await this.omni.signers.near.functionCall({
+    const data = await this.omni.signers.near.viewFunction({
       args: { token_id: this.id, chain_ids: [chain] },
       methodName: "get_token_info",
       contractId: OMNI_HOT,
@@ -96,7 +124,7 @@ class OmniToken {
 
     return {
       address: omniToNative(chain, omniAddress),
-      decimals: data[chain].decimals,
+      decimals: data[chain].decimal,
       omniAddress,
     };
   }

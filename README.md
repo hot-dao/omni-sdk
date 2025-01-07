@@ -1,32 +1,39 @@
 # HOT Omni
 
-`npm i @hot/omni-sdk`
+`npm i @hot-wallet/omni`
 
 ## Usage
 
 ```ts
-import { Network, OmniService, NearSigner, SolanaSigner, EvmSigner, TonSigner } from "@hot/omni-sdk";
+import "dotenv/config";
+import { EvmSigner, Network, TokenId } from "@hot-wallet/omni";
+import { TonSigner, NearSigner, OmniService, SolanaSigner } from "@hot-wallet/omni";
 
+const env = process.env as any;
 const omni = new OmniService({
-  near: new NearSigner("seed"),
-  solana: new SolanaSigner("seed"),
-  evm: new EvmSigner("seed"),
-  ton: new TonSigner("seed"),
+  near: new NearSigner(env.NEAR_ACCONT_ID, env.NEAR_PRIVATE_KEY),
+  ton: new TonSigner(env.TON_PRIVATE_KEY, env.TON_WALLET_TYPE, env.TON_API_KEY),
+  solana: new SolanaSigner(env.SOLANA_PRIVATE_KEY, [env.SOLANA_RPC]),
+  evm: new EvmSigner(env.EVM_PRIVATE_KEY),
 });
 
-const bridgeFromTonToBase = async () => {
-  const usdc = omni.token(OmniToken.USDC);
-  await usdc.balance(Network.Ton); // OMNI USDC balance
-  await usdc.balance(Network.Base); // Base USDC balance
+const bridgeUsdtFromNearToBnb = async () => {
+  const USDT = omni.token(TokenId.USDT);
+  await USDT.balance(Network.Near); // Near USDT balance
+  await USDT.balance(Network.Bnb); // Bnb USDT balance
 
-  await omni.depositToken(usdc, Network.Ton, 1); // USDC from TON to OMNI
-  await usdc.balance(Network.Ton); // TON USDC balance -1
-  await usdc.balance(Network.Hot); // OMNI USDC balance +1
+  const input = await USDT.input(Network.Near, 1); // <-- construct input amount
+  await omni.depositToken(input); // USDT from TON to OMNI
+  await USDT.balance(Network.Near); // NEAR USDT balance -1
+  await USDT.balance(Network.Hot); // OMNI USDT balance +1
 
-  await omni.withdrawToken(usdc, Network.Base, 1); // USDC from OMNI to Base
-  await usdc.balance(Network.Hot); // HOT USDC balance -1
-  await usdc.balance(Network.Base); // Base USDC balance +1
+  const output = await USDT.output(Network.Bnb, 1); // <-- construct output amount
+  await omni.withdrawToken(output); // USDT from OMNI to Base
+  await USDT.balance(Network.Hot); // HOT USDT balance -1
+  await USDT.balance(Network.Bnb); // Bnb USDT balance +1
 };
+
+bridgeUsdtFromNearToBnb();
 ```
 
 ## Omni Tokens

@@ -12,7 +12,7 @@ import {
 import { PendingDeposit, TransferType } from "../types";
 import { Network } from "../chains";
 import { wait } from "../utils";
-import OmniToken from "../token";
+import OmniToken, { TokenInput } from "../token";
 import OmniService from "..";
 
 import { findDepositAddress, PROGRAM_ID } from "./helpers";
@@ -131,7 +131,7 @@ class SolanaOmniService {
     this.omni.removePendingDeposit(deposit);
   }
 
-  async deposit(token: OmniToken, amount: bigint, to?: string) {
+  async deposit(token: TokenInput, to?: string) {
     const receiverAddr = to ? this.omni.getOmniAddress(to) : this.omni.omniAddress;
     const receiver = Buffer.from(baseDecode(receiverAddr));
 
@@ -153,11 +153,10 @@ class SolanaOmniService {
     };
 
     const nonce = await waitNewNonce();
-    const metadata = await token.metadata(Network.Solana);
 
-    const amt = new anchor.BN(amount.toString());
-    if (metadata.address === "native") {
-      const [depositAddress, depositBump] = findDepositAddress(nonce, this.solana.publicKey, receiver, sol.PublicKey.default, amount);
+    const amt = new anchor.BN(token.amount.toString());
+    if (token.address === "native") {
+      const [depositAddress, depositBump] = findDepositAddress(nonce, this.solana.publicKey, receiver, sol.PublicKey.default, token.amount);
       const depositBuilder = this.env.program.methods.nativeDeposit(receiver, amt, depositBump);
       depositBuilder.accountsStrict({
         user: this.env.userAccount.toBase58(),
@@ -177,7 +176,7 @@ class SolanaOmniService {
             receiver: receiverAddr,
             timestamp: Date.now(),
             chain: Network.Solana,
-            amount: String(amount),
+            amount: String(token.amount),
             token: token.id,
             nonce: "",
             tx: hash,
@@ -190,8 +189,8 @@ class SolanaOmniService {
       return deposit;
     }
 
-    const mint = new sol.PublicKey(metadata.address);
-    const [depositAddress, depositBump] = findDepositAddress(nonce, this.solana.publicKey, receiver, mint, amount);
+    const mint = new sol.PublicKey(token.address);
+    const [depositAddress, depositBump] = findDepositAddress(nonce, this.solana.publicKey, receiver, mint, token.amount);
 
     const depositBuilder = this.env.program.methods.tokenDeposit(receiver, amt, depositBump);
     depositBuilder.accountsStrict({
@@ -215,7 +214,7 @@ class SolanaOmniService {
           timestamp: Date.now(),
           chain: Network.Solana,
           nonce: nonce.toString(),
-          amount: String(amount),
+          amount: String(token.amount),
           token: token.id,
           tx: hash,
         });

@@ -5,7 +5,7 @@ import { ERC20_ABI, OMNI_ABI, OMNI_CONTRACT, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, 
 import { PendingDeposit, TransferType } from "../types";
 import { parseAmount, wait } from "../utils";
 import { Network } from "../chains";
-import OmniToken from "../token";
+import OmniToken, { TokenInput } from "../token";
 import OmniService from "..";
 
 class EvmOmniService {
@@ -30,18 +30,16 @@ class EvmOmniService {
     return await contract.usedNonces(nonce);
   }
 
-  async withdraw(args: { transfer: TransferType; signature: string; nonce: string; takeFee?: boolean }) {
+  async withdraw(args: { transfer: TransferType; signature: string; nonce: string }) {
     const runner = await this.evm.runner(args.transfer.chain_id);
     const contract = new Contract(OMNI_CONTRACT, OMNI_ABI, runner);
 
-    const fee = args.transfer.chain_id === Network.Bnb ? parseAmount(0.00015, 18) : parseAmount(0.00005, 18);
     const tx = await contract.withdraw(
       args.nonce, //
       hexlify(baseDecode(args.transfer.contract_id)),
       hexlify(baseDecode(args.transfer.receiver_id)),
       BigInt(args.transfer.amount),
-      hexlify(baseDecode(args.signature)),
-      args.takeFee ? { value: fee } : {}
+      hexlify(baseDecode(args.signature))
     );
 
     await tx.wait();
@@ -55,43 +53,41 @@ class EvmOmniService {
     return (gasPrice / 10n) * 13n;
   }
 
-  async deposit(chain: Network, token: OmniToken, amount: bigint, to?: string) {
+  async deposit(token: TokenInput, to?: string) {
     const receiver = to ? this.omni.getOmniAddressHex(to) : this.omni.omniAddressHex;
-    const { address } = await token.metadata(chain);
+    const wallet = await this.evm.runner(token.chain);
+    const gasPrice = await this.getGasPrice(token.chain);
 
-    const wallet = await this.evm.runner(chain);
-    const gasPrice = await this.getGasPrice(chain);
-
-    if (address === "native") {
+    if (token.address === "native") {
       const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_NATIVE], wallet);
-      const depositTx = await contract.deposit(receiver, { value: amount, gasPrice });
+      const depositTx = await contract.deposit(receiver, { value: token.amount, gasPrice });
 
       const deposit = this.omni.addPendingDeposit({
         timestamp: Date.now(),
-        amount: String(amount),
+        amount: String(token.amount),
         tx: depositTx.hash,
+        chain: token.chain,
         token: token.id,
         nonce: "",
         receiver,
-        chain,
       });
 
       await depositTx.wait();
       return deposit;
     }
 
-    await this.approveToken(chain, address, OMNI_CONTRACT, amount);
+    await this.approveToken(token.chain, token.address, OMNI_CONTRACT, token.amount);
     const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_FT], wallet);
-    const depositTx = await await contract.deposit(receiver, address, amount, { gasPrice });
+    const depositTx = await await contract.deposit(receiver, token.address, token.amount, { gasPrice });
 
     const deposit = this.omni.addPendingDeposit({
       timestamp: Date.now(),
-      amount: String(amount),
+      amount: String(token.amount),
       tx: depositTx.hash,
+      chain: token.chain,
       token: token.id,
       nonce: "",
       receiver,
-      chain,
     });
 
     await depositTx.wait();
