@@ -42,6 +42,32 @@
     bn.js "^5.1.2"
     buffer-layout "^1.2.0"
 
+"@hot-wallet/omni-sdk@1.1.0":
+  version "1.1.0"
+  resolved "https://registry.yarnpkg.com/@hot-wallet/omni-sdk/-/omni-sdk-1.1.0.tgz#12b115ed970ac3adebdc6eb960baaeb376234059"
+  integrity sha512-7oeBiVBJwoYlsViknQVaHasPb7qyg4FHeU9yBdrGVsno6vEHEGoX/rxsZ1AIiQLGvJRvi1hvQkGOm88yuj6Hqg==
+  dependencies:
+    "@coral-xyz/anchor" "0.29.0"
+    "@hot-wallet/omni-sdk" "1.1.0"
+    "@near-js/utils" "^1.0.1"
+    "@solana/spl-token" "^0.4.9"
+    "@solana/web3.js" "^1.98.0"
+    "@ton-api/client" "^0.3.0"
+    "@ton-api/ton-adapter" "^0.3.0"
+    "@ton/core" "^0.59.1"
+    "@ton/crypto" "^3.3.0"
+    "@ton/ton" "^15.1.0"
+    "@tonconnect/protocol" "^2.2.6"
+    bn.js "^5.2.1"
+    ethers "^6.13.5"
+    lodash "^4.17.21"
+    near-api-js "^5.0.1"
+    node-fetch "^3.3.2"
+    rlp "^3.0.0"
+    solana-advanced-connection "^1.1.0"
+    tonapi-sdk-js "^2.0.7"
+    uuid4 "^2.0.3"
+
 "@near-js/accounts@1.3.1":
   version "1.3.1"
   resolved "https://registry.yarnpkg.com/@near-js/accounts/-/accounts-1.3.1.tgz#b01253444f9ed04374bddd06f3d063765b529ac3"

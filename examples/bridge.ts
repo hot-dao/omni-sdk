@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { EvmSigner, Network, TokenId } from "../src";
-import { TonSigner, NearSigner, OmniService, SolanaSigner } from "../src";
+import { EvmSigner, Network, TokenId } from "@hot-wallet/omni-sdk";
+import { TonSigner, NearSigner, OmniService, SolanaSigner } from "@hot-wallet/omni-sdk";
 
 const env = process.env as any;
 const omni = new OmniService({
