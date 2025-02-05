@@ -1,23 +1,22 @@
 import { getBytes, sha256 } from "ethers";
 import { baseEncode } from "@near-js/utils";
 import { Address } from "@ton/core";
-import uniq from "lodash/uniq";
 
 import NearSigner from "../signers/NearSigner";
 import SolanaSigner from "../signers/SolanaSigner";
 import TonSigner from "../signers/TonSigner";
 import EvmSigner from "../signers/EvmSigner";
 
+import { TokenId } from "./tokens";
+import OmniToken, { TokenInput } from "./token";
 import { bigintToBuffer, generateUserId } from "./ton/constants";
 import { PendingDeposit, PendingWithdraw, TransferType } from "./types";
-import { bigIntMin, nativeToOmni, PendingControl, wait } from "./utils";
+import { nativeToOmni, PendingControl, wait } from "./utils";
 import { getChain, Network } from "./chains";
 import SolanaOmniService from "./solana";
 import EvmOmniService from "./evm";
 import TonOmniService from "./ton";
 import OmniApi from "./api";
-import OmniToken, { TokenInput } from "./token";
-import { TokenId } from "./tokens";
 
 export const OMNI_HOT = "v1-1.omni.hot.tg";
 export const OMNI_HELPER = "v1-1.omni-helper.hot.tg";
@@ -172,7 +171,6 @@ class OmniService {
       const isUsed = await this.isWithdrawUsed(transfer.chain_id, nonce);
       if (isUsed) return;
 
-      console.log({ daysAgo });
       withdrawals.push({
         receiver: transfer.receiver_id,
         amount: transfer.amount,

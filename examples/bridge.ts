@@ -19,9 +19,11 @@ const finishWithdrawals = async () => {
 
 const bridgeUsdtFromNearToBnb = async () => {
   const USDT = omni.token(TokenId.USDT);
-  console.log("Bnb USDT:", await USDT.balance(Network.Bnb)); // Bnb USDT balance
+  console.log("TON USDT:", await USDT.balance(Network.Ton)); // Bnb USDT balance
   console.log("NEAR USDT:", await USDT.balance(Network.Near)); // OMNI USDT balance
+
   console.log("NEAR native:", (await omni.signers.near.getAccountBalance()).available); // Bnb USDT balance
+  console.log("TON native:", await omni.signers.ton?.getBalance("native")); // Bnb USDT balance
 
   const input = await USDT.input(Network.Near, 1);
   await omni.depositToken(input); // USDT from TON to OMNI
@@ -29,13 +31,13 @@ const bridgeUsdtFromNearToBnb = async () => {
   console.log("NEAR USDT", await USDT.balance(Network.Near)); // NEAR USDT balance -1
   console.log("OMNI USDT", await USDT.balance(Network.Hot)); // OMNI USDT balance +1
 
-  const output = await USDT.output(Network.Bnb, 1);
+  const output = await USDT.output(Network.Ton, 1);
   await omni.withdrawToken(output); // USDT from OMNI to Base
 
   console.log("OMNI USDT", await USDT.balance(Network.Hot)); // HOT USDT balance -1
-  console.log("Bnb USDT", await USDT.balance(Network.Bnb)); // Bnb USDT balance +1
+  console.log("TON USDT", await USDT.balance(Network.Ton)); // Bnb USDT balance +1
 
-  await finishWithdrawals();
+  // await finishWithdrawals();
 };
 
 bridgeUsdtFromNearToBnb();
