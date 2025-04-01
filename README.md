@@ -4,7 +4,7 @@
 
 ```ts
 import "dotenv/config";
-import { EvmSigner, Network, OmniToken, OmniGroup } from "@hot-wallet/omni-sdk";
+import { EvmSigner, Network as chain, OmniToken, OmniGroup } from "@hot-wallet/omni-sdk";
 import { TonSigner, NearSigner, StellarSigner, OmniService, SolanaSigner } from "@hot-wallet/omni-sdk";
 
 const env = process.env as any;
@@ -18,16 +18,16 @@ const omni = new OmniService({
 
 // Simple bridge
 const ton = new OmniToken(OmniGroup.TON); // builder
-await omni.depositToken(...ton.input(Network.Ton, 1));
+await omni.depositToken(...ton.input(chain.Ton, 1));
 
-console.log("Omni TON", await omni.getBalance(ton.intent(Network.Ton)));
-await omni.withdrawToken(...ton.input(Network.Bnb, 1));
+console.log("Omni TON", await omni.getBalance(ton.intent(chain.Ton)));
+await omni.withdrawToken(...ton.input(chain.Bnb, 1));
 
 // Intent swap
 const usdc = new OmniToken(OmniGroup.USDC);
-await omni.depositToken(...usdc.input(Network.Base, 1));
-await omni.swapToken(usdc.intent(Network.Base), usdc.intent(Network.Arbitrum), 1);
+await omni.depositToken(...usdc.input(chain.Base, 1));
+await omni.swapToken(usdc.intent(chain.Base), usdc.intent(chain.Arbitrum), 1);
 
-console.log("Omni USDC on Arb", await omni.getBalance(ton.intent(Network.Arbitrum)));
-await omni.withdrawToken(...ton.input(Network.Arbitrum, 1));
+console.log("Omni USDC on Arb", await omni.getBalance(usdc.intent(chain.Arbitrum)));
+await omni.withdrawToken(...usdc.input(chain.Arbitrum, 1));
 ```

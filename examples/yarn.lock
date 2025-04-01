@@ -55,10 +55,10 @@
     sha1 "^1.1.1"
     uuid4 "2.0.3"
 
-"@hot-wallet/omni-sdk@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@hot-wallet/omni-sdk/-/omni-sdk-2.0.0.tgz#ebb31416114753de6d03365a25bfab921e762720"
-  integrity sha512-P1ciGPPiqHH2dwHs26/RtawQmUG0wp1D3rNKFRV+Mowaxj9OBk9pHLZFajJfOaakV1dGYcQegNP6K4kzbRWSow==
+"@hot-wallet/omni-sdk@^2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@hot-wallet/omni-sdk/-/omni-sdk-2.0.1.tgz#5c5fcc4f317bf6da811f3b6ee6df4abf41912bb8"
+  integrity sha512-CWSGREe27YMYQJTwQWiqaZ3LPYuELc1GPZyyg0LmVFX3eqZ5bVZ67lhMc8cv74xM3xMNPjwCsFjFUXWRcOxq1g==
   dependencies:
     "@coral-xyz/anchor" "0.29.0"
     "@here-wallet/core" "^3.4.0"
