@@ -1,7 +1,7 @@
-import { BN } from "bn.js";
+import { BN } from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
 
-export const PROGRAM_ID = new PublicKey("5bG1Kru6ifRmkWMigYaGRKbBKp3WrgcmB6ARNKsV2y2v");
+export const PROGRAM_ID = new PublicKey("8sXzdKW2jFj7V5heRwPMcygzNH3JZnmie5ZRuNoTuKQC");
 
 export function findContractStateAddress(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], PROGRAM_ID);

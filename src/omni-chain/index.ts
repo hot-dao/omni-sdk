@@ -1,296 +1,234 @@
+import { Address as stellarAddress } from "@stellar/stellar-sdk";
+import { baseDecode, baseEncode } from "@near-js/utils";
+import { HereCall } from "@here-wallet/core";
 import { getBytes, sha256 } from "ethers";
-import { baseEncode } from "@near-js/utils";
 import { Address } from "@ton/core";
 
-import NearSigner from "../signers/NearSigner";
-import SolanaSigner from "../signers/SolanaSigner";
-import TonSigner from "../signers/TonSigner";
-import EvmSigner from "../signers/EvmSigner";
-
-import { TokenId } from "./tokens";
-import OmniToken, { TokenInput } from "./token";
-import { bigintToBuffer, generateUserId } from "./ton/constants";
+import { omniTokens } from "./tokens";
+import { IntentsService } from "./intents";
+import { Network, Chains } from "./chains";
+import { signIntentAction, withdrawIntentAction } from "./intents";
+import { formatAmount, PendingControl, TGAS, wait } from "./utils";
+import { address2base, base2Address, INTENT_PREFIX, OMNI_HOT_V2, toOmni, toOmniIntent } from "./utils";
 import { PendingDeposit, PendingWithdraw, TransferType } from "./types";
-import { nativeToOmni, PendingControl, wait } from "./utils";
-import { getChain, Network } from "./chains";
+import { bigintToBuffer, generateUserId } from "./ton/constants";
+
 import SolanaOmniService from "./solana";
+import StellarService from "./stellar";
 import EvmOmniService from "./evm";
 import TonOmniService from "./ton";
+import OmniV2 from "./omni_v2";
 import OmniApi from "./api";
 
-export const OMNI_HOT = "v1-1.omni.hot.tg";
-export const OMNI_HELPER = "v1-1.omni-helper.hot.tg";
-export const TGAS = 1000000000000n;
-
-interface Options {
-  solana?: SolanaSigner;
-  near: NearSigner;
-  ton?: TonSigner;
-  evm?: EvmSigner;
-}
+import NearSigner from "../signers/NearSigner";
+import EvmSigner from "../signers/EvmSigner";
+import SolanaSigner from "../signers/SolanaSigner";
+import StellarSigner from "../signers/StellarSigner";
+import TonSigner from "../signers/TonSigner";
 
 class OmniService {
+  isDisabled = false;
+  completed = new Set<string>();
+  disabled: Network[] = [];
+
+  pendings: Record<string, PendingWithdraw> = {};
+  deposits: Record<string, PendingDeposit> = {};
+  addresses: Record<string, string> = {};
+  balances: Record<string, string> = {};
+
+  intents: IntentsService;
   solana: SolanaOmniService;
   ton: TonOmniService;
   evm: EvmOmniService;
+  stellar: StellarService;
+  omniV2: OmniV2;
 
-  constructor(readonly signers: Options) {
+  constructor(readonly user: { near: NearSigner; evm?: EvmSigner; solana?: SolanaSigner; stellar?: StellarSigner; ton?: TonSigner }) {
     this.ton = new TonOmniService(this);
     this.solana = new SolanaOmniService(this);
+    this.stellar = new StellarService(this);
     this.evm = new EvmOmniService(this);
+
+    this.intents = new IntentsService(this);
+    this.omniV2 = new OmniV2(this);
   }
 
-  get storage(): any {
-    return null;
+  get assets() {
+    return Object.values(omniTokens).map((t) => Object.entries(t).map(([chain, address]) => toOmniIntent(+chain, address)));
   }
 
-  signer(chain: Network) {
-    if (chain === Network.Hot) return this.getOmniAddress(this.signers.near.accountId);
-    if (chain === Network.Near) return this.signers.near.accountId;
-    if (chain === Network.Solana) return this.signers.solana!.address;
-    if (chain === Network.Ton) return this.signers.ton!.address;
-    return this.signers.evm!.address;
+  get near() {
+    return this.user.near;
   }
 
-  getOmniAddress(address: string) {
-    return baseEncode(getBytes(sha256(Buffer.from(address, "utf8"))));
-  }
+  async fetchPendingWithdrawals() {
+    const pending = new Set<PendingWithdraw>();
+    const chains = new Set(Object.values(omniTokens).flatMap((t) => Object.keys(t).map((t) => +t)));
+    const tasks = Array.from(chains).map(async (chain) => {
+      const withdraw = await this.near.viewFunction({
+        contractId: OMNI_HOT_V2,
+        methodName: "get_withdraw_by_receiver",
+        args: {
+          receiver_id: this.getReceiverRaw(chain),
+          chain_id: chain,
+        },
+      });
 
-  getOmniAddressHex(address: string) {
-    return sha256(Buffer.from(address, "utf8"));
-  }
-
-  token(id: TokenId) {
-    return new OmniToken(this, id);
-  }
-
-  async findToken(chain: Network, address: string) {
-    if (chain === 0) return new OmniToken(this, +address);
-    const id = await this.signers.near.viewFunction({
-      args: { contract_id: nativeToOmni(chain, address), chain_id: chain },
-      methodName: "get_token_id",
-      contractId: OMNI_HOT,
+      if (!withdraw || (await this.isNonceUsed(chain, withdraw.nonce))) return;
+      pending.add({
+        nonce: withdraw.nonce,
+        chain: withdraw.chain_id,
+        amount: withdraw.amount,
+        timestamp: withdraw.created_ts * 1000,
+        token: base2Address(withdraw.chain_id, withdraw.contract_id),
+        receiver: withdraw.receiver_id,
+        completed: false,
+      });
     });
 
-    return new OmniToken(this, id);
+    await Promise.allSettled(tasks);
+    return pending;
   }
 
-  get omniAddress() {
-    return this.getOmniAddress(this.signers.near.accountId);
+  async fetchBalances() {
+    return await this.intents.getBalances(
+      this.assets.flatMap((t) => t),
+      this.near!.accountId
+    );
   }
 
-  get omniAddressHex() {
-    return sha256(Buffer.from(this.signers.near.accountId, "utf8"));
+  async getBalance(intentId: string) {
+    const balances = await this.fetchBalances();
+    return balances[intentId] || 0n;
+  }
+
+  async getGroup(intentId: string) {
+    const stables = await this.omniV2.getStableGroups();
+    const balances = await this.fetchBalances();
+
+    const linked = Object.entries(stables)
+      .filter(([_, symbol]) => symbol.group === stables[toOmni(intentId)]?.group)
+      .map((t) => INTENT_PREFIX + t[0]);
+
+    return linked.reduce((acc, id) => {
+      if (BigInt(balances[id] || 0n) === 0n) return acc;
+      return { ...acc, [id]: String(balances[id] || 0n) };
+    }, {} as Record<string, string>);
+  }
+
+  removePendingDeposit(deposit: PendingDeposit) {
+    delete this.deposits[deposit.tx];
+  }
+
+  addPendingDeposit(deposit: PendingDeposit) {
+    this.deposits[deposit.tx] = deposit;
+    return deposit;
   }
 
   getReceiverRaw(chain: Network) {
-    if (chain === Network.Near) return baseEncode(getBytes(sha256(Buffer.from(this.signers.near.accountId, "utf8"))));
+    if (chain === Network.Near) return baseEncode(getBytes(sha256(Buffer.from(this.near.accountId, "utf8"))));
 
     if (chain === Network.Solana) {
-      if (this.signers.solana == null) throw "Connect Solana";
-      return this.signers.solana.publicKey.toBase58();
+      if (this.user.solana == null) throw "Connect Solana";
+      return this.user.solana.publicKey.toBase58();
     }
 
     if (chain === Network.Ton) {
-      if (this.signers.ton == null) throw "Connect TON";
-      const id = generateUserId(Address.parse(this.signers.ton.address), 0n);
+      if (this.user.ton == null) throw "Connect TON";
+      const id = generateUserId(Address.parse(this.user.ton.address), 0n);
       return baseEncode(bigintToBuffer(id, 32));
     }
 
-    if (getChain(chain).isEvm) {
-      if (this.signers.evm == null) throw "Connect EVM";
-      return baseEncode(getBytes(this.signers.evm.address));
+    if (chain === Network.Stellar) {
+      if (this.user.stellar == null) throw "Connect Stellar";
+      return baseEncode(stellarAddress.fromString(this.user.stellar.address).toScVal().toXDR());
+    }
+
+    if (Chains.get(chain).isEvm) {
+      if (this.user.evm == null) throw "Connect EVM";
+      return baseEncode(getBytes(this.user.evm.address));
     }
 
     throw `Unsupported chain address ${chain}`;
   }
 
-  async getOmniBalances(account = this.omniAddress): Promise<Record<number, string>> {
-    return await this.signers.near.viewFunction({
-      args: { account_id: account },
-      methodName: "get_balance",
-      contractId: OMNI_HOT,
-    });
-  }
-
   async isDepositUsed(chain: number, nonce: string) {
-    return await await this.signers.near.viewFunction({
+    return await this.near.viewFunction({
       args: { chain_id: chain, nonce: nonce },
       methodName: "is_executed",
-      contractId: OMNI_HOT,
+      contractId: OMNI_HOT_V2,
     });
   }
 
-  async isWithdrawUsed(chain: number, nonce: string) {
+  async isNonceUsed(chain: number, nonce: string) {
     if (chain === Network.Ton) return await this.ton.isNonceUsed(nonce);
     if (chain === Network.Solana) return await this.solana.isNonceUsed(nonce);
-    if (getChain(chain).isEvm) return await this.evm.isNonceUsed(chain, nonce);
+    if (chain === Network.Stellar) return await this.stellar.isNonceUsed(nonce);
+    if (Chains.get(chain).isEvm) return await this.evm.isNonceUsed(chain, nonce);
     return false;
   }
 
-  async parseDeposit(chain: number, tx: string) {
-    if (chain === Network.Ton) return await this.ton.parseDeposit(tx);
-    if (chain === Network.Solana) return await this.solana.parseDeposit(tx);
-    if (getChain(chain).isEvm) return await this.evm.parseDeposit(chain, tx);
+  async getWithdrawFee(chain: number, token?: string) {
+    if (chain === Network.Hot || chain === Network.Near) return { need: 0n, canPerform: true, decimal: 24, amount: 0n, additional: 0n };
+    if (chain === Network.Ton) return await this.ton.getWithdrawFee();
+    if (chain === Network.Solana) return await this.solana.getWithdrawFee();
+    if (chain === Network.Stellar) return await this.stellar.getWithdrawFee();
+    if (Chains.get(chain).isEvm) return await this.evm.getWithdrawFee(chain);
+    throw `Unsupported chain address ${chain}`;
+  }
+
+  async getDepositFee(chain: number, token: string) {
+    if (chain === Network.Near || chain === Network.Hot)
+      return { maxFee: 0n, need: 0n, isNotEnough: false, gasPrice: 0n, gasLimit: 0n, chain: chain };
+    if (Chains.get(chain).isEvm) return this.evm.getDepositFee(chain, token);
+    if (chain === Network.Solana) return this.solana.getDepositFee();
+    if (chain === Network.Stellar) return this.stellar.getDepositFee();
+    if (chain === Network.Ton) return this.ton.getDepositFee();
     throw "Unknown chain";
   }
 
-  async getActiveDeposits(): Promise<PendingDeposit[]> {
-    const addresses = [this.signer(Network.Ton), this.signer(Network.Eth), this.signer(Network.Solana)].filter((t) => t != null);
-    const transactions = await OmniApi.shared.findDeposits(addresses);
-    const pendings: PendingDeposit[] = [];
-    let i = 0;
+  async finishWithdrawal(nonce: string, pending?: PendingControl) {
+    const transfer: TransferType = await this.near.viewFunction({ contractId: OMNI_HOT_V2, methodName: "get_transfer", args: { nonce } });
 
-    for (const tx of transactions) {
-      console.log(`Check ${++i}/${transactions.length}: ${getChain(tx.chain_id).name}: ${tx.hash}`);
-      const deposit = await this.parseDeposit(tx.chain_id, tx.hash).catch((e) => console.log(e));
-      if (deposit) pendings.push(deposit);
-    }
-
-    return pendings;
-  }
-
-  async getActiveWithdrawals(): Promise<PendingWithdraw[]> {
-    const nonces = await this.signers.near.viewFunction({
-      args: { account_id: this.omniAddress },
-      methodName: "get_withdrawals",
-      contractId: OMNI_HELPER,
-    });
-
-    let withdrawals: PendingWithdraw[] = [];
-    const promises = nonces.map(async (nonce: string) => {
-      // More then 17 days -> expired nonce (non-refundable)
-      if (+nonce <= 1728526736_000_000_000_000) return;
-      const currentNonce = Date.now() * 1_000_000_000;
-      const daysAgo = (currentNonce - +nonce) / 1_000_000_000_000 / 3600 / 24;
-      if (daysAgo >= 16) return;
-
-      const transfer = await this.signers.near.viewFunction({ methodName: "get_transfer", contractId: OMNI_HOT, args: { nonce } });
-      if (transfer == null) return;
-
-      const isUsed = await this.isWithdrawUsed(transfer.chain_id, nonce);
-      if (isUsed) return;
-
-      withdrawals.push({
-        receiver: transfer.receiver_id,
-        amount: transfer.amount,
-        token: transfer.token_id,
-        chain: transfer.chain_id,
-        nonce: String(nonce),
-        timestamp: Date.now(),
-        completed: false,
-      });
-    });
-
-    await Promise.allSettled(promises);
-    return withdrawals;
-  }
-
-  isWithdrawNonceExpired(chain: Network, nonce: string) {
-    const time = chain === Network.Ton ? 86400_000 : 480_000;
-    const ts = BigInt(nonce) / 1000000000000n;
-    return Date.now() - Number(ts) * 1000 > time;
-  }
-
-  timeLeftForRefund(nonce: string) {
-    const ts = BigInt(nonce) / 1000000000000n;
-    const time = Date.now() - Number(ts) * 1000;
-    return Math.max(0, 602_000 - time);
-  }
-
-  async cancelWithdraw(nonce: string): Promise<TransferType> {
-    const transfer = await await this.signers.near.viewFunction({
-      contractId: OMNI_HOT,
-      methodName: "get_transfer",
-      args: { nonce },
-    });
-
-    if (transfer === null) throw "Withdraw pending not found";
-    const isExpired = this.isWithdrawNonceExpired(transfer.chain_id, nonce);
-    if (isExpired === false) throw "nonce does not expire yet";
-
-    const timeToRefund = this.timeLeftForRefund(nonce);
-    if (timeToRefund > 0) throw `Refund will be available in ${timeToRefund} seconds.`;
-
-    const receiver = this.getReceiverRaw(transfer.chain_id)!;
-    const token = await this.token(transfer.token_id).metadata(transfer.chain_id);
-    const signature = await OmniApi.shared.refundSign(transfer.chain_id, nonce, receiver, token.omniAddress, transfer.amount);
-
-    await this.signers.near.functionCall({
-      contractId: OMNI_HOT,
-      methodName: "refund",
-      gas: 120n * TGAS,
-      attachedDeposit: 0n,
-      args: {
-        chain_id: transfer.chain_id,
-        helper_contract_id: OMNI_HELPER,
-        nonce: nonce,
-        signature,
-      },
-    });
-
-    return transfer;
-  }
-
-  async finishWithdrawal(nonce: string) {
-    const transfer: TransferType = await this.signers.near.viewFunction({
-      methodName: "get_transfer",
-      contractId: OMNI_HOT,
-      args: { nonce },
-    });
-
-    if (this.isWithdrawNonceExpired(transfer.chain_id, nonce)) {
-      await this.cancelWithdraw(nonce);
-      return;
-    }
-
-    if (await this.isWithdrawUsed(transfer.chain_id, nonce)) {
-      throw "Already claimed";
-    }
-
+    pending?.log("Signing request");
     const signature = await OmniApi.shared.withdrawSign(nonce);
+    const isUsed = await this.isNonceUsed(transfer.chain_id, nonce).catch(() => false);
+    if (isUsed) throw "Already claimed";
 
-    // SOLANA WITHDRAW
-    if (+transfer.chain_id === Network.Solana) {
-      await this.solana.withdraw({ nonce, signature, transfer });
-      return;
-    }
+    pending?.log(`Depositing on ${Chains.get(transfer.chain_id).name}`);
+    const token = base2Address(transfer.chain_id, transfer.contract_id);
+    const withdraw = { chain: +transfer.chain_id, nonce, signature, token, amount: BigInt(transfer.amount) };
 
-    if (+transfer.chain_id === Network.Ton) {
-      await this.ton.withdraw({ nonce, signature, transfer });
-      return;
-    }
-
-    // EVM WITHDRAW
-    if (getChain(+transfer.chain_id).isEvm) {
-      await this.evm.withdraw({ nonce, signature, transfer });
-      return;
-    }
+    if (withdraw.chain === Network.Ton) await this.ton.withdraw(withdraw);
+    if (withdraw.chain === Network.Solana) await this.solana.withdraw(withdraw);
+    if (withdraw.chain === Network.Stellar) await this.stellar.withdraw(withdraw);
+    if (Chains.get(withdraw.chain).isEvm) await this.evm.withdraw(withdraw);
+    await this.fetchBalances();
   }
 
-  async finishDeposit(deposit: PendingDeposit) {
+  async finishDeposit(deposit: PendingDeposit, _?: PendingControl): Promise<string> {
     // PARSE DEPOSIT NONCE
-    if (getChain(deposit.chain).isEvm) deposit = await this.evm.parseDeposit(deposit.chain, deposit.tx);
+    if (Chains.get(deposit.chain).isEvm) deposit = await this.evm.parseDeposit(deposit.chain, deposit.tx);
     if (deposit.chain === Network.Solana) deposit = await this.solana.parseDeposit(deposit.tx);
-    if (deposit.chain === Network.Ton) deposit = await this.ton.parseDeposit(deposit.tx);
+    if (deposit.chain === Network.Stellar) deposit = await this.stellar.parseDeposit(deposit);
+    if (deposit.chain === Network.Ton) deposit = await this.ton.parseDeposit(deposit);
     if (deposit == null) throw "Deposit nonce failed";
 
-    const isExecuted = await this.signers.near.viewFunction({
-      args: { nonce: deposit.nonce, chain_id: deposit.chain },
-      methodName: "is_executed",
-      contractId: OMNI_HOT,
-    });
+    const args = { nonce: deposit.nonce, chain_id: deposit.chain };
+    const isExecuted = await this.near.viewFunction({ contractId: OMNI_HOT_V2, methodName: "is_executed", args });
 
     if (isExecuted) {
       // CLEAR DEPOSIT PENDING
-      if (deposit.chain === Network.Solana) await this.solana.clearDepositNonceIfNeeded(deposit).catch(() => {});
-      if (deposit.chain === Network.Ton) await this.ton.clearDepositNonceIfNeeded(deposit).catch(() => {});
-      if (getChain(deposit.chain).isEvm) await this.evm.clearDepositNonceIfNeeded(deposit).catch(() => {});
-      return;
+      if (deposit.chain === Network.Stellar) this.stellar.clearDepositNonceIfNeeded(deposit);
+      if (deposit.chain === Network.Solana) this.solana.clearDepositNonceIfNeeded(deposit);
+      if (deposit.chain === Network.Ton) this.ton.clearDepositNonceIfNeeded(deposit);
+      if (Chains.get(deposit.chain).isEvm) this.evm.clearDepositNonceIfNeeded(deposit);
+      this.removePendingDeposit(deposit);
+      this.fetchBalances();
+      return "x";
     }
 
     const receiver = this.getReceiverRaw(deposit.chain);
-    const token = await this.token(deposit.token).metadata(deposit.chain);
 
     const depositSign = async (attemps = 0) => {
       try {
@@ -299,7 +237,7 @@ class OmniService {
           deposit.nonce,
           receiver,
           deposit.receiver,
-          token.omniAddress,
+          address2base(deposit.chain, deposit.token),
           deposit.amount
         );
       } catch (e) {
@@ -310,137 +248,316 @@ class OmniService {
     };
 
     const signature = await depositSign();
-    try {
-      await this.signers.near.functionCall({
-        contractId: OMNI_HOT,
+    let hash: string | null = null;
+
+    const depositAction: HereCall["actions"][0] = {
+      type: "FunctionCall",
+      params: {
         methodName: "deposit",
-        gas: 80n * TGAS,
+        gas: String(80n * TGAS),
+        deposit: "0",
         args: {
           nonce: deposit.nonce,
           chain_id: deposit.chain,
-          contract_id: token.omniAddress,
+          contract_id: address2base(deposit.chain, deposit.token),
+          near_account_id: this.near.accountId,
           receiver_id: deposit.receiver,
           amount: deposit.amount,
           signature,
         },
-      });
+      },
+    };
+
+    const depositToIntentsAction: HereCall["actions"][0] = {
+      type: "FunctionCall",
+      params: {
+        methodName: "mt_transfer_call",
+        gas: String(80n * TGAS),
+        deposit: "1",
+        args: {
+          receiver_id: "intents.near",
+          token_id: toOmni(deposit.chain, deposit.token),
+          amount: deposit.amount,
+          msg: "",
+        },
+      },
+    };
+
+    try {
+      hash = await this.near.callTransaction({ actions: [depositAction, depositToIntentsAction], receiverId: OMNI_HOT_V2 });
     } catch (e) {
-      // Backend can call deposit automatically, so we just skip this error
+      console.log({ error: e?.toString?.() });
       if (!e?.toString?.().includes("Nonce already used")) throw e;
     }
 
     // CLEAR DEPOSIT PENDING
-    if (deposit.chain === Network.Ton) await this.ton.clearDepositNonceIfNeeded(deposit).catch(() => {});
-    if (deposit.chain === Network.Solana) await this.solana.clearDepositNonceIfNeeded(deposit).catch(() => {});
-    if (getChain(deposit.chain).isEvm) await this.evm.clearDepositNonceIfNeeded(deposit).catch(() => {});
+    if (deposit.chain === Network.Ton) this.ton.clearDepositNonceIfNeeded(deposit);
+    if (deposit.chain === Network.Solana) this.solana.clearDepositNonceIfNeeded(deposit);
+    if (Chains.get(deposit.chain).isEvm) this.evm.clearDepositNonceIfNeeded(deposit);
+
+    this.removePendingDeposit(deposit);
+    this.fetchBalances();
+    return hash!;
   }
 
-  async depositToken(token: TokenInput, to?: string, pending = new PendingControl()) {
-    if (token.chain === Network.Near) {
-      pending?.step(`Withdrawing from NEAR to HOT Omni`, 2);
-      const receiver = to ? this.getOmniAddress(to) : this.omniAddress;
-      return await this.signers.near.functionCall({
-        args: { amount: token.amount, receiver_id: OMNI_HOT, msg: receiver },
-        methodName: "ft_transfer_call",
-        contractId: token.address,
-        attachedDeposit: 1n,
-        gas: 80n * TGAS,
+  async depositToken(chain: Network, address: string, amount: bigint, to?: string, pending?: PendingControl) {
+    if (this.disabled.includes(chain)) throw "Technical work, please try again later";
+
+    if (chain === Network.Near) {
+      pending?.log(`Depositing to NEAR`);
+      address = address === "native" ? "wrap.near" : address;
+
+      const call = await this.near.getRegisterTokenTrx(address, OMNI_HOT_V2);
+      if (call) await this.near.callTransaction(call);
+
+      const depositWnear: any[] = address === "wrap.near" ? await this.near.getWrapNearDepositAction(BigInt(amount)) : [];
+      await this.near.callTransaction({
+        receiverId: address,
+        actions: [
+          ...depositWnear,
+          {
+            type: "FunctionCall",
+            params: {
+              args: { amount: BigInt(amount), receiver_id: OMNI_HOT_V2, msg: this.near.accountId },
+              methodName: "ft_transfer_call",
+              gas: String(80n * TGAS),
+              deposit: "1",
+            },
+          },
+        ],
       });
+
+      const tx = await this.near.callTransaction({
+        receiverId: OMNI_HOT_V2,
+        actions: [
+          {
+            type: "FunctionCall",
+            params: {
+              methodName: "mt_transfer_call",
+              gas: String(80n * TGAS),
+              deposit: "1",
+              args: {
+                receiver_id: "intents.near",
+                token_id: toOmni(chain, address),
+                amount: BigInt(amount),
+                msg: "",
+              },
+            },
+          },
+        ],
+      });
+
+      return { receiver: address, hash: tx };
     }
 
-    // EVM DEPOSIT
-    if (getChain(token.chain).isEvm) {
-      pending?.step(`Withdrawing from ${getChain(token.chain).name}`);
-      const deposit = await this.evm.deposit(token, to);
+    let deposit: PendingDeposit | null = null;
 
-      pending?.step(`Receiving on HOT Omni`);
-      return await this.finishDeposit(deposit);
+    // EVM DEPOSIT
+    if (Chains.get(chain).isEvm) {
+      pending?.log(`Withdrawing from ${Chains.get(chain).name}`);
+      deposit = await this.evm.deposit(chain, address, amount, to);
+    }
+
+    // Stellar DEPOSIT
+    if (chain === Network.Stellar) {
+      pending?.log(`Withdrawing from Stellar`);
+      deposit = await this.stellar.deposit(address, amount, to);
     }
 
     // SOLANA DEPOSIT
-    if (token.chain === Network.Solana) {
-      pending?.step(`Withdrawing from Solana`);
-      const deposit = await this.solana.deposit(token, to);
-
-      pending?.step(`Receiving on HOT Omni`);
-      return await this.finishDeposit(deposit);
+    if (chain === Network.Solana) {
+      pending?.log(`Withdrawing from Solana`);
+      deposit = await this.solana.deposit(address, amount, to);
     }
 
     // TON DEPOSIT
-    if (token.chain === Network.Ton) {
-      pending?.step(`Withdrawing from Ton`);
-      const deposit = await this.ton.deposit(token, to, pending);
-
-      pending?.step(`Receiving on HOT Omni`);
-      return await this.finishDeposit(deposit);
+    if (chain === Network.Ton) {
+      pending?.log(`Withdrawing from TON`);
+      deposit = await this.ton.deposit(address, amount, to);
     }
 
-    throw "Unsupported chain";
+    if (deposit == null) throw "Unsupported chain";
+
+    pending?.log(`Receiving on HOT Omni`);
+    const hash = await this.finishDeposit(deposit, pending);
+    return { receiver: OMNI_HOT_V2, hash };
   }
 
-  async withdrawToken(token: TokenInput, pending = new PendingControl()) {
-    if (token.chain === Network.Ton) {
-      pending?.step("Creating TON bridge account", 0);
-      await this.ton.createUserIfNeeded();
-    }
-
-    if (token.chain === Network.Near) {
-      pending?.step("Depositting on NEAR", 2);
-      const needReg = await this.signers.near.viewFunction({
-        args: { account_id: this.signers.near.accountId },
-        methodName: "storage_balance_of",
-        contractId: token.address,
-      });
-
-      return await this.signers.near.functionCall({
-        attachedDeposit: needReg == null ? 5000000000000000000000n : 1n,
-        methodName: "withdraw_on_near",
-        contractId: OMNI_HOT,
-        gas: 80n * TGAS,
-        args: {
-          account_id: this.omniAddress,
-          token_id: token.id,
-          amount: token.amount,
-        },
-      });
-    }
-
-    // Convert to 24 decimal for omni format
-    pending?.step("Withdrawing from HOT Omni");
-    const tx = await this.signers.near.functionCall({
-      contractId: OMNI_HOT,
-      methodName: "withdraw",
-      attachedDeposit: 1n,
-      gas: 80n * TGAS,
+  async checkWithdrawLocker(chain: number): Promise<HereCall["actions"][0] | null> {
+    const withdraw = await this.near.viewFunction({
+      contractId: OMNI_HOT_V2,
+      methodName: "get_withdraw_by_receiver",
       args: {
-        helper_contract_id: OMNI_HELPER,
-        receiver_id: this.getReceiverRaw(token.chain),
-        account_id: this.omniAddress,
-        token_id: token.id,
-        chain_id: token.chain,
-        amount: token.amount,
+        receiver_id: this.getReceiverRaw(chain),
+        chain_id: chain,
       },
     });
 
-    const receipt = await this.signers.near.connection.provider.txStatusReceipts(
-      tx.transaction_outcome.id,
-      this.signers.near.accountId,
-      "EXECUTED"
-    );
+    if (withdraw == null) return null;
+    const isUsed = await this.isNonceUsed(withdraw.chain_id, withdraw.nonce);
+    if (!isUsed) throw "Complete previous withdraw before making new";
+
+    if (withdraw.sender_id === this.near.accountId) {
+      return {
+        type: "FunctionCall",
+        params: {
+          deposit: "0",
+          methodName: "clear_my_withdraw",
+          gas: String(80n * TGAS),
+          args: {
+            chain_id: withdraw.chain_id,
+            receiver_id: withdraw.receiver_id,
+            last_nonce: withdraw.nonce,
+          },
+        },
+      };
+    }
+
+    const signature = await OmniApi.shared.clearWithdrawSign(withdraw.nonce, Buffer.from(baseDecode(withdraw.receiver_id)));
+    return {
+      type: "FunctionCall",
+      params: {
+        deposit: "0",
+        methodName: "clear_withdraw",
+        args: { nonce: withdraw.nonce, signature },
+        gas: String(80n * TGAS),
+      },
+    };
+  }
+
+  async estimateSwap(intentFrom: string, intentTo: string, amount: number) {
+    const group = await this.getGroup(intentFrom);
+    group[intentFrom] = String(10n ** 24n); // For emulation
+
+    const { amountOut } = await OmniApi.shared.estimateSwap(this.near.accountId, group, intentTo, amount);
+    return amountOut;
+  }
+
+  async swapToken(intentFrom: string, intentTo: string, amount: number) {
+    await this.intents.registerIntents();
+
+    const group = await this.getGroup(intentFrom);
+    const { quote, signed_quote, amountOut } = await OmniApi.shared.estimateSwap(this.near.accountId, group, intentTo, amount);
+
+    const signed = await signIntentAction(this.near, quote);
+    const tx = await this.near.callTransaction({
+      receiverId: "intents.near",
+      actions: [
+        {
+          type: "FunctionCall",
+          params: {
+            methodName: "execute_intents",
+            args: { signed: [signed, signed_quote] },
+            gas: String(300n * TGAS),
+            deposit: "0",
+          },
+        },
+      ],
+    });
+
+    return { receiver: "intents.near", hash: tx, amountOut };
+  }
+
+  async autoWithdraw(chain: Network, nonce: string) {
+    const gasPrice = await this.evm.getGasPrice(chain);
+    await this.near.callTransaction({
+      receiverId: "intents.near",
+      actions: [
+        {
+          type: "FunctionCall",
+          params: {
+            deposit: "1",
+            gas: String(40n * TGAS),
+            methodName: "mt_transfer_call",
+
+            args: {
+              receiver_id: "gas.hot.tg",
+              token_id: toOmniIntent(chain, "native"),
+              msg: JSON.stringify({ withdrawal_nonce: nonce, chain_id: chain, standard: "bridge" }),
+              amount: String(gasPrice * 300_000n),
+            },
+          },
+        },
+      ],
+    });
+  }
+
+  async withdrawToken(chain: Network, address: string, amount: { int: bigint; decimals: number }, pending?: PendingControl) {
+    if (chain === Network.Ton) {
+      pending?.log("Creating TON bridge account");
+      await this.ton.createUserIfNeeded();
+    }
+
+    // Check withdraw locker
+    pending?.log(`Clear withdraw locker`);
+    const ClearWithdrawAction = await this.checkWithdrawLocker(chain);
+    if (ClearWithdrawAction) await this.near.callTransaction({ actions: [ClearWithdrawAction], receiverId: OMNI_HOT_V2 });
+
+    // Register intents
+    pending?.log(`Register intents`);
+    await this.intents.registerIntents();
+
+    const balances = await this.fetchBalances();
+    const intentId = toOmniIntent(chain, address);
+
+    if (balances[intentId] >= amount.int) {
+      const receiver = chain === Network.Near ? this.near.accountId : this.getReceiverRaw(chain);
+      const tx = await this.intents.withdrawIntent(intentId, amount.int, receiver);
+      if (chain === Network.Near) return;
+
+      const nonce = await this.parseWithdrawalNonce(tx);
+      pending?.log(`Depositing to ${Chains.get(chain).name}`);
+      await this.finishWithdrawal(nonce);
+      return;
+    }
+
+    const group = await this.getGroup(intentId); // amount to swap minus balance in target intent token
+    const amountInFloat = formatAmount(amount.int - (balances[intentId] || 0n), amount.decimals);
+    group[intentId] = "0"; // Dont swap target intent token
+
+    let { quote, signed_quote, amountOut } = await OmniApi.shared.estimateSwap(this.near.accountId, group, intentId, amountInFloat);
+    const signed = await signIntentAction(this.near, quote);
+
+    amountOut += balances[intentId] || 0n;
+    const receiver = chain === Network.Near ? this.near.accountId : this.getReceiverRaw(chain);
+    const withdraw = await withdrawIntentAction(this.near, intentId, amountOut, receiver);
+
+    const tx = await this.near.callTransaction({
+      receiverId: "intents.near",
+      actions: [
+        {
+          type: "FunctionCall",
+          params: {
+            methodName: "execute_intents",
+            args: { signed: [signed, signed_quote, withdraw] },
+            gas: String(300n * TGAS),
+            deposit: "0",
+          },
+        },
+      ],
+    });
+
+    if (chain === Network.Near) return;
+
+    const nonce = await this.parseWithdrawalNonce(tx);
+    pending?.log(`Depositing to ${Chains.get(chain).name}`);
+    await this.finishWithdrawal(nonce);
+  }
+
+  async parseWithdrawalNonce(tx: string) {
+    const receipt = await this.near.connection.provider.txStatusReceipts(tx, this.near.accountId, "EXECUTED_OPTIMISTIC");
 
     const transfer = (() => {
       for (let item of receipt.receipts_outcome) {
         for (let log of item.outcome.logs) {
-          const nonce = `${log}`.match(/nonce.....(\d+)/)?.[1];
-          const amount = `${log}`.match(/amount.....(\d+)/)?.[1];
-          if (nonce && amount) return { amount, nonce };
+          const nonce = `${log}`.match(/"memo":"(\d+)"/)?.[1];
+          if (nonce) return { nonce };
         }
       }
     })();
 
     if (transfer == null) throw `Nonce not found, contact support please`;
-    pending?.step(`Depositting to ${getChain(token.chain).name}`);
-    await this.finishWithdrawal(transfer.nonce);
+    return transfer.nonce;
   }
 }
 

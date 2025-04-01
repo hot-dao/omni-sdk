@@ -1,27 +1,6 @@
-import {
-  AbstractProvider,
-  FeeData,
-  JsonRpcProvider,
-  Network,
-  PerformActionRequest,
-  TransactionRequest,
-  Wallet,
-  ethers,
-  isError,
-} from "ethers";
-import { Network as Chain, getChain, networks } from "../omni-chain/chains";
+import { AbstractProvider, FeeData, JsonRpcProvider, Network, PerformActionRequest, TransactionRequest, Wallet, ethers } from "ethers";
+import { Chains, networks } from "../omni-chain/chains";
 import { SigningKey } from "ethers";
-
-const blockchain = [
-  //
-  "CALL_EXCEPTION",
-  "INSUFFICIENT_FUNDS",
-  "NONCE_EXPIRED",
-  "REPLACEMENT_UNDERPRICED",
-  "TRANSACTION_REPLACED",
-  "UNCONFIGURED_NAME",
-  "OFFCHAIN_FAULT",
-];
 
 let methods = [
   "getBlock",
@@ -38,7 +17,12 @@ let methods = [
 ];
 
 export class EvmProvider extends AbstractProvider {
-  constructor(readonly providers: JsonRpcProvider[], readonly chain: number, readonly address?: string) {
+  constructor(
+    readonly providers: JsonRpcProvider[],
+    readonly chain: number,
+    readonly address?: string,
+    readonly submitter?: JsonRpcProvider[]
+  ) {
     super(chain);
   }
 
@@ -47,11 +31,16 @@ export class EvmProvider extends AbstractProvider {
   }
 
   async send(method: string, params: any[]) {
+    let lastError: any;
     for (const rpc of this.providers) {
       try {
         return await rpc.send(method, params);
-      } catch {}
+      } catch (e) {
+        lastError = e;
+      }
     }
+
+    throw lastError;
   }
 
   estimateGas(_tx: TransactionRequest): Promise<bigint> {
@@ -60,26 +49,36 @@ export class EvmProvider extends AbstractProvider {
   }
 
   async getFeeData(): Promise<FeeData> {
-    if (this.chain === Chain.Bnb) return new FeeData(1000000000n);
-    return super.getFeeData();
+    try {
+      const res = await fetch(`https://api0.herewallet.app/api/v1/evm/${this.chain}/gas_price`);
+      const { gas_price } = await res.json();
+      return new FeeData(BigInt(gas_price));
+    } catch {
+      if (this.chain === 56) return new FeeData(1000000000n);
+      return super.getFeeData();
+    }
   }
 
   async _perform<T = any>(req: PerformActionRequest): Promise<T> {
     let lastError: any;
     let currentProviderIndex = -1;
 
-    for (const rpc of this.providers) {
+    let rpcList = this.providers;
+    if (req.method === "broadcastTransaction" || req.method === "getTransactionReceipt") {
+      rpcList = [...(this.submitter || []), ...this.providers];
+    }
+
+    for (const rpc of rpcList) {
       currentProviderIndex += 1;
       if (methods.includes(req.method)) {
         const result = await rpc._perform(req).catch(() => null);
-        if (result == null && this.providers[currentProviderIndex + 1] != null) continue;
+        if (result == null && rpcList[currentProviderIndex + 1] != null) continue;
         return result;
       }
 
       try {
         return await rpc._perform(req);
       } catch (e) {
-        if (blockchain.some((id: any) => isError(e, id))) throw e;
         lastError = e;
       }
     }
@@ -111,7 +110,7 @@ export default class EvmSigner extends Wallet {
   }
 
   async runner(chain: number): Promise<ethers.AbstractSigner> {
-    const provider = createProvider(getChain(chain), this.address);
+    const provider = createProvider(Chains.get(chain), this.address);
     return this.connect(provider);
   }
 }

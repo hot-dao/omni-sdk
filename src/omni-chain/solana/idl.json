@@ -43,26 +43,6 @@
           }
         },
         {
-          "name": "withdrawDelegate",
-          "type": "publicKey"
-        },
-        {
-          "name": "chainId",
-          "type": "u16"
-        },
-        {
-          "name": "refundDelay",
-          "type": {
-            "option": "u64"
-          }
-        },
-        {
-          "name": "clearDelay",
-          "type": {
-            "option": "u64"
-          }
-        },
-        {
           "name": "bump",
           "type": "u8"
         }
@@ -109,90 +89,6 @@
           "type": {
             "array": ["u8", 64]
           }
-        }
-      ]
-    },
-    {
-      "name": "setWithdrawDelegate",
-      "accounts": [
-        {
-          "name": "authority",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "state",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "withdrawDelegate",
-          "type": "publicKey"
-        }
-      ]
-    },
-    {
-      "name": "setChainId",
-      "accounts": [
-        {
-          "name": "authority",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "state",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "chainId",
-          "type": "u16"
-        }
-      ]
-    },
-    {
-      "name": "setRefundDelay",
-      "accounts": [
-        {
-          "name": "authority",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "state",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "refundDelay",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "setClearDelay",
-      "accounts": [
-        {
-          "name": "authority",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "state",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "clearDelay",
-          "type": "u64"
         }
       ]
     },
@@ -452,6 +348,11 @@
           "isSigner": true
         },
         {
+          "name": "receiver",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "user",
           "isMut": true,
           "isSigner": false
@@ -481,10 +382,6 @@
         {
           "name": "amount",
           "type": "u64"
-        },
-        {
-          "name": "receiver",
-          "type": "publicKey"
         },
         {
           "name": "bump",
@@ -550,7 +447,7 @@
       ]
     },
     {
-      "name": "hotVerify",
+      "name": "hotVerifyDeposit",
       "accounts": [
         {
           "name": "signer",
@@ -560,8 +457,7 @@
         {
           "name": "deposit",
           "isMut": false,
-          "isSigner": false,
-          "isOptional": true
+          "isSigner": false
         },
         {
           "name": "user",
@@ -575,10 +471,6 @@
         }
       ],
       "args": [
-        {
-          "name": "verificationType",
-          "type": "u8"
-        },
         {
           "name": "msgHash",
           "type": "bytes"
@@ -637,34 +529,14 @@
             }
           },
           {
-            "name": "withdrawDelegate",
-            "docs": ["Public key of the delegate wallet that can be used for withdrawing funds"],
-            "type": "publicKey"
-          },
-          {
             "name": "chainId",
             "docs": ["Solana chain ID"],
             "type": "u16"
           },
           {
-            "name": "refundDelay",
-            "docs": ["Delay in seconds before the deposit can be refunded"],
-            "type": "u64"
-          },
-          {
-            "name": "clearDelay",
-            "docs": ["Delay in seconds before the deposit can be cleared"],
-            "type": "u64"
-          },
-          {
             "name": "nonceAdditive",
             "docs": ["Additive used for generating deposit nonce"],
             "type": "u32"
-          },
-          {
-            "name": "updatedAt",
-            "docs": ["Timestamp when the state was last updated"],
-            "type": "i64"
           }
         ]
       }
@@ -816,9 +688,11 @@
       "code": 6019,
       "name": "HotVerificationFailed",
       "msg": "Provided hash doesn't match"
+    },
+    {
+      "code": 6020,
+      "name": "ReceiverMismatch",
+      "msg": "Provided receivers doesn't match"
     }
-  ],
-  "metadata": {
-    "address": "HHh8YRPymdQQD9pU248Si6JLQyCfzS5ygatcePxjfqj4"
-  }
+  ]
 }

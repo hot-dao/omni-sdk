@@ -1,4 +1,4 @@
-export const OMNI_CONTRACT = "0x42351e68420D16613BBE5A7d8cB337A9969980b4";
+export const OMNI_CONTRACT = "0x233c5370CCfb3cD7409d9A3fb98ab94dE94Cb4Cd";
 export const OMNI_DEPOSIT_FT = "function deposit(bytes memory receiver, address contract_id, uint128 amount)";
 export const OMNI_DEPOSIT_NATIVE = "function deposit(bytes memory receiver) payable";
 export const OMNI_DEPOSIT_LOG = {

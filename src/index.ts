@@ -1,28 +1,12 @@
-import OmniService from "./omni-chain";
-import OmniToken from "./omni-chain/token";
-import { TokenId, TokenIds } from "./omni-chain/tokens";
-import { Network, networks, getChain } from "./omni-chain/chains";
-
-import EvmSigner, { EvmProvider, createProvider } from "./signers/EvmSigner";
+import EvmSigner, { EvmProvider } from "./signers/EvmSigner";
 import SolanaSigner from "./signers/SolanaSigner";
+import StellarSigner from "./signers/StellarSigner";
 import NearSigner from "./signers/NearSigner";
 import TonSigner from "./signers/TonSigner";
 
+import OmniService from "./omni-chain";
+import { Chains, Network } from "./omni-chain/chains";
+import { OmniToken } from "./omni-chain/tokens";
 import * as utils from "./omni-chain/utils";
 
-export {
-  OmniToken,
-  OmniService,
-  TokenId,
-  TokenIds,
-  Network,
-  networks,
-  getChain,
-  EvmSigner,
-  SolanaSigner,
-  NearSigner,
-  TonSigner,
-  EvmProvider,
-  createProvider,
-  utils,
-};
+export { OmniToken, OmniService, Chains, Network, EvmSigner, StellarSigner, SolanaSigner, NearSigner, TonSigner, EvmProvider, utils };

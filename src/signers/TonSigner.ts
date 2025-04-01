@@ -1,6 +1,6 @@
 import { TonApiClient } from "@ton-api/client";
 import { ContractAdapter } from "@ton-api/ton-adapter";
-import { KeyPair, keyPairFromSecretKey, mnemonicToPrivateKey } from "@ton/crypto";
+import { KeyPair, keyPairFromSecretKey } from "@ton/crypto";
 import EventEmitter from "eventemitter3";
 import {
   Address,

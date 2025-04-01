@@ -18,11 +18,14 @@ export interface ChainType {
 }
 
 export enum Network {
-  Hot = 0,
+  Hot = -4,
+  Tron = 999, // magic id
+  Solana = 1001, // magic id
+  Near = 1010, // magic id
+  Ton = 1111, // magic id
+  Stellar = 1100, // magic id
+
   Eth = 1,
-  Tron = 999,
-  Solana = 1001,
-  Near = 1010,
   Polygon = 137,
   Arbitrum = 42161,
   Aurora = 1313161554,
@@ -30,7 +33,6 @@ export enum Network {
   Linea = 59144,
   Xlayer = 196,
   Base = 8453,
-  Ton = 1111,
   Bnb = 56,
   OpBnb = 204,
   BnbTestnet = 97,
@@ -42,33 +44,16 @@ export enum Network {
   Taiko = 167000,
   Mantle = 5000,
   Manta = 169,
+  Kava = 2222,
 }
 
-export const chainLogo = (ft: { chain: number } | number) => {
-  const network = networks.find((t) => (typeof ft === "number" ? t.id === ft : t.id === ft.chain));
-  return network?.icon;
+export const Chains = {
+  get(id: number) {
+    return networks.find((t) => t.id === id) || ({} as any);
+  },
 };
 
-export const getChain = (id: number): ChainType => networks.find((t) => t.id === id) || ({} as any);
-
 export const networks: ChainType[] = [
-  {
-    id: Network.Hot,
-    rpc: [],
-    icon: "https://tgapp.herewallet.app/images/hot/hot-icon.png",
-    wrapToken: "",
-    name: "HOT",
-    key: "hot",
-    short: "HOT",
-    symbol: "HOT",
-    decimal: 6,
-    minimum: 0,
-    isEvm: false,
-    isOpen: false,
-    explorer: "https://hotscan.org",
-    explorerTx: "https://solscan.io/tx",
-    exporerToken: "https://hotscan.org",
-  },
   {
     id: Network.Tron,
     rpc: ["https://api.trongrid.io"],
@@ -89,10 +74,7 @@ export const networks: ChainType[] = [
 
   {
     id: Network.Solana,
-    rpc: [
-      "https://go.getblock.io/dd14ddd266c243ef9f7ec9d4a2971908",
-      "https://g.w.lavanet.xyz:443/gateway/solana/rpc-http/d201915962f57367c3c57baa1c72df72", //
-    ],
+    rpc: [],
 
     icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png",
     wrapToken: "So11111111111111111111111111111111111111112",
@@ -111,14 +93,8 @@ export const networks: ChainType[] = [
 
   {
     id: Network.Near,
-    rpc: [
-      Math.random() > 0.5 ? "https://c1.rpc.fastnear.com" : "https://c2.rpc.fastnear.com",
-      "https://rpc.near.org",
-      "https://g.w.lavanet.xyz:443/gateway/near/rpc-http/d201915962f57367c3c57baa1c72df72",
-      "https://rpc.mainnet.pagoda.co",
-      "https://rpc.mainnet.near.org",
-      "https://nearrpc.aurora.dev",
-    ],
+    rpc: [],
+
     icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/near/info/logo.png",
     wrapToken: "wrap.near",
     name: "NEAR",
@@ -207,7 +183,6 @@ export const networks: ChainType[] = [
     rpc: [
       "https://polygon.blockpi.network/v1/rpc/public",
       "https://polygon-rpc.com",
-      // "https://black-damp-wave.matic.quiknode.pro/e2869b5c4f4f6e4da83cc88b2530819b8c5b1e0f",
       "https://g.w.lavanet.xyz:443/gateway/polygon1/rpc-http/d201915962f57367c3c57baa1c72df72",
     ],
 
@@ -233,6 +208,7 @@ export const networks: ChainType[] = [
       "https://arb1.arbitrum.io/rpc",
       "https://g.w.lavanet.xyz:443/gateway/arb1/rpc-http/d201915962f57367c3c57baa1c72df72",
     ],
+
     icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png",
     wrapToken: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
     name: "Arbitrum",
