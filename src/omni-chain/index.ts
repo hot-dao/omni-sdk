@@ -27,10 +27,6 @@ import StellarSigner from "../signers/StellarSigner";
 import TonSigner from "../signers/TonSigner";
 
 class OmniService {
-  isDisabled = false;
-  completed = new Set<string>();
-  disabled: Network[] = [];
-
   pendings: Record<string, PendingWithdraw> = {};
   deposits: Record<string, PendingDeposit> = {};
   addresses: Record<string, string> = {};
@@ -54,7 +50,7 @@ class OmniService {
   }
 
   get assets() {
-    return Object.values(omniTokens).map((t) => Object.entries(t).map(([chain, address]) => toOmniIntent(+chain, address)));
+    return Object.values(omniTokens).map((t) => Object.entries(t).map(([chain, { address }]) => toOmniIntent(+chain, address)));
   }
 
   get near() {
@@ -301,8 +297,6 @@ class OmniService {
   }
 
   async depositToken(chain: Network, address: string, amount: bigint, to?: string, pending?: PendingControl) {
-    if (this.disabled.includes(chain)) throw "Technical work, please try again later";
-
     if (chain === Network.Near) {
       pending?.log(`Depositing to NEAR`);
       address = address === "native" ? "wrap.near" : address;

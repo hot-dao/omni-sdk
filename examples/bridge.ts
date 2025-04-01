@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { EvmSigner } from "@hot-wallet/omni-sdk";
-import { TonSigner, NearSigner, OmniService, StellarSigner, SolanaSigner } from "@hot-wallet/omni-sdk";
+import { EvmSigner, Network, OmniToken, OmniGroup } from "@hot-wallet/omni";
+import { TonSigner, NearSigner, StellarSigner, OmniService, SolanaSigner } from "@hot-wallet/omni";
 
 const env = process.env as any;
 const omni = new OmniService({
@@ -11,6 +11,17 @@ const omni = new OmniService({
   evm: new EvmSigner(env.EVM_PRIVATE_KEY),
 });
 
-const bridgeUsdtFromNearToBnb = async () => {};
+// Simple bridge
+const ton = new OmniToken(OmniGroup.TON); // builder
+await omni.depositToken(...ton.input(Network.Ton, 1));
 
-bridgeUsdtFromNearToBnb();
+console.log("Omni TON", await omni.getBalance(ton.intent(Network.Ton)));
+await omni.withdrawToken(...ton.input(Network.Bnb, 1));
+
+// Intent swap
+const usdc = new OmniToken(OmniGroup.USDC);
+await omni.depositToken(...usdc.input(Network.Base, 1));
+await omni.swapToken(usdc.intent(Network.Base), usdc.intent(Network.Arbitrum), 1);
+
+console.log("Omni USDC on Arb", await omni.getBalance(ton.intent(Network.Arbitrum)));
+await omni.withdrawToken(...ton.input(Network.Arbitrum, 1));
