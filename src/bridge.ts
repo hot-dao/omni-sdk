@@ -4,21 +4,19 @@ import { HereCall } from "@here-wallet/core";
 import { getBytes, sha256 } from "ethers";
 import { Address } from "@ton/core";
 
-import { omniTokens } from "./tokens";
-import { IntentsService } from "./intents";
-import { Network, Chains } from "./chains";
-import { signIntentAction, withdrawIntentAction } from "./intents";
-import { formatAmount, Logger, TGAS, wait } from "./utils";
-import { address2base, base2Address, INTENT_PREFIX, OMNI_HOT_V2, toOmni, toOmniIntent } from "./utils";
+import { formatAmount, Logger, TGAS, wait, address2base, base2Address, INTENT_PREFIX, OMNI_HOT_V2, toOmni, toOmniIntent } from "./utils";
+import { IntentsService, signIntentAction, withdrawIntentAction } from "./intents";
 import { PendingDeposit, PendingWithdraw, TransferType } from "./types";
-import { bigintToBuffer, generateUserId } from "./bridge-ton/constants";
+import { Network, Chains } from "./chains";
+import { omniTokens } from "./tokens";
+import OmniV2 from "./omni_v2";
+import OmniApi from "./api";
 
+import { bigintToBuffer, generateUserId } from "./bridge-ton/constants";
 import SolanaOmniService from "./bridge-solana";
 import StellarService from "./bridge-stellar";
 import EvmOmniService from "./bridge-evm";
 import TonOmniService from "./bridge-ton";
-import OmniV2 from "./omni_v2";
-import OmniApi from "./api";
 
 import NearSigner from "./signers/NearSigner";
 import EvmSigner from "./signers/EvmSigner";
@@ -28,8 +26,6 @@ import TonSigner from "./signers/TonSigner";
 
 class OmniService {
   deposits: Record<string, PendingDeposit> = {};
-  addresses: Record<string, string> = {};
-  balances: Record<string, string> = {};
 
   intents: IntentsService;
   solana: SolanaOmniService;
