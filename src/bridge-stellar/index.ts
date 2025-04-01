@@ -19,8 +19,8 @@ import { bigIntMax, getOmniAddressHex, parseAmount } from "../utils";
 import { Chains, Network } from "../chains";
 import { PendingDeposit } from "../types";
 import OmniApi from "../api";
-import OmniService from "..";
-import { ACCOUNT_FOR_SIMULATE } from "../../signers/StellarSigner";
+import OmniService from "../bridge";
+import { ACCOUNT_FOR_SIMULATE } from "../signers/StellarSigner";
 
 const CONTRACT = "CCLWL5NYSV2WJQ3VBU44AMDHEVKEPA45N2QP2LL62O3JVKPGWWAQUVAG";
 

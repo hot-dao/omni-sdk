@@ -1,6 +1,6 @@
 import mapValues from "lodash/mapValues";
 import { OMNI_HOT_V2 } from "./utils";
-import OmniService from ".";
+import OmniService from "./bridge";
 
 class OmniV2 {
   public assets: string[][] = [];

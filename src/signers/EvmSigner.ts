@@ -1,5 +1,5 @@
 import { AbstractProvider, FeeData, JsonRpcProvider, Network, PerformActionRequest, TransactionRequest, Wallet, ethers } from "ethers";
-import { Chains, networks } from "../omni-chain/chains";
+import { Chains, networks } from "../chains";
 import { SigningKey } from "ethers";
 
 let methods = [

@@ -12,7 +12,7 @@ import {
 import { bigIntMax, getOmniAddressHex, parseAmount, wait } from "../utils";
 import { Chains, Network } from "../chains";
 import { PendingDeposit } from "../types";
-import OmniService from "..";
+import OmniService from "../bridge";
 
 import { findDepositAddress, PROGRAM_ID } from "./helpers";
 import IDL from "./idl.json";

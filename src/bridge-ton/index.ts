@@ -4,7 +4,7 @@ import uuid4 from "uuid4";
 
 import { Chains, Network } from "../chains";
 import { bigIntMax, getOmniAddressHex, wait } from "../utils";
-import OmniService from "..";
+import OmniService from "../bridge";
 
 import { PendingDeposit } from "../types";
 import { generateUserId, MIN_COMMISSION } from "./constants";

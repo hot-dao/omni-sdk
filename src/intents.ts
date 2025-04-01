@@ -1,10 +1,10 @@
 import { baseEncode } from "@near-js/utils";
 import { randomBytes } from "tweetnacl";
 
-import NearSigner from "../signers/NearSigner";
+import NearSigner from "./signers/NearSigner";
 import { fromOmni, TGAS } from "./utils";
 import { Network } from "./chains";
-import OmniService from ".";
+import OmniService from "./bridge";
 
 export const withdrawIntentAction = async (near: NearSigner, omniIntent: string, amount: bigint, receiverAddr: string) => {
   const [_, mt_contract, token_id] = omniIntent.split(":");

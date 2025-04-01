@@ -20,7 +20,7 @@ import {
   external,
 } from "@ton/ton";
 
-import { wait } from "../omni-chain/utils";
+import { wait } from "../utils";
 import { baseDecode, baseEncode } from "@near-js/utils";
 
 function createStateInit(code: Cell, data: Cell) {

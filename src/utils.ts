@@ -3,7 +3,7 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import { Address as StellarAddress, xdr } from "@stellar/stellar-sdk";
 import { Address } from "@ton/core";
 
-import { createAddressRlp, parseAddressRlp } from "./ton/constants";
+import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
 import { Network, Chains } from "./chains";
 
 export const OMNI_HOT = "v1-1.omni.hot.tg";
@@ -117,15 +117,9 @@ BigInt.prototype.toJSON = function () {
   return this.toString();
 };
 
-export class PendingControl {
-  count = 0;
-  log(msg: string, step?: number) {
-    console.log(this.count, msg);
-  }
-
-  step(msg: string, step?: number) {
-    this.count += 1;
-    console.log(this.count, msg);
+export class Logger {
+  log(msg: string) {
+    console.log(msg);
   }
 }
 

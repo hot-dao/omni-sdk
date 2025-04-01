@@ -8,26 +8,25 @@ import { omniTokens } from "./tokens";
 import { IntentsService } from "./intents";
 import { Network, Chains } from "./chains";
 import { signIntentAction, withdrawIntentAction } from "./intents";
-import { formatAmount, PendingControl, TGAS, wait } from "./utils";
+import { formatAmount, Logger, TGAS, wait } from "./utils";
 import { address2base, base2Address, INTENT_PREFIX, OMNI_HOT_V2, toOmni, toOmniIntent } from "./utils";
 import { PendingDeposit, PendingWithdraw, TransferType } from "./types";
-import { bigintToBuffer, generateUserId } from "./ton/constants";
+import { bigintToBuffer, generateUserId } from "./bridge-ton/constants";
 
-import SolanaOmniService from "./solana";
-import StellarService from "./stellar";
-import EvmOmniService from "./evm";
-import TonOmniService from "./ton";
+import SolanaOmniService from "./bridge-solana";
+import StellarService from "./bridge-stellar";
+import EvmOmniService from "./bridge-evm";
+import TonOmniService from "./bridge-ton";
 import OmniV2 from "./omni_v2";
 import OmniApi from "./api";
 
-import NearSigner from "../signers/NearSigner";
-import EvmSigner from "../signers/EvmSigner";
-import SolanaSigner from "../signers/SolanaSigner";
-import StellarSigner from "../signers/StellarSigner";
-import TonSigner from "../signers/TonSigner";
+import NearSigner from "./signers/NearSigner";
+import EvmSigner from "./signers/EvmSigner";
+import SolanaSigner from "./signers/SolanaSigner";
+import StellarSigner from "./signers/StellarSigner";
+import TonSigner from "./signers/TonSigner";
 
 class OmniService {
-  pendings: Record<string, PendingWithdraw> = {};
   deposits: Record<string, PendingDeposit> = {};
   addresses: Record<string, string> = {};
   balances: Record<string, string> = {};
@@ -183,7 +182,7 @@ class OmniService {
     throw "Unknown chain";
   }
 
-  async finishWithdrawal(nonce: string, pending?: PendingControl) {
+  async finishWithdrawal(nonce: string, pending = new Logger()) {
     const transfer: TransferType = await this.near.viewFunction({ contractId: OMNI_HOT_V2, methodName: "get_transfer", args: { nonce } });
 
     pending?.log("Signing request");
@@ -202,7 +201,7 @@ class OmniService {
     await this.fetchBalances();
   }
 
-  async finishDeposit(deposit: PendingDeposit, _?: PendingControl): Promise<string> {
+  async finishDeposit(deposit: PendingDeposit): Promise<string> {
     // PARSE DEPOSIT NONCE
     if (Chains.get(deposit.chain).isEvm) deposit = await this.evm.parseDeposit(deposit.chain, deposit.tx);
     if (deposit.chain === Network.Solana) deposit = await this.solana.parseDeposit(deposit.tx);
@@ -296,9 +295,9 @@ class OmniService {
     return hash!;
   }
 
-  async depositToken(chain: Network, address: string, amount: bigint, to?: string, pending?: PendingControl) {
+  async depositToken(chain: Network, address: string, amount: bigint, to?: string, logger = new Logger()) {
     if (chain === Network.Near) {
-      pending?.log(`Depositing to NEAR`);
+      logger.log(`Depositing to NEAR`);
       address = address === "native" ? "wrap.near" : address;
 
       const call = await this.near.getRegisterTokenTrx(address, OMNI_HOT_V2);
@@ -348,32 +347,32 @@ class OmniService {
 
     // EVM DEPOSIT
     if (Chains.get(chain).isEvm) {
-      pending?.log(`Withdrawing from ${Chains.get(chain).name}`);
+      logger.log(`Withdrawing from ${Chains.get(chain).name}`);
       deposit = await this.evm.deposit(chain, address, amount, to);
     }
 
     // Stellar DEPOSIT
     if (chain === Network.Stellar) {
-      pending?.log(`Withdrawing from Stellar`);
+      logger.log(`Withdrawing from Stellar`);
       deposit = await this.stellar.deposit(address, amount, to);
     }
 
     // SOLANA DEPOSIT
     if (chain === Network.Solana) {
-      pending?.log(`Withdrawing from Solana`);
+      logger.log(`Withdrawing from Solana`);
       deposit = await this.solana.deposit(address, amount, to);
     }
 
     // TON DEPOSIT
     if (chain === Network.Ton) {
-      pending?.log(`Withdrawing from TON`);
+      logger.log(`Withdrawing from TON`);
       deposit = await this.ton.deposit(address, amount, to);
     }
 
     if (deposit == null) throw "Unsupported chain";
 
-    pending?.log(`Receiving on HOT Omni`);
-    const hash = await this.finishDeposit(deposit, pending);
+    logger.log(`Receiving on HOT Omni`);
+    const hash = await this.finishDeposit(deposit);
     return { receiver: OMNI_HOT_V2, hash };
   }
 
@@ -476,19 +475,19 @@ class OmniService {
     });
   }
 
-  async withdrawToken(chain: Network, address: string, amount: bigint, pending?: PendingControl) {
+  async withdrawToken(chain: Network, address: string, amount: bigint, logger = new Logger()) {
     if (chain === Network.Ton) {
-      pending?.log("Creating TON bridge account");
+      logger.log("Creating TON bridge account");
       await this.ton.createUserIfNeeded();
     }
 
     // Check withdraw locker
-    pending?.log(`Clear withdraw locker`);
+    logger.log(`Clear withdraw locker`);
     const ClearWithdrawAction = await this.checkWithdrawLocker(chain);
     if (ClearWithdrawAction) await this.near.callTransaction({ actions: [ClearWithdrawAction], receiverId: OMNI_HOT_V2 });
 
     // Register intents
-    pending?.log(`Register intents`);
+    logger.log(`Register intents`);
     await this.intents.registerIntents();
 
     const balances = await this.fetchBalances();
@@ -500,7 +499,7 @@ class OmniService {
       if (chain === Network.Near) return;
 
       const nonce = await this.parseWithdrawalNonce(tx);
-      pending?.log(`Depositing to ${Chains.get(chain).name}`);
+      logger.log(`Depositing to ${Chains.get(chain).name}`);
       await this.finishWithdrawal(nonce);
       return;
     }
@@ -538,7 +537,7 @@ class OmniService {
     if (chain === Network.Near) return;
 
     const nonce = await this.parseWithdrawalNonce(tx);
-    pending?.log(`Depositing to ${Chains.get(chain).name}`);
+    logger.log(`Depositing to ${Chains.get(chain).name}`);
     await this.finishWithdrawal(nonce);
   }
 

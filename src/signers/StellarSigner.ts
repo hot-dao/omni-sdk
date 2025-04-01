@@ -16,7 +16,7 @@ import {
 } from "@stellar/stellar-sdk";
 import BigNumber from "bignumber.js"; // @ts-ignore
 
-import { wait } from "../omni-chain/utils";
+import { wait } from "../utils";
 import { baseDecode } from "@near-js/utils";
 
 export const ACCOUNT_FOR_SIMULATE = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";

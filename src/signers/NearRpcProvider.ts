@@ -3,7 +3,7 @@ import { JsonRpcProvider } from "near-api-js/lib/providers";
 import { TypedError } from "@near-js/types";
 import isObject from "lodash/isObject";
 
-import { wait } from "../omni-chain/utils";
+import { wait } from "../utils";
 
 let _nextId = 123;
 export const fastnearRpc = Math.random() > 0.5 ? "https://c1.rpc.fastnear.com" : "https://c2.rpc.fastnear.com";

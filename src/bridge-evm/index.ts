@@ -2,10 +2,10 @@ import { Contract, ethers, getBytes, hexlify, Interface, TransactionReceipt } fr
 import { baseDecode, baseEncode } from "@near-js/utils";
 
 import { ERC20_ABI, OMNI_ABI, OMNI_CONTRACT, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
-import { address2base, bigIntMax, getOmniAddressHex, wait } from "../utils";
+import { address2base, bigIntMax, getOmniAddressHex, wait } from "../omni-chain/utils";
 import { Chains, Network } from "../chains";
 import { PendingDeposit } from "../types";
-import OmniService from "..";
+import OmniService from "../bridge";
 
 class EvmOmniService {
   constructor(readonly omni: OmniService) {}

@@ -6,7 +6,7 @@ import { PublicKey } from "near-api-js/lib/utils";
 import { serialize } from "borsh";
 
 import NearRpcProvider from "./NearRpcProvider";
-import { TGAS } from "../omni-chain/utils";
+import { TGAS } from "../utils";
 
 const rpc = new NearRpcProvider();
 
