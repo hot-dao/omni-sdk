@@ -476,7 +476,7 @@ class OmniService {
     });
   }
 
-  async withdrawToken(chain: Network, address: string, amount: { int: bigint; decimals: number }, pending?: PendingControl) {
+  async withdrawToken(chain: Network, address: string, amount: bigint, pending?: PendingControl) {
     if (chain === Network.Ton) {
       pending?.log("Creating TON bridge account");
       await this.ton.createUserIfNeeded();
@@ -494,9 +494,9 @@ class OmniService {
     const balances = await this.fetchBalances();
     const intentId = toOmniIntent(chain, address);
 
-    if (balances[intentId] >= amount.int) {
+    if (balances[intentId] >= amount) {
       const receiver = chain === Network.Near ? this.near.accountId : this.getReceiverRaw(chain);
-      const tx = await this.intents.withdrawIntent(intentId, amount.int, receiver);
+      const tx = await this.intents.withdrawIntent(intentId, amount, receiver);
       if (chain === Network.Near) return;
 
       const nonce = await this.parseWithdrawalNonce(tx);
@@ -505,8 +505,12 @@ class OmniService {
       return;
     }
 
-    const group = await this.getGroup(intentId); // amount to swap minus balance in target intent token
-    const amountInFloat = formatAmount(amount.int - (balances[intentId] || 0n), amount.decimals);
+    const group = await this.getGroup(intentId);
+    const decimals = omniTokens[intentId]?.[chain]?.decimal;
+    if (decimals == null) throw `Unsupported token ${intentId}`;
+
+    // amount to swap minus balance in target intent token
+    const amountInFloat = formatAmount(amount - (balances[intentId] || 0n), decimals);
     group[intentId] = "0"; // Dont swap target intent token
 
     let { quote, signed_quote, amountOut } = await OmniApi.shared.estimateSwap(this.near.accountId, group, intentId, amountInFloat);
