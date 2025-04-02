@@ -37,6 +37,7 @@ Provide your private keys in base58 format for the required networks in `.env` f
 `yarn cli deposit --token usdc --chain base --amount 0.001`
 
 <br />
+
 ## Usage from code
 
 `yarn add @hot-wallet/omni-sdk`
