@@ -1,5 +1,9 @@
 # HOT Omni
 
+A fast and cheap bridge protocol over **HOT Protocol** that uses the **NEAR Intents** engine for exchange.
+
+**Available for EVM (10+ chains), NEAR, Solana, TON, Stellar**
+
 ## Usage from CLI
 
 ### Installation
