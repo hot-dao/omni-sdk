@@ -1,8 +1,9 @@
 # HOT Omni
 
-A fast and cheap bridge protocol over **HOT Protocol** that uses the **NEAR Intents** engine for exchange.
-
+A fast and cheap bridge protocol over **HOT Protocol** that uses the **NEAR Intents** engine for exchange.<br/>
 **Available for EVM (10+ chains), NEAR, Solana, TON, Stellar**
+
+<br />
 
 ## Usage from CLI
 
@@ -35,6 +36,7 @@ Provide your private keys in base58 format for the required networks in `.env` f
 
 `yarn cli deposit --token usdc --chain base --amount 0.001`
 
+<br />
 ## Usage from code
 
 `yarn add @hot-wallet/omni-sdk`
