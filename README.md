@@ -1,6 +1,39 @@
 # HOT Omni
 
-## Usage
+## Usage from CLI
+
+### Installation
+
+```bash
+git clone git@github.com:hot-dao/omni-sdk.git
+cd omni-sdk
+yarn install
+cp .env.example .env
+```
+
+Provide your private keys in base58 format for the required networks in `.env` file. You only need to provide `NEAR_ACCONT_ID` and `NEAR_PRIVATE_KEY`. The other networks can be left blank if you do not plan to deposit/withdraw to these networks.
+
+### Commands
+
+**Get HOT Intent balance**
+
+`yarn cli balance --token usdc --chain near`
+
+**Make swap HOT Intent token to another HOT Intent token**
+
+`yarn cli swap --token usdc --from near --to arb --amount 0.01`
+
+**Make withdraw HOT Intent token to chain**
+
+`yarn cli withdraw --token usdc --chain base --amount 0.001`
+
+**Make deposit token from chain to HOT Intent**
+
+`yarn cli deposit --token usdc --chain base --amount 0.001`
+
+## Usage from code
+
+`yarn add @hot-wallet/omni-sdk`
 
 ```ts
 import "dotenv/config";

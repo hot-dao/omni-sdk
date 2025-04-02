@@ -15,14 +15,17 @@ import { DepositJetton } from "./wrappers/DepositJetton";
 import { UserJetton } from "./wrappers/UserJetton";
 
 class TonOmniService {
-  readonly metaWallet = this.ton.client.open(
-    TonMetaWallet.createFromAddress(Address.parse("EQAbCbnq3QDZCN2qi3wu6pM6e1xrSHkCdtLLSqJnWDYRGhPV"))
-  );
-
   constructor(readonly omni: OmniService) {}
 
   get ton() {
     return this.omni.user.ton!;
+  }
+
+  get metaWallet() {
+    if (this.omni.user.ton == null) throw "Connect TON";
+    return this.omni.user.ton.client.open(
+      TonMetaWallet.createFromAddress(Address.parse("EQAbCbnq3QDZCN2qi3wu6pM6e1xrSHkCdtLLSqJnWDYRGhPV"))
+    );
   }
 
   private userOmniContract!: OpenedContract<UserJetton>;

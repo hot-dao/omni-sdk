@@ -1,5 +1,5 @@
-import { Network } from "./chains";
-import { parseAmount, toOmniIntent } from "./utils";
+import { Network, Chains } from "./chains";
+import { formatAmount, parseAmount, toOmniIntent } from "./utils";
 
 export enum OmniGroup {
   ETH = "ETH",
@@ -24,6 +24,12 @@ export class OmniToken {
     const token = omniTokens[this.token]?.[chain];
     if (token == null) throw `Unsupported token ${chain}:${this.token}`;
     return [chain, token.address, BigInt(parseAmount(amount, token.decimal))];
+  }
+
+  format(chain: Network, amount: bigint): string {
+    const token = omniTokens[this.token]?.[chain];
+    if (token == null) throw `Unsupported token ${chain}:${this.token}`;
+    return `${formatAmount(amount, token.decimal)} ${this.token} on ${Chains.get(chain).name}`;
   }
 
   intent(chain: Network) {

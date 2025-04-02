@@ -2,7 +2,7 @@ import { baseEncode } from "@near-js/utils";
 import { randomBytes } from "tweetnacl";
 
 import NearSigner from "./signers/NearSigner";
-import { fromOmni, TGAS } from "./utils";
+import { fromOmni, Logger, TGAS } from "./utils";
 import { Network } from "./chains";
 import OmniService from "./bridge";
 
@@ -66,7 +66,7 @@ export class IntentsService {
   }
 
   async registerIntents() {
-    const publicKey = await this.omni.near.signer.getPublicKey(this.omni.near.accountId, "mainnet");
+    const publicKey = this.omni.near.signer.publicKey.toString();
     const keys = await this.omni.near.viewFunction({
       args: { account_id: this.omni.near.accountId },
       methodName: "public_keys_of",
@@ -84,16 +84,26 @@ export class IntentsService {
     }
   }
 
-  async withdrawIntent(token: string, amount: bigint, receiverAddr: string): Promise<string> {
-    const [chain, address] = fromOmni(token).split(":");
+  async withdrawIntent(token: string, amount: bigint, receiverAddr: string, logger: Logger): Promise<string> {
+    logger.log(`Call withdrawIntent ${token} ${amount} ${receiverAddr}`);
 
+    const [chain, address] = fromOmni(token).split(":");
     if (+chain === Network.Near) {
+      logger.log(`Checking if token ${token} is not registered`);
       const call = await this.omni.near.getRegisterTokenTrx(address);
-      if (call) await this.omni.near.callTransaction(call);
+      if (call) {
+        logger.log(`Registering token ${token}`);
+        await this.omni.near.callTransaction(call);
+      }
     }
 
+    logger.log(`Registering intents`);
     await this.registerIntents();
+
+    logger.log(`Building intent`);
     const intent = await withdrawIntentAction(this.omni.near, token, amount, receiverAddr);
+
+    logger.log(`Executing intent`);
     return await this.omni.near.callTransaction({
       receiverId: "intents.near",
       actions: [

@@ -11,8 +11,8 @@ class OmniApi {
     let error: Error | null = null;
     for (const endpoint of OMNI_API) {
       try {
-        const headers = Object.assign({}, init.headers, { "omni-version": `v2` });
-        return await fetch(req, { ...init, headers, timeout: 5000, endpoint });
+        const headers = Object.assign({}, init.headers, { "omni-version": `v2`, "Content-Type": "application/json" });
+        return await fetch(`${endpoint}${req}`, { ...init, headers });
       } catch (e) {
         error = e as Error;
       }
@@ -22,18 +22,19 @@ class OmniApi {
   }
 
   async getTime() {
-    const res = await this.request("https://api0.herewallet.app/api/v1/web/time", { method: "GET" });
+    const res = await fetch("https://api0.herewallet.app/api/v1/web/time", { method: "GET" });
     const { ts } = await res.json();
     return ts;
   }
 
   async estimateSwap(nearAddress: string, group: Record<string, string>, intentTo: string, amount: number) {
-    const response = await fetch("https://api0.herewallet.app/api/v1/exchange/intent_swap", {
+    const response = await fetch("https://dev.herewallet.app/api/v1/exchange/intent_swap", {
       body: JSON.stringify({ token_out: intentTo, amount_in: amount, tokens_in: group, sender_id: nearAddress }),
       method: "POST",
     });
 
-    const { quote, signed_quote, amount_out } = await response.json();
+    const result = await response.json();
+    const { quote, signed_quote, amount_out } = result;
     return { quote, signed_quote, amountOut: BigInt(amount_out) };
   }
 

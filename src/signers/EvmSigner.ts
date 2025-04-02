@@ -88,18 +88,7 @@ export class EvmProvider extends AbstractProvider {
 }
 
 export const createProvider = (n: (typeof networks)[0], address?: string) => {
-  const providers = n.rpc
-    .filter((t) => !t.includes("blockpi"))
-    .map(
-      (rpc) =>
-        new ethers.JsonRpcProvider(rpc, n.id, {
-          batchMaxCount: rpc.includes("blockpi") ? 5 : 10,
-          batchStallTime: 200,
-          staticNetwork: true,
-        })
-    );
-
-  return new EvmProvider(providers, n.id, address);
+  return new ethers.JsonRpcProvider(`https://api0.herewallet.app/api/v1/evm/rpc/${n.id}`, n.id, { staticNetwork: true });
 };
 
 export default class EvmSigner extends Wallet {
