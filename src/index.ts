@@ -1,4 +1,4 @@
-export { default as EvmSigner, EvmProvider } from "./signers/EvmSigner";
+export { default as EvmSigner } from "./signers/EvmSigner";
 export { default as SolanaSigner } from "./signers/SolanaSigner";
 export { default as StellarSigner } from "./signers/StellarSigner";
 export { default as NearSigner } from "./signers/NearSigner";

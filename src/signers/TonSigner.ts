@@ -21,7 +21,7 @@ import {
 } from "@ton/ton";
 
 import { wait } from "../utils";
-import { baseDecode, baseEncode } from "@near-js/utils";
+import { baseDecode } from "@near-js/utils";
 
 function createStateInit(code: Cell, data: Cell) {
   return beginCell()

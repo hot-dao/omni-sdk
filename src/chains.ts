@@ -73,6 +73,39 @@ export const networks: ChainType[] = [
   },
 
   {
+    id: Network.Stellar,
+    rpc: [],
+    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/stellar/info/logo.png",
+    wrapToken: "",
+    name: "Stellar",
+    key: "stellar",
+    short: "XLM",
+    symbol: "XLM",
+    decimal: 7,
+    isEvm: false,
+    isOpen: true,
+    explorer: "https://stellar.expert/explorer/public/account",
+    explorerTx: "https://stellar.expert/explorer/public/tx",
+    exporerToken: "https://stellar.expert/explorer/public/asset",
+    minimum: 0.008,
+  },
+
+  {
+    id: Network.Kava,
+    rpc: [],
+    icon: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/kava/info/logo.png",
+    wrapToken: "",
+    name: "Kava",
+    key: "kava",
+    short: "KAVA",
+    symbol: "KAVA",
+    decimal: 18,
+    minimum: 0.008,
+    isEvm: true,
+    isOpen: true,
+  },
+
+  {
     id: Network.Solana,
     rpc: [],
 

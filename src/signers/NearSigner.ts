@@ -5,10 +5,7 @@ import { InMemoryKeyStore } from "near-api-js/lib/key_stores";
 import { PublicKey } from "near-api-js/lib/utils";
 import { serialize } from "borsh";
 
-import NearRpcProvider from "./NearRpcProvider";
-import { TGAS } from "../utils";
-
-const rpc = new NearRpcProvider();
+import NearRpcProvider from "../bridge-near/provider";
 
 export class KeySingleNearSigner extends InMemorySigner {
   private readonly keyPair: KeyPair;
@@ -33,9 +30,11 @@ export class KeySingleNearSigner extends InMemorySigner {
 
 export default class NearSigner extends Account {
   readonly signer: KeySingleNearSigner;
+
   constructor(accountId: string, privateKey: string) {
     const signer = new KeySingleNearSigner(accountId, privateKey);
-    super(Connection.fromConfig({ signer, jsvmAccountId: "jsvm.mainnet", networkId: "mainnet", provider: rpc }), accountId);
+    const config = Connection.fromConfig({ signer, jsvmAccountId: "jsvm.mainnet", networkId: "mainnet", provider: new NearRpcProvider() });
+    super(config, accountId);
     this.signer = signer;
   }
 
@@ -58,72 +57,6 @@ export default class NearSigner extends Account {
     const actions = call.actions.map((a) => createAction(a));
     const tx = await this.signAndSendTransaction({ receiverId: call.receiverId!, actions });
     return tx.transaction.hash;
-  }
-
-  async getRegisterTokenTrx(token: string, address = this.accountId, deposit?: string): Promise<HereCall | null> {
-    if (token === "") return null;
-    const storage = await this.viewFunction({
-      args: { account_id: address },
-      methodName: "storage_balance_of",
-      contractId: token,
-    }).catch(() => null);
-
-    if (storage != null) return null;
-
-    return {
-      signerId: this.accountId,
-      receiverId: token,
-      actions: [
-        {
-          type: "FunctionCall",
-          params: {
-            gas: String(10n * TGAS),
-            methodName: "storage_deposit",
-            deposit: deposit || "12500000000000000000000",
-            args: {
-              account_id: address,
-              registration_only: true,
-            },
-          },
-        },
-      ],
-    };
-  }
-  async getStorageBalance() {
-    return;
-  }
-
-  public async getWrapNearDepositAction(amount: string | bigint) {
-    const storage = await this.viewFunction({
-      contractId: "wrap.near",
-      methodName: "storage_balance_of",
-      args: { account_id: this.accountId },
-    });
-
-    const depositAction = {
-      type: "FunctionCall",
-      params: {
-        methodName: "near_deposit",
-        deposit: amount.toString(),
-        gas: String(50n * TGAS),
-        args: {},
-      },
-    };
-
-    if (storage != null) return [depositAction];
-
-    return [
-      {
-        type: "FunctionCall",
-        params: {
-          gas: String(30n * TGAS),
-          methodName: "storage_deposit",
-          deposit: "12500000000000000000000",
-          args: { account_id: this.accountId, registration_only: true },
-        },
-      },
-      depositAction,
-    ];
   }
 }
 

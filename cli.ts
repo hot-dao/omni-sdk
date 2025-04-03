@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { Command } from "commander";
+import { uniq, cloneDeep } from "lodash";
 
 import NearSigner from "./src/signers/NearSigner";
 import EvmSigner from "./src/signers/EvmSigner";
@@ -8,8 +9,9 @@ import StellarSigner from "./src/signers/StellarSigner";
 import TonSigner from "./src/signers/TonSigner";
 
 import OmniService from "./src/bridge";
-import { Network, networks } from "./src/chains";
-import { OmniToken } from "./src/tokens";
+import { Network, networks, Chains } from "./src/chains";
+import { formatAmount, getOmniAddress, toOmniIntent, wait } from "./src/utils";
+import { OmniToken, omniTokens } from "./src/tokens";
 
 const env = process.env as any;
 const omni = new OmniService({
@@ -37,6 +39,12 @@ program
 
       const balanceBefore = await omni.getBalance(token.intent(chain));
       console.log("Balance Before:", token.format(chain, balanceBefore));
+
+      const canDeposit = await omni.getDepositFee(chain, token.address(chain));
+      if (canDeposit.isNotEnough) {
+        console.log("Not enough balance to deposit, need:", canDeposit.need);
+        process.exit(1);
+      }
 
       await omni.depositToken(...token.input(chain, Number(options.amount)));
 
@@ -120,6 +128,66 @@ program
 
       const balance = await omni.getBalance(token.intent(chain));
       console.log("Balance:", token.format(chain, balance));
+    } catch (error) {
+      console.error("Failed to get balances:", error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("profile")
+  .description("Get user profile")
+  .option("-c, --chain <chain>", "Chain ID (e.g., number id (1, 56 and etc) or name (near, solana, ton, stellar))")
+  .option("-a, --address <address>", "Address")
+  .option("-t, --token <token>", "Token")
+  .action(async (options) => {
+    try {
+      await wait(1000);
+      const selectedChain = isNaN(Number(options.chain))
+        ? networks.find((n) => n.key === options.chain)?.id
+        : (Number(options.chain) as Network);
+
+      const allChains = uniq(Object.entries(omniTokens).flatMap(([_, chains]) => Object.keys(chains)));
+      const chains = (selectedChain ? [selectedChain] : allChains).sort((a, b) => Chains.get(+a).isEvm - Chains.get(+b).isEvm);
+
+      let tokens = cloneDeep(omniTokens);
+      if (options.token) tokens = { [options.token.toUpperCase()]: tokens[options.token.toUpperCase()] };
+
+      const render = async (chain: Network) => {
+        if (Object.entries(tokens).some(([_, chains]) => Object.keys(chains || {}).length === 0)) return;
+        const address = options.address || omni.getAddress(chain);
+        if (!address) return;
+
+        console.log("");
+        console.log(`${Chains.get(chain).name}: ${address}`);
+
+        for (const [id, chains] of Object.entries(tokens)) {
+          for (const [tokenChain, token] of Object.entries(chains || {})) {
+            if (chain !== +tokenChain) continue;
+            try {
+              const balance = await omni.getTokenBalance(+tokenChain, token.address, address);
+              console.log(`> Balance ${id}: ${formatAmount(balance, token.decimal)}`);
+            } catch {}
+          }
+        }
+      };
+
+      for (const network of chains) {
+        await render(+network);
+      }
+
+      console.log("");
+      console.log(`HOT Bridge: ${getOmniAddress(omni.near.address)}`);
+
+      for (const [id, chains] of Object.entries(tokens)) {
+        for (const [chain, token] of Object.entries(chains || {})) {
+          try {
+            const liquidity = await omni.getBalance(toOmniIntent(chain, token.address), options.address).catch(() => 0n);
+            console.log(`> Intent ${Chains.get(+chain).name}_${id}: ${formatAmount(liquidity, token.decimal)}`);
+          } catch {}
+        }
+        console.log("--------------------------------");
+      }
     } catch (error) {
       console.error("Failed to get balances:", error);
       process.exit(1);

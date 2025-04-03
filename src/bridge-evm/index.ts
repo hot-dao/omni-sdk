@@ -7,24 +7,32 @@ import { Chains, Network } from "../chains";
 import { PendingDeposit } from "../types";
 import OmniService from "../bridge";
 import { Logger } from "../utils";
+import { EvmProvider } from "./provider";
+
 class EvmOmniService {
   constructor(readonly omni: OmniService) {}
 
   get evm() {
-    if (this.omni.user.evm == null) throw "Connect EVM";
-    return this.omni.user.evm;
+    if (this.omni.signers.evm == null) throw "Connect EVM";
+    return this.omni.signers.evm;
+  }
+
+  public providers: Record<number, EvmProvider> = {};
+  async runner(chain: number): Promise<ethers.AbstractSigner> {
+    const provider = new ethers.JsonRpcProvider(`https://api0.herewallet.app/api/v1/evm/rpc/${chain}`, chain, { staticNetwork: true });
+    return this.evm.connect(provider);
   }
 
   async getGasPrice(chain: number): Promise<bigint> {
     if (chain === 56) return 1000000000n; // BNB 1 gwei always...
-    const wallet = await this.evm.runner(chain);
+    const wallet = await this.runner(chain);
     const feeData = await wallet.provider!.getFeeData();
     const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || 0n;
     return (gasPrice / 10n) * 13n;
   }
 
   async approveToken(chain: number, token: string, allowed: string, need: bigint) {
-    const wallet = await this.evm.runner(chain);
+    const wallet = await this.runner(chain);
     const erc20 = new ethers.Contract(token, ERC20_ABI, wallet);
     const allowance = await erc20.allowance(this.evm.address, allowed);
     if (allowance >= need) return;
@@ -35,7 +43,7 @@ class EvmOmniService {
   }
 
   async approveTokenEstimate(chain: number, token: string, allowed: string, need: bigint) {
-    const wallet = await this.evm.runner(chain);
+    const wallet = await this.runner(chain);
     const erc20 = new ethers.Contract(token, ERC20_ABI, wallet);
     const allowance = await erc20.allowance(this.evm.address, allowed);
     if (allowance >= need) return 0n;
@@ -50,7 +58,7 @@ class EvmOmniService {
     const needNative = gasPrice * 400_000n;
     const realGas = needNative;
 
-    const balance = await this.getTokenLiquidity("native", chain, this.evm.address);
+    const balance = await this.getTokenBalance("native", chain, this.evm.address);
     if (balance >= needNative) return { need: 0n, canPerform: true, amount: realGas, decimal: Chains.get(chain).decimal, additional: 0n };
     return {
       need: bigIntMax(0n, needNative - balance),
@@ -63,7 +71,7 @@ class EvmOmniService {
 
   async getDepositFee(chain: Network, address: string) {
     const gasPrice = await this.getGasPrice(chain);
-    const balance = await this.getTokenLiquidity(address, chain, this.evm.address);
+    const balance = await this.getTokenBalance(address, chain, this.evm.address);
     const gasLimit = await this.depositEstimateGas(chain, address, 1n);
     const need = gasPrice * gasLimit;
     return {
@@ -76,8 +84,8 @@ class EvmOmniService {
     };
   }
 
-  async getTokenLiquidity(token: string, chain: Network, address = OMNI_CONTRACT): Promise<bigint> {
-    const rpc = await this.evm.runner(chain);
+  async getTokenBalance(token: string, chain: Network, address = OMNI_CONTRACT): Promise<bigint> {
+    const rpc = await this.runner(chain);
     if (token === "native") return await rpc.provider!.getBalance(address);
     const contract = new Contract(token, ERC20_ABI, rpc);
     const result = await contract.balanceOf(address);
@@ -86,7 +94,7 @@ class EvmOmniService {
 
   async isNonceUsed(chain: number, nonce: string): Promise<boolean> {
     const contractId = OMNI_CONTRACT;
-    const provider = await this.evm.runner(chain);
+    const provider = await this.runner(chain);
     if (provider == null || contractId == null) return true;
 
     const contract = new Contract(contractId, OMNI_ABI, provider);
@@ -96,7 +104,7 @@ class EvmOmniService {
   async withdraw(args: { chain: number; amount: bigint; token: string; signature: string; nonce: string }, logger?: Logger) {
     logger?.log(`Withdrawing ${args.amount} ${args.token} from ${args.chain}`);
 
-    const runner = await this.evm.runner(args.chain);
+    const runner = await this.runner(args.chain);
     const contract = new Contract(OMNI_CONTRACT, OMNI_ABI, runner);
 
     const tx = await contract.withdraw(
@@ -113,8 +121,8 @@ class EvmOmniService {
   }
 
   async depositEstimateGas(chain: Network, address: string, amount: bigint, to?: string) {
-    const receiver = to ? getOmniAddressHex(to) : getOmniAddressHex(this.omni.near.accountId);
-    const wallet = await this.evm.runner(chain);
+    const receiver = to ? getOmniAddressHex(to) : this.omni.omniAddressHex;
+    const wallet = await this.runner(chain);
 
     if (address === "native") {
       const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_NATIVE], wallet);
@@ -128,14 +136,14 @@ class EvmOmniService {
   }
 
   async deposit(chain: Network, address: string, amount: bigint, to?: string, logger?: Logger) {
-    const receiver = to ? getOmniAddressHex(to) : getOmniAddressHex(this.omni.near.accountId);
+    const receiver = to ? getOmniAddressHex(to) : this.omni.omniAddressHex;
     logger?.log(`Call deposit ${amount} ${address} to ${receiver}`);
 
     logger?.log(`Getting gas price`);
     const gasPrice = await this.getGasPrice(chain);
     logger?.log(`Gas price: ${gasPrice}`);
 
-    const wallet = await this.evm.runner(chain);
+    const wallet = await this.runner(chain);
 
     if (address === "native") {
       logger?.log(`Depositing native`);
@@ -213,7 +221,7 @@ class EvmOmniService {
   }
 
   async parseDeposit(chain: number, hash: string) {
-    const wallet = await this.evm.runner(chain);
+    const wallet = await this.runner(chain);
     const waitReceipt = async (attemps = 0): Promise<null | TransactionReceipt> => {
       const receipt = await wallet.provider!.getTransactionReceipt(hash);
       if (receipt || attemps > 2) return receipt;

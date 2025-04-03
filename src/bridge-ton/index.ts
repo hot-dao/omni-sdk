@@ -3,7 +3,7 @@ import { baseDecode } from "@near-js/utils";
 import uuid4 from "uuid4";
 
 import { Chains, Network } from "../chains";
-import { bigIntMax, getOmniAddressHex, wait } from "../utils";
+import { bigIntMax, Logger, getOmniAddressHex, wait } from "../utils";
 import OmniService from "../bridge";
 
 import { PendingDeposit } from "../types";
@@ -18,12 +18,12 @@ class TonOmniService {
   constructor(readonly omni: OmniService) {}
 
   get ton() {
-    return this.omni.user.ton!;
+    return this.omni.signers.ton!;
   }
 
   get metaWallet() {
-    if (this.omni.user.ton == null) throw "Connect TON";
-    return this.omni.user.ton.client.open(
+    if (this.omni.signers.ton == null) throw "Connect TON";
+    return this.omni.signers.ton.client.open(
       TonMetaWallet.createFromAddress(Address.parse("EQAbCbnq3QDZCN2qi3wu6pM6e1xrSHkCdtLLSqJnWDYRGhPV"))
     );
   }
@@ -44,7 +44,7 @@ class TonOmniService {
     const needNative = toNano(0.05) + additional;
     const realGas = toNano(0.025);
 
-    const balance = await this.getTokenLiquidity("native", this.ton.address);
+    const balance = await this.getTokenBalance("native", this.ton.address);
     if (balance >= needNative) return { need: 0n, canPerform: true, amount: realGas, decimal: Chains.get(Network.Ton).decimal, additional };
 
     return {
@@ -68,7 +68,8 @@ class TonOmniService {
     };
   }
 
-  async getTokenLiquidity(token: string, address?: string): Promise<bigint> {
+  async getTokenBalance(token: string, address?: string): Promise<bigint> {
+    if (token === "native") return await this.ton.getBalance("native");
     const minter = this.ton.client.open(JettonMinter.createFromAddress(Address.parse(token)));
     const metaJettonWalletAddress = await minter.getWalletAddressOf(address ? Address.parse(address) : this.metaWallet.address);
     const userJetton = this.ton.client.open(JettonWallet.createFromAddress(metaJettonWalletAddress));
@@ -161,12 +162,13 @@ class TonOmniService {
     });
   }
 
-  async deposit(address: string, amount: bigint, to?: string) {
+  async deposit(address: string, amount: bigint, to?: string, logger?: Logger) {
     const id = uuid4();
-    const receiverAddr = to ? getOmniAddressHex(to) : getOmniAddressHex(this.omni.near.accountId);
+    const receiverAddr = to ? getOmniAddressHex(to) : this.omni.omniAddressHex;
     const receiver = Buffer.from(receiverAddr, "hex");
 
     if (address === "native") {
+      logger?.log(`Depositing ${amount} TON to ${receiverAddr}`);
       await this.metaWallet.sendNativeDeposit(this.ton.executor({ id }), {
         value: amount + toNano(0.05),
         queryId: 0,
@@ -177,8 +179,13 @@ class TonOmniService {
 
     // deposit token
     else {
+      logger?.log(`Depositing ${amount} ${address} to ${receiverAddr}`);
       const minter = this.ton.client.open(JettonMinter.createFromAddress(Address.parse(address)));
+
+      logger?.log(`Getting wallet address of ${address}`);
       const userJettonWalletAddress = await minter.getWalletAddressOf(Address.parse(this.ton.address));
+
+      logger?.log(`Sending transfer`);
       const userJetton = this.ton.client.open(JettonWallet.createFromAddress(userJettonWalletAddress));
       await userJetton.sendTransfer(
         this.ton.executor({ id }),
@@ -190,13 +197,18 @@ class TonOmniService {
       );
     }
 
-    return new Promise<PendingDeposit>((resolve, reject) => {
-      this.ton.events.on("transaction:failed", async ({ metadata }) => {
+    return await new Promise<PendingDeposit>((resolve, reject) => {
+      logger?.log(`Waiting for transaction`);
+
+      this.ton.events.on("transaction:failed", async ({ tx, metadata }) => {
+        logger?.log(`Transaction failed ${tx} with metadata ${metadata}`);
         if (metadata.id == id) return reject("Transaction failed");
       });
 
       this.ton.events.on("transaction:success", async ({ tx, metadata }) => {
+        logger?.log(`Transaction success ${tx} with metadata ${metadata}`);
         if (metadata.id !== id) return;
+
         const deposit = this.omni.addPendingDeposit({
           chain: Network.Ton,
           receiver: receiverAddr,
@@ -213,11 +225,13 @@ class TonOmniService {
           } catch (e) {
             if (attemps > 15) throw e;
             await wait(5000);
+            logger?.log(`Retrying parse deposit`);
             return waitParseDeposit(attemps + 1);
           }
         };
 
         try {
+          logger?.log(`Parsing deposit`);
           const deposit = await waitParseDeposit();
           resolve(this.omni.addPendingDeposit(deposit));
         } catch (e) {

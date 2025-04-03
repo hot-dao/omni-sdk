@@ -1,6 +1,7 @@
 {
   "name": "@hot-wallet/omni-sdk",
-  "version": "2.0.2",
+  "description": "A fast and cheap bridge protocol over HOT Protocol that uses the NEAR Intents engine for exchange",
+  "version": "2.0.3",
   "type": "commonjs",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
@@ -11,9 +12,8 @@
     "build": "tsc",
     "cli": "npx tsx ./cli.ts"
   },
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "author": "HOT Labs",
+  "license": "MIT",
   "dependencies": {
     "@coral-xyz/anchor": "0.29.0",
     "@here-wallet/core": "^3.4.0",

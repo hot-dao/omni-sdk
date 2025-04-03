@@ -29,7 +29,7 @@ class OmniV2 {
   }
 
   async getOmniBalances() {
-    const balances = await this.getLiquidityBalances(this.near.accountId);
+    const balances = await this.getLiquidityBalances(this.near.address);
     const groups: { contract_id: string; group_id: string }[] = await this.near.viewFunction({
       contractId: "stable-swap.hot.tg",
       methodName: "get_groups",

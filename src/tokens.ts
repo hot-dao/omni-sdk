@@ -20,10 +20,16 @@ export enum OmniGroup {
 export class OmniToken {
   constructor(readonly token: OmniGroup) {}
 
-  input(chain: Network, amount: number): [Network, string, bigint] {
+  address(chain: Network) {
     const token = omniTokens[this.token]?.[chain];
     if (token == null) throw `Unsupported token ${chain}:${this.token}`;
-    return [chain, token.address, BigInt(parseAmount(amount, token.decimal))];
+    return token.address;
+  }
+
+  input(chain: Network, amount: number | bigint): [Network, string, bigint] {
+    const token = omniTokens[this.token]?.[chain];
+    if (token == null) throw `Unsupported token ${chain}:${this.token}`;
+    return [chain, token.address, typeof amount === "bigint" ? amount : BigInt(parseAmount(amount, token.decimal))];
   }
 
   format(chain: Network, amount: bigint): string {

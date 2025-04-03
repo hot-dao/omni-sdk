@@ -21,8 +21,8 @@ class SolanaOmniService {
   constructor(readonly omni: OmniService) {}
 
   get solana() {
-    if (this.omni.user.solana == null) throw "Connect SOLANA";
-    return this.omni.user.solana;
+    if (this.omni.signers.solana == null) throw "Connect SOLANA";
+    return this.omni.signers.solana;
   }
 
   async isNonceUsed(nonce: string) {
@@ -51,7 +51,7 @@ class SolanaOmniService {
   async getWithdrawFee() {
     const needNative = BigInt(parseAmount(0.005, 9));
     const realGas = BigInt(parseAmount(0.0002, 9));
-    const balance = await this.getTokenLiquidity("native", this.solana.address);
+    const balance = await this.getTokenBalance("native", this.solana.address);
 
     if (balance >= needNative)
       return { need: 0n, canPerform: true, amount: realGas, decimal: Chains.get(Network.Solana).decimal, additional: 0n };
@@ -66,7 +66,7 @@ class SolanaOmniService {
   }
 
   async getDepositFee() {
-    const balance = await this.getTokenLiquidity("native", this.solana.address);
+    const balance = await this.getTokenBalance("native", this.solana.address);
     return {
       maxFee: 4_000_000n,
       need: bigIntMax(0n, 4_000_000n - balance),
@@ -77,7 +77,7 @@ class SolanaOmniService {
     };
   }
 
-  async getTokenLiquidity(token: string, address: string) {
+  async getTokenBalance(token: string, address?: string) {
     const [stateAccount] = address
       ? [new sol.PublicKey(address)]
       : sol.PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], PROGRAM_ID);
@@ -145,7 +145,7 @@ class SolanaOmniService {
     const isUsed = await this.omni.isDepositUsed(Network.Solana, deposit.nonce);
     if (!isUsed) throw "You have not completed the previous deposit";
 
-    const receiver = Buffer.from(getOmniAddressHex(this.omni.near.accountId), "hex");
+    const receiver = Buffer.from(this.omni.omniAddressHex, "hex");
     const bnAmount = new anchor.BN(deposit.amount.toString());
     const bnNonce = new anchor.BN(deposit.nonce.toString());
 
@@ -173,7 +173,7 @@ class SolanaOmniService {
   }
 
   async deposit(address: string, amount: bigint, to?: string) {
-    const receiverAddr = to ? getOmniAddressHex(to) : getOmniAddressHex(this.omni.near.accountId);
+    const receiverAddr = to ? getOmniAddressHex(to) : this.omni.omniAddressHex;
     const receiver = Buffer.from(receiverAddr, "hex");
 
     const lastDeposit = await this.getLastDepositNonce();

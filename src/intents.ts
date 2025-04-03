@@ -66,20 +66,27 @@ export class IntentsService {
   }
 
   async registerIntents() {
-    const publicKey = this.omni.near.signer.publicKey.toString();
+    const publicKey = this.omni.signers.near.signer.publicKey.toString();
     const keys = await this.omni.near.viewFunction({
-      args: { account_id: this.omni.near.accountId },
+      args: { account_id: this.omni.signers.near.accountId },
       methodName: "public_keys_of",
       contractId: "intents.near",
     });
 
     if (!keys.includes(publicKey)) {
-      await this.omni.near?.functionCall({
-        args: { public_key: publicKey },
-        contractId: "intents.near",
-        methodName: "add_public_key",
-        attachedDeposit: 1n,
-        gas: 80n * TGAS,
+      await this.omni.near.callTransaction({
+        receiverId: "intents.near",
+        actions: [
+          {
+            type: "FunctionCall",
+            params: {
+              methodName: "add_public_key",
+              args: { public_key: publicKey },
+              gas: String(80n * TGAS),
+              deposit: "1",
+            },
+          },
+        ],
       });
     }
   }
@@ -101,7 +108,7 @@ export class IntentsService {
     await this.registerIntents();
 
     logger.log(`Building intent`);
-    const intent = await withdrawIntentAction(this.omni.near, token, amount, receiverAddr);
+    const intent = await withdrawIntentAction(this.omni.signers.near, token, amount, receiverAddr);
 
     logger.log(`Executing intent`);
     return await this.omni.near.callTransaction({

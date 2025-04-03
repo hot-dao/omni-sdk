@@ -24,6 +24,16 @@ Provide your private keys in base58 format for the required networks in `.env` f
 
 `yarn cli balance --token usdc --chain near`
 
+**Get All balances**
+
+`yarn cli profile`
+
+`yarn cli profile --chain near`
+
+`yarn cli profile --chain base --address 0x...`
+
+`yarn cli profile --token eth`
+
 **Make swap HOT Intent token to another HOT Intent token**
 
 `yarn cli swap --token usdc --from near --to arb --amount 0.01`
