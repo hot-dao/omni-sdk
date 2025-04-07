@@ -30,12 +30,20 @@ export class KeySingleNearSigner extends InMemorySigner {
 
 export default class NearSigner extends Account {
   readonly signer: KeySingleNearSigner;
+  readonly rpcs: string[] = [];
 
-  constructor(accountId: string, privateKey: string) {
+  constructor(accountId: string, privateKey: string, rpcs?: string[]) {
+    const rpc = new NearRpcProvider(rpcs);
     const signer = new KeySingleNearSigner(accountId, privateKey);
-    const config = Connection.fromConfig({ signer, jsvmAccountId: "jsvm.mainnet", networkId: "mainnet", provider: new NearRpcProvider() });
+    const config = Connection.fromConfig({ signer, jsvmAccountId: "jsvm.mainnet", networkId: "mainnet", provider: rpc });
+
     super(config, accountId);
+    this.rpcs = rpcs || rpc.providers;
     this.signer = signer;
+  }
+
+  async getAddress(): Promise<string> {
+    return this.accountId;
   }
 
   async signMessage(config: SignMessageOptionsNEP0413) {
@@ -53,7 +61,7 @@ export default class NearSigner extends Account {
     return { accountId: this.accountId, signature: base64, publicKey: publicKey.toString(), nonce: config.nonce };
   }
 
-  async callTransaction(call: HereCall) {
+  async sendTransaction(call: HereCall): Promise<string> {
     const actions = call.actions.map((a) => createAction(a));
     const tx = await this.signAndSendTransaction({ receiverId: call.receiverId!, actions });
     return tx.transaction.hash;

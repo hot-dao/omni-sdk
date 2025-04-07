@@ -52,11 +52,11 @@ export const omniTokens: Record<string, Record<number, { address: string; decima
     56: { address: "0x55d398326f99059ff775485246999027b3197955", decimal: 18 },
     137: { address: "0xc2132d05d31c914a87c6611c10748aeb04b58e8f", decimal: 6 },
     1001: { address: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", decimal: 6 },
-    1010: { address: "usdt.tether-token.near", decimal: 6 },
     1111: { address: "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs", decimal: 6 },
     2222: { address: "0x919C1c267BC06a7039e03fcc2eF738525769109c", decimal: 6 },
     42161: { address: "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", decimal: 6 },
     1313161554: { address: "0x80da25da4d783e57d2fcda0436873a193a4beccf", decimal: 6 },
+    1010: { address: "usdt.tether-token.near", decimal: 6 },
   },
   USDC: {
     10: { address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", decimal: 6 },
@@ -85,15 +85,15 @@ export const omniTokens: Record<string, Record<number, { address: string; decima
   SOL: {
     56: { address: "0x570A5D26f7765Ecb712C0924E4De545B89fD43dF", decimal: 18 },
     137: { address: "0xd93f7E271cB87c23AaA73edC008A79646d1F9912", decimal: 9 },
-    1001: { address: "native", decimal: 9 },
     1010: { address: "22.contract.portalbridge.near", decimal: 8 },
+    1001: { address: "native", decimal: 9 },
   },
   NEAR: {
     1: { address: "0x85f17cf997934a597031b2e18a9ab6ebd4b9f6a4", decimal: 24 },
     56: { address: "0x1fa4a73a3f0133f0025378af00236f3abdee5d63", decimal: 18 },
     1001: { address: "BYPsjxa3YuZESQz1dKuBw1QSFCSpecsm8nCQhY5xbU1Z", decimal: 9 },
-    1010: { address: "native", decimal: 24 },
     1313161554: { address: "0xc42c30ac6cc15fac9bd938618bcaa1a1fae8501d", decimal: 24 },
+    1010: { address: "native", decimal: 24 },
   },
   AURORA: {
     1: { address: "0xaaaaaa20d9e0e2461697782ef11675f668207961", decimal: 18 },

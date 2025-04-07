@@ -61,7 +61,7 @@ const env = process.env as any;
 const omni = new OmniService({
   near: new NearSigner(env.NEAR_ACCONT_ID, env.NEAR_PRIVATE_KEY),
   ton: new TonSigner(env.TON_PRIVATE_KEY, env.TON_WALLET_TYPE, env.TON_API_KEY),
-  stellar: new StellarSigner(env.STELLAR_PRIVATE_KEY, env.HORIZON_RPC, env.SOROBAN_RPC),
+  stellar: new StellarSigner(env.STELLAR_PRIVATE_KEY),
   solana: new SolanaSigner(env.SOLANA_PRIVATE_KEY, [env.SOLANA_RPC]),
   evm: new EvmSigner(env.EVM_PRIVATE_KEY),
 });
@@ -71,12 +71,12 @@ const ton = new OmniToken(OmniGroup.TON); // builder
 await omni.depositToken(...ton.input(chain.Ton, 1));
 
 console.log("Omni TON", await omni.getBalance(ton.intent(chain.Ton)));
-await omni.withdrawToken(...ton.input(chain.Bnb, 1));
+await omni.withdrawToken(...ton.input(chain.Bnb, 10000n));
 
 // Intent swap
 const usdc = new OmniToken(OmniGroup.USDC);
-await omni.depositToken(...usdc.input(chain.Base, 1));
-await omni.swapToken(usdc.intent(chain.Base), usdc.intent(chain.Arbitrum), 1);
+await omni.depositToken(...usdc.input(chain.Base, 1)); // or usdc.input(chain.Base, 10000000n)
+await omni.swapToken(usdc.intent(chain.Base), usdc.intent(chain.Arbitrum), 1); // for swap only float input
 
 console.log("Omni USDC on Arb", await omni.getBalance(usdc.intent(chain.Arbitrum)));
 await omni.withdrawToken(...usdc.input(chain.Arbitrum, 1));

@@ -10,16 +10,18 @@ import TonSigner from "./src/signers/TonSigner";
 
 import OmniService from "./src/bridge";
 import { Network, networks, Chains } from "./src/chains";
-import { formatAmount, getOmniAddress, toOmniIntent, wait } from "./src/utils";
+import { formatAmount, toOmniIntent, wait } from "./src/utils";
 import { OmniToken, omniTokens } from "./src/tokens";
 
 const env = process.env as any;
+
 const omni = new OmniService({
   near: new NearSigner(env.NEAR_ACCONT_ID, env.NEAR_PRIVATE_KEY),
   ton: env.TON_PRIVATE_KEY ? new TonSigner(env.TON_PRIVATE_KEY, env.TON_WALLET_TYPE, env.TON_API_KEY) : undefined,
   stellar: env.STELLAR_PRIVATE_KEY ? new StellarSigner(env.STELLAR_PRIVATE_KEY, env.HORIZON_RPC, env.SOROBAN_RPC) : undefined,
   solana: env.SOLANA_PRIVATE_KEY ? new SolanaSigner(env.SOLANA_PRIVATE_KEY, [env.SOLANA_RPC]) : undefined,
   evm: env.EVM_PRIVATE_KEY ? new EvmSigner(env.EVM_PRIVATE_KEY) : undefined,
+  signIntent: async (intent) => intent,
 });
 
 const program = new Command();
@@ -31,6 +33,7 @@ program
   .option("--token <token>", "Token to withdraw (usdc, usdt, bnb, sol, ton, eth...)")
   .option("--chain <chain>", "Chain ID (e.g., number id (1, 56 and etc) or name (near, solana, ton, stellar))")
   .option("--amount <amount>", "Amount to withdraw")
+  .option("--receiver <receiver>", "Receiver address")
   .action(async (options) => {
     try {
       const token = new OmniToken(options.token.toUpperCase());
@@ -46,7 +49,7 @@ program
         process.exit(1);
       }
 
-      await omni.depositToken(...token.input(chain, Number(options.amount)));
+      await omni.depositToken(...token.input(chain, Number(options.amount)), options.receiver);
 
       console.log("Deposit successful");
       const balanceAfter = await omni.getBalance(token.intent(chain));
@@ -63,6 +66,7 @@ program
   .option("--token <token>", "Token to withdraw (usdc, usdt, bnb, sol, ton, eth...)")
   .option("--chain <chain>", "Chain ID (e.g., number id (1, 56 and etc) or name (near, solana, ton, stellar))")
   .option("--amount <amount>", "Amount to withdraw")
+  .option("--receiver <receiver>", "Receiver address")
   .action(async (options) => {
     try {
       const token = new OmniToken(options.token.toUpperCase());
@@ -72,7 +76,7 @@ program
       const balanceBefore = await omni.getBalance(token.intent(chain));
       console.log("Balance Before:", token.format(chain, balanceBefore));
 
-      await omni.withdrawToken(...token.input(chain, Number(options.amount)));
+      await omni.withdrawToken(...token.input(chain, Number(options.amount)), options.receiver);
 
       console.log("Withdrawal successful");
       const balanceAfter = await omni.getBalance(token.intent(chain));
@@ -120,13 +124,14 @@ program
   .description("Get HOT Bridge balance")
   .option("-t, --token <token>", "Token to withdraw (usdc, usdt, bnb, sol, ton, eth...)")
   .option("-c, --chain <chain>", "Chain ID (e.g., number id (1, 56 and etc) or name (near, solana, ton, stellar))")
+  .option("-a, --address <address>", "Address")
   .action(async (options) => {
     try {
       const token = new OmniToken(options.token.toUpperCase());
       const chain = isNaN(Number(options.chain)) ? networks.find((n) => n.key === options.chain)?.id : (Number(options.chain) as Network);
       if (!chain) throw new Error(`Chain ${options.chain} not found`);
 
-      const balance = await omni.getBalance(token.intent(chain));
+      const balance = await omni.getBalance(token.intent(chain), options.address);
       console.log("Balance:", token.format(chain, balance));
     } catch (error) {
       console.error("Failed to get balances:", error);
@@ -177,7 +182,7 @@ program
       }
 
       console.log("");
-      console.log(`HOT Bridge: ${getOmniAddress(omni.near.address)}`);
+      console.log(`HOT Bridge`);
 
       for (const [id, chains] of Object.entries(tokens)) {
         for (const [chain, token] of Object.entries(chains || {})) {

@@ -6,7 +6,7 @@ import { address2base, bigIntMax, getOmniAddressHex, wait } from "../utils";
 import { Chains, Network } from "../chains";
 import { PendingDeposit } from "../types";
 import OmniService from "../bridge";
-import { Logger } from "../utils";
+
 import { EvmProvider } from "./provider";
 
 class EvmOmniService {
@@ -19,8 +19,18 @@ class EvmOmniService {
 
   public providers: Record<number, EvmProvider> = {};
   async runner(chain: number): Promise<ethers.AbstractSigner> {
+    const address = await this.evm.getAddress();
     const provider = new ethers.JsonRpcProvider(`https://api0.herewallet.app/api/v1/evm/rpc/${chain}`, chain, { staticNetwork: true });
-    return this.evm.connect(provider);
+    const signer = new ethers.JsonRpcSigner(provider, address);
+
+    signer.sendTransaction = async (req) => {
+      const blockNumber = await provider.getBlockNumber();
+      const tx = await this.evm.sendTransaction(req);
+      const t = await provider.getTransaction(tx);
+      return t!.replaceableTransaction(blockNumber);
+    };
+
+    return signer;
   }
 
   async getGasPrice(chain: number): Promise<bigint> {
@@ -34,7 +44,9 @@ class EvmOmniService {
   async approveToken(chain: number, token: string, allowed: string, need: bigint) {
     const wallet = await this.runner(chain);
     const erc20 = new ethers.Contract(token, ERC20_ABI, wallet);
-    const allowance = await erc20.allowance(this.evm.address, allowed);
+
+    const address = await this.evm.getAddress();
+    const allowance = await erc20.allowance(address, allowed);
     if (allowance >= need) return;
 
     const MAX_APPROVE = 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
@@ -45,7 +57,9 @@ class EvmOmniService {
   async approveTokenEstimate(chain: number, token: string, allowed: string, need: bigint) {
     const wallet = await this.runner(chain);
     const erc20 = new ethers.Contract(token, ERC20_ABI, wallet);
-    const allowance = await erc20.allowance(this.evm.address, allowed);
+
+    const address = await this.evm.getAddress();
+    const allowance = await erc20.allowance(address, allowed);
     if (allowance >= need) return 0n;
 
     const MAX_APPROVE = 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
@@ -58,21 +72,23 @@ class EvmOmniService {
     const needNative = gasPrice * 400_000n;
     const realGas = needNative;
 
-    const balance = await this.getTokenBalance("native", chain, this.evm.address);
+    const address = await this.evm.getAddress();
+    const balance = await this.getTokenBalance("native", chain, address);
     if (balance >= needNative) return { need: 0n, canPerform: true, amount: realGas, decimal: Chains.get(chain).decimal, additional: 0n };
     return {
       need: bigIntMax(0n, needNative - balance),
-      canPerform: false,
       decimal: Chains.get(chain).decimal,
+      canPerform: false,
       amount: realGas,
       additional: 0n,
     };
   }
 
-  async getDepositFee(chain: Network, address: string) {
+  async getDepositFee(chain: Network, receiver: string) {
     const gasPrice = await this.getGasPrice(chain);
-    const balance = await this.getTokenBalance(address, chain, this.evm.address);
-    const gasLimit = await this.depositEstimateGas(chain, address, 1n);
+    const address = await this.evm.getAddress();
+    const balance = await this.getTokenBalance(address, chain, address);
+    const gasLimit = await this.depositEstimateGas(chain, address, 1n, receiver);
     const need = gasPrice * gasLimit;
     return {
       maxFee: gasPrice * gasLimit,
@@ -101,8 +117,8 @@ class EvmOmniService {
     return await contract.usedNonces(nonce);
   }
 
-  async withdraw(args: { chain: number; amount: bigint; token: string; signature: string; nonce: string }, logger?: Logger) {
-    logger?.log(`Withdrawing ${args.amount} ${args.token} from ${args.chain}`);
+  async withdraw(args: { chain: number; amount: bigint; token: string; signature: string; nonce: string; receiver: string }) {
+    this.omni.logger?.log(`Withdrawing ${args.amount} ${args.token} from ${args.chain}`);
 
     const runner = await this.runner(args.chain);
     const contract = new Contract(OMNI_CONTRACT, OMNI_ABI, runner);
@@ -110,18 +126,18 @@ class EvmOmniService {
     const tx = await contract.withdraw(
       args.nonce,
       hexlify(baseDecode(address2base(args.chain, args.token))),
-      this.evm.address, // receiver
+      args.receiver,
       BigInt(args.amount),
       hexlify(baseDecode(args.signature))
     );
 
-    logger?.log(`Withdraw tx: ${tx.hash}`);
-    logger?.log(`Waiting for receipt`);
+    this.omni.logger?.log(`Withdraw tx: ${tx.hash}`);
+    this.omni.logger?.log(`Waiting for receipt`);
     await tx.wait();
   }
 
-  async depositEstimateGas(chain: Network, address: string, amount: bigint, to?: string) {
-    const receiver = to ? getOmniAddressHex(to) : this.omni.omniAddressHex;
+  async depositEstimateGas(chain: Network, address: string, amount: bigint, to: string) {
+    const receiver = getOmniAddressHex(to);
     const wallet = await this.runner(chain);
 
     if (address === "native") {
@@ -135,18 +151,19 @@ class EvmOmniService {
     return await contract.deposit.estimateGas(receiver, address, amount);
   }
 
-  async deposit(chain: Network, address: string, amount: bigint, to?: string, logger?: Logger) {
-    const receiver = to ? getOmniAddressHex(to) : this.omni.omniAddressHex;
-    logger?.log(`Call deposit ${amount} ${address} to ${receiver}`);
+  async deposit(chain: Network, address: string, amount: bigint, to: string) {
+    const receiver = getOmniAddressHex(to);
+    this.omni.logger?.log(`Call deposit ${amount} ${address} to ${receiver}`);
 
-    logger?.log(`Getting gas price`);
+    this.omni.logger?.log(`Getting gas price`);
     const gasPrice = await this.getGasPrice(chain);
-    logger?.log(`Gas price: ${gasPrice}`);
+    this.omni.logger?.log(`Gas price: ${gasPrice}`);
 
     const wallet = await this.runner(chain);
+    const sender = await this.evm.getAddress();
 
     if (address === "native") {
-      logger?.log(`Depositing native`);
+      this.omni.logger?.log(`Depositing native`);
       const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_NATIVE], wallet);
       const depositTx = await contract.deposit(receiver, { value: amount, gasPrice });
       const deposit = this.omni.addPendingDeposit({
@@ -157,13 +174,14 @@ class EvmOmniService {
         token: address,
         tx: depositTx.hash,
         nonce: "",
+        sender,
       });
 
-      logger?.log(`Waiting for receipt`);
+      this.omni.logger?.log(`Waiting for receipt`);
       const receipt = await depositTx.wait();
       if (!receipt) throw "no receipt";
 
-      logger?.log(`Parsing receipt`);
+      this.omni.logger?.log(`Parsing receipt`);
       const logs = await this.parseDepositReceipt(receipt);
       deposit.receiver = logs.receiver;
       deposit.nonce = logs.nonce;
@@ -171,34 +189,35 @@ class EvmOmniService {
       return this.omni.addPendingDeposit(deposit);
     }
 
-    logger?.log(`Approving token if needed ${address} ${amount}`);
+    this.omni.logger?.log(`Approving token if needed ${address} ${amount}`);
     await this.approveToken(chain, address, OMNI_CONTRACT, amount);
 
-    logger?.log(`Depositing token`);
+    this.omni.logger?.log(`Depositing token`);
     const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_FT], wallet);
     const depositTx = await contract.deposit(receiver, address, amount, { gasPrice });
 
-    logger?.log(`Deposit tx: ${depositTx.hash}`);
+    this.omni.logger?.log(`Deposit tx: ${depositTx.hash}`);
     const deposit = this.omni.addPendingDeposit({
       tx: depositTx.hash,
       timestamp: Date.now(),
       amount: String(amount),
       token: address,
       nonce: "",
+      sender,
       receiver,
       chain,
     });
 
-    logger?.log(`Waiting for receipt`);
+    this.omni.logger?.log(`Waiting for receipt`);
     const receipt = await depositTx.wait();
     if (!receipt) throw "no receipt";
 
-    logger?.log(`Parsing receipt`);
+    this.omni.logger?.log(`Parsing receipt`);
     const logs = await this.parseDepositReceipt(receipt);
     deposit.receiver = logs.receiver;
     deposit.nonce = logs.nonce;
 
-    logger?.log(JSON.stringify(deposit, null, 2));
+    this.omni.logger?.log(JSON.stringify(deposit, null, 2));
     return this.omni.addPendingDeposit(deposit);
   }
 
@@ -244,7 +263,7 @@ class EvmOmniService {
     const receiver = baseEncode(getBytes(log.args[3]));
 
     const timestamp = (await receipt.getBlock().then((t) => t.timestamp)) * 1000;
-    const deposit = { amount, chain, receiver, timestamp, tx: hash, nonce, token: contractId };
+    const deposit = { amount, chain, receiver, timestamp, tx: hash, nonce, token: contractId, sender: receipt.from };
 
     const isUsed = await this.omni.isDepositUsed(chain, nonce);
     if (isUsed) {

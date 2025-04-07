@@ -23,15 +23,6 @@ import {
 import { wait } from "../utils";
 import { baseDecode } from "@near-js/utils";
 
-function createStateInit(code: Cell, data: Cell) {
-  return beginCell()
-    .storeUint(0, 2) // split_depth:(Maybe (## 5)) special:(Maybe TickTock)
-    .storeMaybeRef(code) // code:(Maybe ^Cell)
-    .storeMaybeRef(data) // data:(Maybe ^Cell)
-    .storeDict(null) // library:(HashmapE 256 SimpleLib)
-    .endCell();
-}
-
 export const externalMessage = (address: Address, init: StateInit, seqno: number, body: Cell) => {
   return beginCell()
     .storeWritable(storeMessage(external({ to: address, init: seqno === 0 ? init : undefined, body: body })))
@@ -55,19 +46,14 @@ export const createWallet = (type: TonWalletType, publicKey: Buffer) => {
 class TonSigner {
   readonly keyPair: KeyPair;
   readonly wallet: OpenedContract<WalletContractV3R1 | WalletContractV3R2 | WalletContractV4 | WalletContractV5R1>;
-  readonly events = new EventEmitter<{
-    "transaction:success": { tx: string; metadata?: object };
-    "transaction:failed": { metadata?: object; error: string };
-  }>();
 
   tonApi: TonApiClient;
   client: ContractAdapter;
   pending: { event: any; messageHash: string; metadata?: object; seqno: number } | null = null;
 
-  constructor(privateKey: string, readonly walletType: TonWalletType = "v5r1", tonApiKey: string) {
+  constructor(privateKey: string, readonly walletType: TonWalletType = "v5r1", readonly tonApiKey: string) {
     this.tonApi = new TonApiClient({ apiKey: tonApiKey });
     this.client = new ContractAdapter(this.tonApi);
-
     this.keyPair = keyPairFromSecretKey(Buffer.from(baseDecode(privateKey)));
     this.wallet = this.client.open(createWallet(walletType, this.keyPair.publicKey));
   }
@@ -77,32 +63,21 @@ class TonSigner {
     return res;
   };
 
-  get address() {
+  async getAddress() {
     return this.wallet.address.toString({ bounceable: false });
   }
 
-  get publicKey() {
-    return this.wallet.publicKey;
-  }
-
   async pendingProcessing() {
-    if (!this.pending) return;
+    if (!this.pending) throw "No pending transaction";
 
     // Remove pending after 10 minutes...
     if (Math.floor(Date.now() / 1000) - this.pending.event.timestamp > 600) {
       this.pending = null;
-      return;
+      throw "Pending transaction timeout";
     }
 
-    try {
-      await this.waitNextSeqno(this.pending.seqno);
-      const tx = await this.waitTransactionByMessageHash(this.pending.messageHash);
-      this.events.emit("transaction:success", { tx, ...this.pending });
-    } catch (error) {
-      this.events.emit("transaction:failed", { error, ...this.pending });
-    } finally {
-      this.pending = null;
-    }
+    await this.waitNextSeqno(this.pending.seqno);
+    return await this.waitTransactionByMessageHash(this.pending.messageHash);
   }
 
   async createTransfer(messages: MessageRelaxed[], sendMode?: SendMode, seqno?: number) {
@@ -118,17 +93,19 @@ class TonSigner {
     });
   }
 
-  getWalletStateInit() {
-    return createStateInit(this.wallet.init.code, this.wallet.init.data).toBoc().toString("base64");
-  }
+  async sendTransaction(args: SenderArguments) {
+    const msg = internal({ to: args.to, value: args.value, init: args.init, body: args.body, bounce: args.bounce });
 
-  async sendTransaction(messages: MessageRelaxed[], sendMode?: any, metadata?: object) {
     if (this.pending != null) throw "Wait until the previous transaction on TON is completed";
-    sendMode = sendMode ?? SendMode.PAY_GAS_SEPARATELY + SendMode.IGNORE_ERRORS;
+    args.sendMode = args.sendMode ?? SendMode.PAY_GAS_SEPARATELY + SendMode.IGNORE_ERRORS;
 
     const { seqno } = await this.tonApi.wallet.getAccountSeqno(this.wallet.address);
-    const transfer: Cell = await this.createTransfer(messages, sendMode, seqno);
+    console.log("getAccountSeqno", { seqno });
 
+    console.log("createTransfer");
+    const transfer: Cell = await this.createTransfer([msg], args.sendMode, seqno);
+
+    console.log("emulating");
     const external = externalMessage(this.wallet.address, this.wallet.init, seqno, transfer);
     const { trace, event } = await this.tonApiRequest("/v2/wallet/emulate", {
       body: { boc: external.toBoc().toString("base64") },
@@ -141,13 +118,11 @@ class TonSigner {
     const messageHash = trace.transaction.in_msg?.hash;
     if (messageHash == null) throw `Message hash is undefined`;
 
+    console.log("sendBlockchainMessage");
     await this.tonApi.blockchain.sendBlockchainMessage({ boc: external });
-    this.pending = { event: event, messageHash, metadata, seqno };
-  }
 
-  setPendingMetadata(metadata: any) {
-    if (!this.pending) return;
-    this.pending.metadata = metadata;
+    this.pending = { event: event, messageHash, seqno };
+    return await this.pendingProcessing();
   }
 
   async waitTransactionByMessageHash(hash: string, attemps = 0): Promise<string> {
@@ -161,33 +136,11 @@ class TonSigner {
     return tx.hash;
   }
 
-  executor(metadata?: object) {
-    return {
-      send: async (args: SenderArguments) => {
-        const msg = internal({ to: args.to, value: args.value, init: args.init, body: args.body, bounce: args.bounce });
-        await this.sendTransaction([msg], args.sendMode, metadata);
-      },
-    };
-  }
-
   async waitNextSeqno(seqno: number): Promise<number> {
     await wait(3000);
     const nextSeqno = await this.tonApi.wallet.getAccountSeqno(this.wallet.address).catch(() => ({ seqno: 0 }));
     if (seqno >= nextSeqno.seqno) return await this.waitNextSeqno(seqno);
     return nextSeqno.seqno;
-  }
-
-  async getBalance(address: string) {
-    try {
-      if (address === "native") return await this.wallet.getBalance();
-      const jetton = await this.tonApi.accounts.getAccountJettonBalance(this.wallet.address, Address.parse(address), {
-        supported_extensions: ["custom_payload"],
-      });
-
-      return BigInt(jetton.balance);
-    } catch (e) {
-      return 0n;
-    }
   }
 }
 

@@ -74,7 +74,7 @@ export class IntentsService {
     });
 
     if (!keys.includes(publicKey)) {
-      await this.omni.near.callTransaction({
+      await this.omni.signers.near!.sendTransaction({
         receiverId: "intents.near",
         actions: [
           {
@@ -91,27 +91,27 @@ export class IntentsService {
     }
   }
 
-  async withdrawIntent(token: string, amount: bigint, receiverAddr: string, logger: Logger): Promise<string> {
-    logger.log(`Call withdrawIntent ${token} ${amount} ${receiverAddr}`);
+  async withdrawIntent(token: string, amount: bigint, receiverAddr: string, logger?: Logger): Promise<string> {
+    logger?.log(`Call withdrawIntent ${token} ${amount} ${receiverAddr}`);
 
     const [chain, address] = fromOmni(token).split(":");
     if (+chain === Network.Near) {
-      logger.log(`Checking if token ${token} is not registered`);
+      logger?.log(`Checking if token ${token} is not registered`);
       const call = await this.omni.near.getRegisterTokenTrx(address);
       if (call) {
-        logger.log(`Registering token ${token}`);
-        await this.omni.near.callTransaction(call);
+        logger?.log(`Registering token ${token}`);
+        await this.omni.signers.near!.sendTransaction(call);
       }
     }
 
-    logger.log(`Registering intents`);
+    logger?.log(`Registering intents`);
     await this.registerIntents();
 
-    logger.log(`Building intent`);
+    logger?.log(`Building intent`);
     const intent = await withdrawIntentAction(this.omni.signers.near, token, amount, receiverAddr);
 
-    logger.log(`Executing intent`);
-    return await this.omni.near.callTransaction({
+    logger?.log(`Executing intent`);
+    return await this.omni.signers.near!.sendTransaction({
       receiverId: "intents.near",
       actions: [
         {

@@ -98,6 +98,15 @@ export const base2Address = (chain: Network, addr: string) => {
   }
 };
 
+export const encodeReceiver = (chain: Network, address: string) => {
+  if (chain === Network.Near) return address;
+  if (chain === Network.Solana) return address;
+  if (Chains.get(chain)?.isEvm) return baseEncode(getBytes(address));
+  if (chain === Network.Stellar) return baseEncode(StellarAddress.fromString(address).toScVal().toXDR());
+  if (chain === Network.Ton) return baseEncode(createAddressRlp(Address.parse(address)));
+  throw `Unsupported chain address ${chain}`;
+};
+
 /**
  * Convert near address to omni address format (base58 encoded)
  */

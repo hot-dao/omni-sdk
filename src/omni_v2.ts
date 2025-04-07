@@ -27,29 +27,6 @@ class OmniV2 {
     this._groups = _groups;
     return _groups;
   }
-
-  async getOmniBalances() {
-    const balances = await this.getLiquidityBalances(this.near.address);
-    const groups: { contract_id: string; group_id: string }[] = await this.near.viewFunction({
-      contractId: "stable-swap.hot.tg",
-      methodName: "get_groups",
-    });
-
-    const list: Record<string, string[]> = {};
-    groups.map(async ({ contract_id, group_id }) => {
-      if (list[group_id] == null) list[group_id] = [];
-      list[group_id].push(contract_id);
-    });
-
-    Object.keys(balances).forEach((id) => {
-      const group = groups.find((t) => t.contract_id === id)?.group_id || id;
-      if (list[group] == null) list[group] = [];
-      if (list[group].includes(id)) return;
-      list[group].push(id);
-    });
-
-    return balances;
-  }
 }
 
 export default OmniV2;

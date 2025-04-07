@@ -1,6 +1,7 @@
 import * as sol from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
 import { baseDecode, baseEncode } from "@near-js/utils";
+import AdvancedConnection from "solana-advanced-connection";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountInstruction,
@@ -25,9 +26,14 @@ class SolanaOmniService {
     return this.omni.signers.solana;
   }
 
-  async isNonceUsed(nonce: string) {
+  get connection() {
+    return new AdvancedConnection(this.solana.rpcs);
+  }
+
+  async isNonceUsed(nonce: string, receiver: string) {
     try {
-      const state: any = await this.env.program.account.user.fetch(this.env.userAccount);
+      const env = this.env(receiver);
+      const state: any = await env.program.account.user.fetch(env.userAccount);
       return BigInt(nonce) <= BigInt(state.lastWithdrawNonce.toString());
     } catch (e) {
       console.error("isNonceUsed", e);
@@ -35,23 +41,23 @@ class SolanaOmniService {
     }
   }
 
-  get env() {
+  env(receiver: string) {
     const [userAccount, userBump] = sol.PublicKey.findProgramAddressSync(
-      [Buffer.from("user", "utf8"), this.solana.publicKey.toBytes()],
+      [Buffer.from("user", "utf8"), new sol.PublicKey(receiver).toBytes()],
       PROGRAM_ID
     );
 
     const [stateAccount, stateBump] = sol.PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], PROGRAM_ID);
-    const provider = new anchor.AnchorProvider(this.solana.connection, this.solana, {});
-    const program = new anchor.Program(IDL as any, PROGRAM_ID, provider);
+    const program = new anchor.Program(IDL as any, PROGRAM_ID, { connection: this.connection });
     return { program, PROGRAM_ID, userAccount, userBump, stateAccount, stateBump };
   }
 
   // TODO: Compute gas dinamically
   async getWithdrawFee() {
+    const address = await this.solana.getAddress();
     const needNative = BigInt(parseAmount(0.005, 9));
     const realGas = BigInt(parseAmount(0.0002, 9));
-    const balance = await this.getTokenBalance("native", this.solana.address);
+    const balance = await this.getTokenBalance("native", address);
 
     if (balance >= needNative)
       return { need: 0n, canPerform: true, amount: realGas, decimal: Chains.get(Network.Solana).decimal, additional: 0n };
@@ -66,7 +72,8 @@ class SolanaOmniService {
   }
 
   async getDepositFee() {
-    const balance = await this.getTokenBalance("native", this.solana.address);
+    const address = await this.solana.getAddress();
+    const balance = await this.getTokenBalance("native", address);
     return {
       maxFee: 4_000_000n,
       need: bigIntMax(0n, 4_000_000n - balance),
@@ -83,33 +90,35 @@ class SolanaOmniService {
       : sol.PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], PROGRAM_ID);
 
     if (token === "native") {
-      const balance = await this.solana.connection.getBalance(stateAccount);
+      const balance = await this.connection.getBalance(stateAccount);
       return BigInt(balance);
     }
 
     const ATA = getAssociatedTokenAddressSync(new sol.PublicKey(token), stateAccount, true);
-    const meta = await this.solana.connection.getTokenAccountBalance(ATA);
+    const meta = await this.connection.getTokenAccountBalance(ATA);
     return BigInt(meta.value.amount);
   }
 
-  async getLastDepositNonce() {
-    const state: any = await this.env.program.account.user.fetch(this.env.userAccount).catch(() => ({ lastDepositNonce: null }));
+  async getLastDepositNonce(receiver: string) {
+    const env = this.env(receiver);
+    const state: any = await env.program.account.user.fetch(env.userAccount).catch(() => ({ lastDepositNonce: null }));
     if (!state.lastDepositNonce) return null;
     const nonce = BigInt(state.lastDepositNonce.toString());
     return nonce;
   }
 
-  async getLastWithdrawNonce() {
-    const isExist = await this.solana.connection.getAccountInfo(this.env.userAccount);
+  async getLastWithdrawNonce(receiver: string) {
+    const env = this.env(receiver);
+    const isExist = await this.connection.getAccountInfo(env.userAccount);
     if (!isExist) return 0n;
 
-    const state: any = await this.env.program.account.user.fetch(this.env.userAccount);
+    const state: any = await env.program.account.user.fetch(env.userAccount);
     return BigInt(state?.lastWithdrawNonce || 0n);
   }
 
   async parseDeposit(hash: string) {
     const waitReceipt = async (attemps = 0): Promise<sol.ParsedTransactionWithMeta | null> => {
-      const status = await this.solana.connection.getParsedTransaction(hash, { commitment: "confirmed" });
+      const status = await this.connection.getParsedTransaction(hash, { commitment: "confirmed" });
       if (status || attemps > 2) return status || null;
       await wait(3000);
       return await waitReceipt(attemps + 1);
@@ -130,7 +139,8 @@ class SolanaOmniService {
     const timestamp = (status.blockTime || 0) * 1000;
     const receiver = baseEncode(Buffer.from(receiverHex, "hex"));
 
-    const deposit = { tx: hash, amount, nonce, receiver, chain: Network.Solana, timestamp, token };
+    const sender = await this.solana.getAddress();
+    const deposit = { tx: hash, amount, nonce, receiver, chain: Network.Solana, timestamp, token, sender };
     const isUsed = await this.omni.isDepositUsed(Network.Solana, nonce);
 
     if (isUsed) {
@@ -145,26 +155,29 @@ class SolanaOmniService {
     const isUsed = await this.omni.isDepositUsed(Network.Solana, deposit.nonce);
     if (!isUsed) throw "You have not completed the previous deposit";
 
-    const receiver = Buffer.from(this.omni.omniAddressHex, "hex");
+    const receiver = Buffer.from(deposit.receiver, "hex");
     const bnAmount = new anchor.BN(deposit.amount.toString());
     const bnNonce = new anchor.BN(deposit.nonce.toString());
 
+    const sender = await this.solana.getAddress();
     const mint = deposit.token === "native" ? sol.PublicKey.default : new sol.PublicKey(deposit.token);
-    const [depositAddress] = findDepositAddress(BigInt(deposit.nonce), this.solana.publicKey, receiver, mint, BigInt(deposit.amount));
+    const [depositAddress] = findDepositAddress(BigInt(deposit.nonce), new sol.PublicKey(sender), receiver, mint, BigInt(deposit.amount));
 
-    const isExist = await this.solana.connection.getAccountInfo(depositAddress, { commitment: "confirmed" });
+    const isExist = await this.connection.getAccountInfo(depositAddress, { commitment: "confirmed" });
     if (isExist == null) return this.omni.removePendingDeposit(deposit);
+    const env = this.env(deposit.receiver);
 
     try {
-      const builder = this.env.program.methods.clearDepositInfo(Array.from(receiver), mint, bnAmount, bnNonce).accounts({
+      const builder = env.program.methods.clearDepositInfo(Array.from(receiver), mint, bnAmount, bnNonce).accounts({
         systemProgram: sol.SystemProgram.programId,
-        sender: this.solana.publicKey.toBase58(),
-        state: this.env.stateAccount.toBase58(),
+        state: env.stateAccount.toBase58(),
         deposit: depositAddress,
+        sender,
       });
 
       const instruction = await builder.instruction();
-      await this.solana.sendInstructions({ instructions: [instruction] });
+      const tx = new sol.Transaction().add(instruction);
+      await this.solana.sendTransaction(tx);
     } catch (e) {
       console.error(e);
     }
@@ -172,22 +185,25 @@ class SolanaOmniService {
     this.omni.removePendingDeposit(deposit);
   }
 
-  async deposit(address: string, amount: bigint, to?: string) {
-    const receiverAddr = to ? getOmniAddressHex(to) : this.omni.omniAddressHex;
+  async deposit(address: string, amount: bigint, to: string) {
+    const receiverAddr = getOmniAddressHex(to);
     const receiver = Buffer.from(receiverAddr, "hex");
 
-    const lastDeposit = await this.getLastDepositNonce();
-    const builder = this.env.program.methods.generateDepositNonce(this.env.userBump);
+    const lastDeposit = await this.getLastDepositNonce(to);
+    const env = this.env(to);
+    const builder = env.program.methods.generateDepositNonce(env.userBump);
     builder.accountsStrict({
-      user: this.env.userAccount.toBase58(),
-      state: this.env.stateAccount.toBase58(),
-      sender: this.solana.publicKey.toBase58(),
+      user: env.userAccount.toBase58(),
+      state: env.stateAccount.toBase58(),
+      sender: await this.solana.getAddress(),
       systemProgram: sol.SystemProgram.programId,
     });
 
-    await this.solana.sendInstructions({ instructions: [await builder.instruction()] });
+    const tx = new sol.Transaction().add(await builder.instruction());
+    await this.solana.sendTransaction(tx);
+
     const waitNewNonce = async () => {
-      const newNonce = await this.getLastDepositNonce().catch(() => lastDeposit);
+      const newNonce = await this.getLastDepositNonce(to).catch(() => lastDeposit);
       if (newNonce === lastDeposit) return await waitNewNonce();
       if (newNonce == null) return await waitNewNonce();
       return newNonce;
@@ -196,32 +212,32 @@ class SolanaOmniService {
     const nonce = await waitNewNonce();
     const amt = new anchor.BN(amount.toString());
     if (address === "native") {
-      const [depositAddress, depositBump] = findDepositAddress(nonce, this.solana.publicKey, receiver, sol.PublicKey.default, amount);
-      const depositBuilder = this.env.program.methods.nativeDeposit(receiver, amt, depositBump);
+      const address = await this.solana.getAddress();
+      const [depositAddress, depositBump] = findDepositAddress(nonce, new sol.PublicKey(address), receiver, sol.PublicKey.default, amount);
+      const depositBuilder = env.program.methods.nativeDeposit(receiver, amt, depositBump);
       depositBuilder.accountsStrict({
-        user: this.env.userAccount.toBase58(),
-        state: this.env.stateAccount.toBase58(),
-        sender: this.solana.publicKey.toBase58(),
+        user: env.userAccount.toBase58(),
+        state: env.stateAccount.toBase58(),
         systemProgram: sol.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
         deposit: depositAddress,
+        sender: address,
       });
 
       let deposit!: PendingDeposit;
       const instruction = await depositBuilder.instruction();
-      await this.solana.sendInstructions({
-        instructions: [instruction],
-        onHash: (hash) => {
-          deposit = this.omni.addPendingDeposit({
-            receiver: receiverAddr,
-            timestamp: Date.now(),
-            chain: Network.Solana,
-            amount: String(amount),
-            token: address,
-            nonce: "",
-            tx: hash,
-          });
-        },
+      const tx = new sol.Transaction().add(instruction);
+      const hash = await this.solana.sendTransaction(tx);
+
+      this.omni.addPendingDeposit({
+        sender: address,
+        receiver: receiverAddr,
+        timestamp: Date.now(),
+        chain: Network.Solana,
+        amount: String(amount),
+        token: address,
+        nonce: "",
+        tx: hash,
       });
 
       deposit.nonce = nonce.toString();
@@ -229,18 +245,18 @@ class SolanaOmniService {
       return deposit;
     }
 
-    const mint = new sol.PublicKey(address);
-    const [depositAddress, depositBump] = findDepositAddress(nonce, this.solana.publicKey, receiver, mint, amount);
+    const mint = new sol.PublicKey(address); // mint receiver or sender???
+    const [depositAddress, depositBump] = findDepositAddress(nonce, mint, receiver, mint, amount);
     const instructions: sol.TransactionInstruction[] = [];
 
-    const contractATA = getAssociatedTokenAddressSync(mint, this.env.stateAccount, true);
-    const isContractATAExist = await getAccount(this.solana.connection, contractATA, "confirmed", TOKEN_PROGRAM_ID).catch(() => null);
+    const contractATA = getAssociatedTokenAddressSync(mint, env.stateAccount, true);
+    const isContractATAExist = await getAccount(this.connection, contractATA, "confirmed", TOKEN_PROGRAM_ID).catch(() => null);
 
     if (!isContractATAExist) {
       const createATA = createAssociatedTokenAccountInstruction(
-        this.solana.publicKey,
+        new sol.PublicKey(address),
         contractATA,
-        this.env.stateAccount,
+        env.stateAccount,
         mint,
         TOKEN_PROGRAM_ID,
         ASSOCIATED_TOKEN_PROGRAM_ID
@@ -248,35 +264,34 @@ class SolanaOmniService {
       instructions.push(createATA);
     }
 
-    const depositBuilder = this.env.program.methods.tokenDeposit(receiver, amt, depositBump);
+    const depositBuilder = env.program.methods.tokenDeposit(receiver, amt, depositBump);
     depositBuilder.accountsStrict({
-      user: this.env.userAccount.toBase58(),
-      state: this.env.stateAccount.toBase58(),
-      sender: this.solana.publicKey.toBase58(),
+      user: env.userAccount.toBase58(),
+      state: env.stateAccount.toBase58(),
       systemProgram: sol.SystemProgram.programId,
-      smcTokenAccount: getAssociatedTokenAddressSync(mint, this.env.stateAccount, true),
-      senderTokenAccount: getAssociatedTokenAddressSync(mint, this.solana.publicKey),
+      smcTokenAccount: getAssociatedTokenAddressSync(mint, env.stateAccount, true),
+      senderTokenAccount: getAssociatedTokenAddressSync(mint, new sol.PublicKey(address)),
       tokenProgram: TOKEN_PROGRAM_ID,
       deposit: depositAddress,
+      sender: address,
     });
 
     const instruction = await depositBuilder.instruction();
     instructions.push(instruction);
 
     let deposit!: PendingDeposit;
-    await this.solana.sendInstructions({
-      instructions,
-      onHash: (hash) => {
-        deposit = this.omni.addPendingDeposit({
-          receiver: receiverAddr,
-          timestamp: Date.now(),
-          chain: Network.Solana,
-          nonce: nonce.toString(),
-          amount: String(amount),
-          token: address,
-          tx: hash,
-        });
-      },
+    const transaction = new sol.Transaction().add(...instructions);
+    const hash = await this.solana.sendTransaction(transaction);
+
+    this.omni.addPendingDeposit({
+      sender: address,
+      receiver: receiverAddr,
+      timestamp: Date.now(),
+      chain: Network.Solana,
+      nonce: nonce.toString(),
+      amount: String(amount),
+      token: address,
+      tx: hash,
     });
 
     deposit.nonce = nonce.toString();
@@ -284,47 +299,50 @@ class SolanaOmniService {
     return deposit;
   }
 
-  async withdraw(args: { nonce: string; signature: string; amount: bigint; token: string }) {
+  async withdraw(args: { nonce: string; signature: string; amount: bigint; token: string; receiver: string }) {
     const sign = Array.from(baseDecode(args.signature));
+    const env = this.env(args.receiver);
 
     if (args.token === "native") {
-      const instructionBuilder = this.env.program.methods.nativeWithdraw(
+      const instructionBuilder = env.program.methods.nativeWithdraw(
         sign,
         new anchor.BN(args.nonce),
         new anchor.BN(args.amount.toString()),
-        this.env.userBump
+        env.userBump
       );
+
       instructionBuilder.accountsStrict({
-        user: this.env.userAccount,
-        state: this.env.stateAccount,
-        sender: this.solana.publicKey,
-        receiver: this.solana.publicKey,
+        user: env.userAccount,
+        state: env.stateAccount,
+        receiver: args.receiver,
+        sender: await this.solana.getAddress(),
         systemProgram: sol.SystemProgram.programId,
       });
 
       const instruction = await instructionBuilder.instruction();
-      const hash = await this.solana.sendInstructions({ instructions: [instruction] });
+      const tx = new sol.Transaction().add(instruction);
+      const hash = await this.solana.sendTransaction(tx);
       return hash;
     }
 
-    const owner = this.solana.publicKey;
+    const owner = new sol.PublicKey(await this.solana.getAddress());
     const mint = new sol.PublicKey(args.token);
     const instructions = [];
 
     const ATA = getAssociatedTokenAddressSync(mint, owner);
-    const isExist = await getAccount(this.solana.connection, ATA, "confirmed", TOKEN_PROGRAM_ID).catch(() => null);
+    const isExist = await getAccount(this.connection, ATA, "confirmed", TOKEN_PROGRAM_ID).catch(() => null);
     if (!isExist) {
       const createATA = createAssociatedTokenAccountInstruction(owner, ATA, owner, mint, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID);
       instructions.push(createATA);
     }
 
-    const contractATA = getAssociatedTokenAddressSync(mint, this.env.stateAccount, true);
-    const isContractATAExist = await getAccount(this.solana.connection, contractATA, "confirmed", TOKEN_PROGRAM_ID).catch(() => null);
+    const contractATA = getAssociatedTokenAddressSync(mint, env.stateAccount, true);
+    const isContractATAExist = await getAccount(this.connection, contractATA, "confirmed", TOKEN_PROGRAM_ID).catch(() => null);
     if (!isContractATAExist) {
       const createATA = createAssociatedTokenAccountInstruction(
         owner,
         contractATA,
-        this.env.stateAccount,
+        env.stateAccount,
         mint,
         TOKEN_PROGRAM_ID,
         ASSOCIATED_TOKEN_PROGRAM_ID
@@ -332,27 +350,29 @@ class SolanaOmniService {
       instructions.push(createATA);
     }
 
-    const instructionBuilder = this.env.program.methods.tokenWithdraw(
+    const address = await this.solana.getAddress();
+    const instructionBuilder = env.program.methods.tokenWithdraw(
       sign,
       new anchor.BN(args.nonce),
       new anchor.BN(args.amount.toString()),
-      this.solana.publicKey,
-      this.env.userBump
+      new sol.PublicKey(address),
+      env.userBump
     );
 
     instructionBuilder.accountsStrict({
-      user: this.env.userAccount,
-      state: this.env.stateAccount,
-      sender: this.solana.publicKey,
+      user: env.userAccount,
+      state: env.stateAccount,
       receiverTokenAccount: ATA,
+      sender: owner,
 
-      smcTokenAccount: getAssociatedTokenAddressSync(mint, this.env.stateAccount, true),
+      smcTokenAccount: getAssociatedTokenAddressSync(mint, env.stateAccount, true),
       systemProgram: sol.SystemProgram.programId,
       tokenProgram: TOKEN_PROGRAM_ID,
     });
 
     instructions.push(await instructionBuilder.instruction());
-    const hash = await this.solana.sendInstructions({ instructions });
+    const transaction = new sol.Transaction().add(...instructions);
+    const hash = await this.solana.sendTransaction(transaction);
     return hash;
   }
 }

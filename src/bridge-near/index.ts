@@ -1,29 +1,35 @@
+import { ViewFunctionCallOptions } from "near-api-js/lib/account";
 import { HereCall } from "@here-wallet/core";
+
 import OmniService from "../bridge";
 import { TGAS } from "../utils";
-import { ViewFunctionCallOptions } from "near-api-js/lib/account";
+import NearRpcProvider from "./provider";
 
 class NearBridge {
-  constructor(readonly omni: OmniService) {}
+  readonly rpc: NearRpcProvider;
+  constructor(readonly omni: OmniService) {
+    this.rpc = new NearRpcProvider(this.omni.signers.near!.rpcs);
+  }
 
   get near() {
     return this.omni.signers.near;
   }
 
-  get address() {
-    return this.near.accountId;
+  async viewFunction(options: ViewFunctionCallOptions) {
+    const payload = Buffer.from(JSON.stringify(options.args), "utf8").toString("base64");
+    const data: any = await this.rpc.query({
+      args_base64: payload,
+      finality: "optimistic",
+      request_type: "call_function",
+      method_name: options.methodName,
+      account_id: options.contractId,
+    });
+
+    return JSON.parse(Buffer.from(data.result).toString("utf8"));
   }
 
-  viewFunction(options: ViewFunctionCallOptions) {
-    return this.near.viewFunction(options);
-  }
-
-  callTransaction(options: HereCall) {
-    return this.near.callTransaction(options);
-  }
-
-  async parseWithdrawalNonce(tx: string) {
-    const receipt = await this.near.connection.provider.txStatusReceipts(tx, this.near.accountId, "EXECUTED_OPTIMISTIC");
+  async parseWithdrawalNonce(tx: string, sender: string) {
+    const receipt = await this.rpc.txStatusReceipts(tx, sender, "EXECUTED_OPTIMISTIC");
 
     const transfer = (() => {
       for (let item of receipt.receipts_outcome) {
@@ -38,30 +44,20 @@ class NearBridge {
     return transfer.nonce;
   }
 
-  async getTokenBalance(token: string, address?: string) {
+  async getTokenBalance(token: string, address: string) {
     if (token === "native") {
-      const balance = await this.near.connection.provider.query<any>({
-        request_type: "view_account",
-        account_id: address || this.address,
-        finality: "optimistic",
-      });
-
+      const balance = await this.rpc.query<any>({ request_type: "view_account", account_id: address, finality: "optimistic" });
       return BigInt(balance.amount);
     }
 
-    return await this.near.viewFunction({
-      args: { account_id: address || this.address },
-      methodName: "ft_balance_of",
-      contractId: token,
-    });
+    return await this.viewFunction({ args: { account_id: address }, methodName: "ft_balance_of", contractId: token });
   }
 
-  async getRegisterTokenTrx(token: string, address = this.near.accountId, deposit?: string): Promise<HereCall | null> {
-    const storage = await this.near.viewFunction({ args: { account_id: address }, methodName: "storage_balance_of", contractId: token });
+  async getRegisterTokenTrx(token: string, address: string, deposit?: string): Promise<HereCall | null> {
+    const storage = await this.viewFunction({ args: { account_id: address }, methodName: "storage_balance_of", contractId: token });
     if (storage != null) return null;
 
     return {
-      signerId: this.near.accountId,
       receiverId: token,
       actions: [
         {
@@ -80,11 +76,11 @@ class NearBridge {
     };
   }
 
-  public async getWrapNearDepositAction(amount: string | bigint) {
-    const storage = await this.near.viewFunction({
+  public async getWrapNearDepositAction(amount: string | bigint, address: string) {
+    const storage = await this.viewFunction({
       contractId: "wrap.near",
       methodName: "storage_balance_of",
-      args: { account_id: this.near.accountId },
+      args: { account_id: address },
     });
 
     const depositAction = {
@@ -105,7 +101,7 @@ class NearBridge {
           gas: String(30n * TGAS),
           methodName: "storage_deposit",
           deposit: "12500000000000000000000",
-          args: { account_id: this.near.accountId, registration_only: true },
+          args: { account_id: address, registration_only: true },
         },
       },
       depositAction,
