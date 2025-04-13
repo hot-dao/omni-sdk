@@ -2,6 +2,7 @@ import { getBytes, hexlify, sha256 } from "ethers";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import { Address as StellarAddress, xdr } from "@stellar/stellar-sdk";
 import { Address } from "@ton/core";
+import crypto from "crypto";
 
 import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
 import { Network, Chains } from "./chains";
@@ -98,6 +99,22 @@ export const base2Address = (chain: Network, addr: string) => {
   }
 };
 
+export const omniEphemeralReceiver = (intentAccount: string, chain: Network, token: string, amount: bigint) => {
+  const depositMsg = JSON.stringify({
+    receiver_id: intentAccount,
+    token_id: toOmni(chain, token),
+    amount: amount,
+  });
+
+  const receiver = crypto
+    .createHash("sha256") //
+    .update(Buffer.from("intents.near", "utf8"))
+    .update(Buffer.from(depositMsg, "utf8"))
+    .digest();
+
+  return receiver;
+};
+
 export const encodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Near) return address;
   if (chain === Network.Solana) return address;
@@ -118,7 +135,7 @@ export const getOmniAddress = (address: string) => {
  * Convert near address to omni address format (hex encoded)
  */
 export const getOmniAddressHex = (address: string) => {
-  return sha256(Buffer.from(address, "utf8"));
+  return crypto.createHash("sha256").update(Buffer.from(address, "utf8")).digest();
 };
 
 // @ts-ignore

@@ -13,13 +13,12 @@ import {
   xdr,
   XdrLargeInt,
 } from "@stellar/stellar-sdk";
-import { Operation, FeeBumpTransaction } from "@stellar/stellar-sdk";
+import { Operation, Transaction } from "@stellar/stellar-sdk";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import BigNumber from "bignumber.js"; // @ts-ignore
-import { getBytes } from "ethers";
 
-import { bigIntMax, getOmniAddressHex, parseAmount } from "../utils";
-import { Chains, Network } from "../chains";
+import { intentReceiver, parseAmount } from "../utils";
+import { Network } from "../chains";
 import { PendingDeposit } from "../types";
 import OmniService from "../bridge";
 import OmniApi from "../api";
@@ -32,66 +31,26 @@ class StellarService {
   readonly horizon: Horizon.Server;
 
   constructor(readonly omni: OmniService) {
-    this.soroban = new rpc.Server(this.stellar.rpcs[0]);
-    this.horizon = new Horizon.Server(this.stellar.horizonApi[0]);
+    this.soroban = new rpc.Server("https://mainnet.sorobanrpc.com");
+    this.horizon = new Horizon.Server("https://horizon.stellar.org");
   }
 
-  get stellar() {
-    return this.omni.signers.stellar!;
-  }
-
-  // TODO: Compute gas dinamically
-  async getWithdrawFee() {
-    const needNative = 0n; // BigInt(parseAmount(0.15, 7));
-    const realGas = 0n; // BigInt(parseAmount(0.1, 7));
-
-    const sender = await this.stellar.getAddress();
-    const balance = await this.getTokenBalance("native", sender);
-
-    if (balance >= needNative)
-      return { need: 0n, canPerform: true, amount: realGas, decimal: Chains.get(Network.Stellar).decimal, additional: 0n };
-
-    return {
-      need: bigIntMax(0n, needNative - balance),
-      canPerform: false,
-      decimal: Chains.get(Network.Stellar).decimal,
-      amount: realGas,
-      additional: 0n,
-    };
-  }
-
-  async getDepositFee(receiver: string) {
-    const { tx } = await this.buildDepositTx("native", 1n, receiver);
-    const balance = await this.getTokenBalance("native", await this.stellar.getAddress());
-    const fee = BigInt(tx.fee);
-    return {
-      maxFee: fee,
-      chain: Network.Stellar,
-      need: bigIntMax(0n, fee - balance),
-      isNotEnough: balance < fee,
-      gasPrice: fee,
-      gasLimit: 1n,
-    };
-  }
-
-  async isNonceUsed(nonce: string) {
+  async isWithdrawUsed(nonce: string) {
     const tx = await this.buildSmartContactTx(ACCOUNT_FOR_SIMULATE, CONTRACT, "is_executed", new XdrLargeInt("u128", nonce).toU128());
     const result = (await this.soroban.simulateTransaction(tx)) as rpc.Api.SimulateTransactionSuccessResponse;
     return result.result?.retval.value();
   }
 
-  async buildDepositTx(address: string, amount: bigint, to: string) {
-    const receiver = getOmniAddressHex(to);
+  async buildDepositTx(sender: string, token: string, amount: bigint, intentAccount: Buffer) {
     const ts = await OmniApi.shared.getTime();
-    const sender = await this.stellar.getAddress();
 
-    const contractId = address === "native" ? new Asset("XLM").contractId(Networks.PUBLIC) : address;
+    const contractId = token === "native" ? new Asset("XLM").contractId(Networks.PUBLIC) : token;
     const call = new Contract(CONTRACT).call(
       "deposit",
       Address.fromString(sender).toScVal(),
       new XdrLargeInt("u128", amount.toString()).toU128(),
       xdr.ScVal.scvAddress(Address.contract(StrKey.decodeContract(contractId)).toScAddress()),
-      xdr.ScVal.scvBytes(Buffer.from(getBytes(receiver))),
+      xdr.ScVal.scvBytes(intentAccount),
       new XdrLargeInt("u128", ts.toString()).toU128()
     );
 
@@ -103,28 +62,45 @@ class StellarService {
     return { nonce: String(ts), tx: await this.soroban.prepareTransaction(tx.build()) };
   }
 
-  async deposit(address: string, amount: bigint, to: string) {
-    const receiver = getOmniAddressHex(to);
-    const { tx, nonce } = await this.buildDepositTx(address, amount, to);
+  async deposit(args: {
+    token: string;
+    amount: bigint;
+    getIntentAccount: () => Promise<string>;
+    getAddress: () => Promise<string>;
+    sendTransaction: (tx: Transaction) => Promise<string>;
+  }): Promise<PendingDeposit> {
+    const sender = await args.getAddress();
+    const intentAccount = await args.getIntentAccount();
+    const receiver = intentReceiver(intentAccount, Network.Stellar, args.token, args.amount);
+    const { tx, nonce } = await this.buildDepositTx(sender, args.token, args.amount, receiver);
+    const hash = await args.sendTransaction(tx);
 
-    const hash = await this.stellar.sendTransaction(tx);
-    return this.omni.addPendingDeposit({
-      sender: address,
-      receiver: baseEncode(getBytes(receiver)),
+    return {
+      intentAccount,
+      receiver: baseEncode(receiver),
       timestamp: Date.now(),
-      amount: String(amount),
+      amount: String(args.amount),
       chain: Network.Stellar,
-      token: address,
+      token: args.token,
       tx: hash,
+      sender,
       nonce,
-    });
+    };
   }
 
-  async withdraw(args: { amount: bigint; token: string; signature: string; nonce: string; receiver: string }) {
+  async withdraw(args: {
+    amount: bigint;
+    token: string;
+    signature: string;
+    nonce: string;
+    receiver: string;
+    getAddress: () => Promise<string>;
+    sendTransaction: (tx: Transaction) => Promise<string>;
+  }) {
     const to = new Contract(CONTRACT);
     const sign = Buffer.from(baseDecode(args.signature));
 
-    if (args.token !== "native") await this.activateToken(args.token);
+    if (args.token !== "native") await this.activateToken(args);
     const contractId = args.token === "native" ? new Asset("XLM").contractId(Networks.PUBLIC) : args.token;
 
     const call = to.call(
@@ -136,14 +112,14 @@ class StellarService {
       xdr.ScVal.scvBytes(sign)
     );
 
-    const address = await this.stellar.getAddress();
-    const account = await this.horizon.loadAccount(address);
+    const sender = await args.getAddress();
+    const account = await this.horizon.loadAccount(sender);
     const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: Networks.PUBLIC }) //
       .addOperation(call)
       .setTimeout(TimeoutInfinite);
 
     const preparedTx = await this.soroban.prepareTransaction(tx.build());
-    return await this.stellar.sendTransaction(preparedTx);
+    return await args.sendTransaction(preparedTx);
   }
 
   async clearDepositNonceIfNeeded(_: PendingDeposit) {}
@@ -153,21 +129,25 @@ class StellarService {
     const txResult = await this.soroban.getTransaction(deposit.tx);
     if (txResult.status !== rpc.Api.GetTransactionStatus.SUCCESS) throw "";
     const nonce = scValToBigInt(txResult.resultMetaXdr.v3().sorobanMeta()!.returnValue());
-    return this.omni.addPendingDeposit({ ...deposit, nonce: nonce.toString() });
+    return { ...deposit, nonce: nonce.toString() };
   }
 
-  async activateToken(assetAddress: string | Asset) {
-    const address = await this.stellar.getAddress();
-    const asset = assetAddress instanceof Asset ? assetAddress : await this.getAssetFromContractId(assetAddress);
-    const account = await this.horizon.loadAccount(address);
+  async activateToken(args: {
+    token: string | Asset;
+    getAddress: () => Promise<string>;
+    sendTransaction: (tx: Transaction) => Promise<string>;
+  }) {
+    const sender = await args.getAddress();
+    const asset = args.token instanceof Asset ? args.token : await this.getAssetFromContractId(args.token);
+    const account = await this.horizon.loadAccount(sender);
 
-    const trustlineOp = Operation.changeTrust({ asset: asset, source: address });
+    const trustlineOp = Operation.changeTrust({ asset: asset, source: sender });
     const trustlineTx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: Networks.PUBLIC }) //
       .addOperation(trustlineOp)
       .setTimeout(TimeoutInfinite)
       .build();
 
-    return await this.stellar.sendTransaction(trustlineTx);
+    return await args.sendTransaction(trustlineTx);
   }
 
   async buildSmartContactTx(publicKey: string, contactId: string, method: string, ...args: any[]) {

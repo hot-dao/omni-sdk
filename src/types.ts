@@ -5,29 +5,35 @@ import { HereCall } from "@here-wallet/core";
 import { ethers } from "ethers";
 
 export interface HotBridgeConfig {
-  signIntent: (intent: any) => Promise<any>;
-
   near?: {
     getAddress: () => Promise<string>;
     sendTransaction: (tx: HereCall) => Promise<string>;
+    getIntentAccount: () => Promise<string>;
+    signIntent: (intent: any) => Promise<any>;
     rpcs: string[];
   };
 
   solana?: {
     getAddress: () => Promise<string>;
     sendTransaction: (tx: Transaction) => Promise<string>;
+    getIntentAccount: () => Promise<string>;
+    signIntent: (intent: any) => Promise<any>;
     rpcs: string[];
   };
 
   evm?: {
     getAddress: () => Promise<string>;
     sendTransaction: (tx: ethers.TransactionRequest) => Promise<string>;
+    getIntentAccount: () => Promise<string>;
+    signIntent: (intent: any) => Promise<any>;
     rpcs: Record<number, string[]>;
   };
 
   stellar?: {
     getAddress: () => Promise<string>;
     sendTransaction: (tx: FeeBumpTransaction | StellarTransaction) => Promise<string>;
+    getIntentAccount: () => Promise<string>;
+    signIntent: (intent: any) => Promise<any>;
     horizonApi: string[];
     rpcs: string[];
   };
@@ -35,6 +41,8 @@ export interface HotBridgeConfig {
   ton?: {
     getAddress: () => Promise<string>;
     sendTransaction: (tx: SenderArguments) => Promise<string>;
+    getIntentAccount: () => Promise<string>;
+    signIntent: (intent: any) => Promise<any>;
     tonApiKey: string;
   };
 }
@@ -58,6 +66,7 @@ export interface PendingWithdraw {
 }
 
 export interface PendingDeposit {
+  intentAccount: string;
   token: string;
   chain: number;
   timestamp: number;

@@ -1,7 +1,6 @@
 import { TonApiClient } from "@ton-api/client";
 import { ContractAdapter } from "@ton-api/ton-adapter";
 import { KeyPair, keyPairFromSecretKey } from "@ton/crypto";
-import EventEmitter from "eventemitter3";
 import {
   Address,
   internal,
@@ -20,8 +19,8 @@ import {
   external,
 } from "@ton/ton";
 
-import { wait } from "../utils";
-import { baseDecode } from "@near-js/utils";
+import { wait } from "../../src/utils";
+import { baseDecode, baseEncode } from "@near-js/utils";
 
 export const externalMessage = (address: Address, init: StateInit, seqno: number, body: Cell) => {
   return beginCell()
@@ -65,6 +64,14 @@ class TonSigner {
 
   async getAddress() {
     return this.wallet.address.toString({ bounceable: false });
+  }
+
+  async getIntentAccount(): Promise<string> {
+    return baseEncode(this.keyPair.publicKey);
+  }
+
+  async signIntent(intent: any): Promise<any> {
+    return; //
   }
 
   async pendingProcessing() {

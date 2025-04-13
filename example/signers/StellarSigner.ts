@@ -1,6 +1,6 @@
 import { rpc, Horizon, Transaction, FeeBumpTransaction, Keypair } from "@stellar/stellar-sdk";
 import { baseDecode } from "@near-js/utils";
-import { wait } from "../utils";
+import { wait } from "../../src/utils";
 
 class StellarSigner {
   readonly soroban: rpc.Server;
@@ -16,6 +16,14 @@ class StellarSigner {
     this.keyPair = Keypair.fromRawEd25519Seed(Buffer.from(baseDecode(privateKey)));
     this.rpcs = [soroban];
     this.horizonApi = [horizon];
+  }
+
+  async getIntentAccount(): Promise<string> {
+    return this.keyPair.publicKey();
+  }
+
+  async signIntent(intent: any): Promise<any> {
+    return; //
   }
 
   async getAddress() {

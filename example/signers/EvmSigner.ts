@@ -1,11 +1,18 @@
-import { SigningKey, TransactionRequest, TransactionResponse, Wallet } from "ethers";
+import { SigningKey, TransactionRequest, Wallet } from "ethers";
 
 export default class EvmSigner {
   wallet: Wallet;
-  rpcs: Record<number, string[]> = {};
 
   constructor(key: string | SigningKey) {
     this.wallet = new Wallet(key);
+  }
+
+  async getIntentAccount(): Promise<string> {
+    return this.wallet.address;
+  }
+
+  async signIntent(intent: any): Promise<any> {
+    return; //
   }
 
   async getAddress(): Promise<string> {

@@ -1,4 +1,5 @@
 import { getErrorTypeFromErrorMessage, parseRpcError } from "@near-js/utils";
+import { ViewFunctionCallOptions } from "near-api-js/lib/account";
 import { JsonRpcProvider } from "near-api-js/lib/providers";
 import { TypedError } from "@near-js/types";
 import isObject from "lodash/isObject";
@@ -47,6 +48,19 @@ class NearRpcProvider extends JsonRpcProvider {
     this.currentProviderIndex = 0;
     this.providers = providers;
     this.startTimeout = timeout;
+  }
+
+  async viewFunction(options: ViewFunctionCallOptions) {
+    const payload = Buffer.from(JSON.stringify(options.args), "utf8").toString("base64");
+    const data: any = await this.query({
+      args_base64: payload,
+      finality: "optimistic",
+      request_type: "call_function",
+      method_name: options.methodName,
+      account_id: options.contractId,
+    });
+
+    return JSON.parse(Buffer.from(data.result).toString("utf8"));
   }
 
   async sendJsonRpc<T>(method: string, params: any, attempts = 0): Promise<T> {

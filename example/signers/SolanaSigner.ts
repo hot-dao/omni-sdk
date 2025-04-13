@@ -13,6 +13,14 @@ export default class SolanaSigner {
     this.rpcs = rpc;
   }
 
+  async signIntent(intent: any): Promise<any> {
+    return; //
+  }
+
+  async getIntentAccount(): Promise<string> {
+    return this.keyPair.publicKey.toBase58();
+  }
+
   async getAddress(): Promise<string> {
     return this.keyPair.publicKey.toBase58();
   }

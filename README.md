@@ -1,83 +1,87 @@
-# HOT Omni
+# HOT Bridge
 
 A fast and cheap bridge protocol over **HOT Protocol** that uses the **NEAR Intents** engine for exchange.<br/>
 **Available for EVM (10+ chains), NEAR, Solana, TON, Stellar**
 
 <br />
 
-## Usage from CLI
+### Example CLI
 
-### Installation
+`yarn cli deposit --token usdc --chain near --amount 100000 --private-key <..> --near-account-id root.near`
 
-```bash
-git clone git@github.com:hot-dao/omni-sdk.git
-cd omni-sdk
-yarn install
-cp .env.example .env
-```
+`yarn cli deposit --token usdc --chain bnb --amount 100000 --private-key <..>`
 
-Provide your private keys in base58 format for the required networks in `.env` file. You only need to provide `NEAR_ACCONT_ID` and `NEAR_PRIVATE_KEY`. The other networks can be left blank if you do not plan to deposit/withdraw to these networks.
-
-### Commands
-
-**Get HOT Intent balance**
-
-`yarn cli balance --token usdc --chain near`
-
-**Get All balances**
-
-`yarn cli profile`
-
-`yarn cli profile --chain near`
-
-`yarn cli profile --chain base --address 0x...`
-
-`yarn cli profile --token eth`
-
-**Make swap HOT Intent token to another HOT Intent token**
-
-`yarn cli swap --token usdc --from near --to arb --amount 0.01`
-
-**Make withdraw HOT Intent token to chain**
-
-`yarn cli withdraw --token usdc --chain base --amount 0.001`
-
-**Make deposit token from chain to HOT Intent**
-
-`yarn cli deposit --token usdc --chain base --amount 0.001`
+`yarn cli withdraw --token usdc --chain base --amount 100000 --private-key <..>`
 
 <br />
 
-## Usage from code
-
-`yarn add @hot-wallet/omni-sdk`
+## Setup OmniBridge
 
 ```ts
-import "dotenv/config";
-import { EvmSigner, Network as chain, OmniToken, OmniGroup } from "@hot-wallet/omni-sdk";
-import { TonSigner, NearSigner, StellarSigner, OmniService, SolanaSigner } from "@hot-wallet/omni-sdk";
-
-const env = process.env as any;
-const omni = new OmniService({
-  near: new NearSigner(env.NEAR_ACCONT_ID, env.NEAR_PRIVATE_KEY),
-  ton: new TonSigner(env.TON_PRIVATE_KEY, env.TON_WALLET_TYPE, env.TON_API_KEY),
-  stellar: new StellarSigner(env.STELLAR_PRIVATE_KEY),
-  solana: new SolanaSigner(env.SOLANA_PRIVATE_KEY, [env.SOLANA_RPC]),
-  evm: new EvmSigner(env.EVM_PRIVATE_KEY),
+const omni = new OmniBridge({
+  logger: console, // optional
+  tonApiKey: env.TON_API_KEY, // only if use TON
+  // Relayer for execute intents and omni bridge operations
+  executeNearTransaction: async (tx) => {
+    const hash = await nearRelayerAccount.signAndSendTransaction(tx).
+    return { sender: nearRelayerAccount.accountId, hash };
+  },
 });
 
-// Simple bridge
-const ton = new OmniToken(OmniGroup.TON); // builder
-await omni.depositToken(...ton.input(chain.Ton, 1));
+```
 
-console.log("Omni TON", await omni.getBalance(ton.intent(chain.Ton)));
-await omni.withdrawToken(...ton.input(chain.Bnb, 10000n));
+### Deposit to Omni Bridge
 
-// Intent swap
-const usdc = new OmniToken(OmniGroup.USDC);
-await omni.depositToken(...usdc.input(chain.Base, 1)); // or usdc.input(chain.Base, 10000000n)
-await omni.swapToken(usdc.intent(chain.Base), usdc.intent(chain.Arbitrum), 1); // for swap only float input
+```ts
+const signer = {
+  getIntentAccount: async () => "account", // intent account to deposit
+  sendTransaction: async (tx) => "hash", // execute by payer
+  getAddress: async () => "address", // payer account
+};
 
-console.log("Omni USDC on Arb", await omni.getBalance(usdc.intent(chain.Arbitrum)));
-await omni.withdrawToken(...usdc.input(chain.Arbitrum, 1));
+await omni.near.depositToken({ token, amount, ...signer });
+
+const deposits = [
+  await omni.ton.depositToken({ token, amount, ...signer }),
+  await omni.solana.depositToken({ token, amount, ...signer }),
+  await omni.stellar.depositToken({ token, amount, ...signer }),
+  await omni.evm.depositToken({ chain, token, amount, ...signer }),
+];
+
+// Processed by near relayer without signers
+for (const deposit of deposits) {
+  await omni.near.finishDeposit(deposit);
+}
+```
+
+### Withdraw from Intent
+
+```ts
+const signer = {
+  getIntentAccount: async () => "account", // intent account with omni balance
+  signIntent: async () => signedIntent, // sign by intent account with omni balance
+  sendTransaction: async () => "hash", // any tx executor for claim tokens for receiver
+  getAddress: async () => "address", // any tx executor address
+};
+
+// Only intent signer need for withdraw
+const withdraw = await omni.withdrawToken({
+  chain, // chain to withdraw
+  receiver: "0x...", // any onchain receiver
+  token, // onchain address of token to withdraw
+  amount: 10n,
+  ...signer,
+});
+
+// For claim onchain need any chain tx executor
+switch (withdraw.chain) {
+  case Network.Solana:
+    await omni.solana.withdraw({ ...withdraw, ...signer });
+  case Network.Ton:
+    await omni.ton.withdraw({ ...withdraw, ...signer });
+  case Netwok.Stellar:
+    await omni.stellar.withdraw({ ...withdraw, ...signer });
+  default:
+    await omni.evm.withdraw({ ...withdraw, ...signer });
+}
 ```

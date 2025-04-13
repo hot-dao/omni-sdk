@@ -5,7 +5,7 @@ import { InMemoryKeyStore } from "near-api-js/lib/key_stores";
 import { PublicKey } from "near-api-js/lib/utils";
 import { serialize } from "borsh";
 
-import NearRpcProvider from "../bridge-near/provider";
+import NearRpcProvider from "../../src/bridge-near/provider";
 
 export class KeySingleNearSigner extends InMemorySigner {
   private readonly keyPair: KeyPair;
@@ -44,6 +44,26 @@ export default class NearSigner extends Account {
 
   async getAddress(): Promise<string> {
     return this.accountId;
+  }
+
+  async getIntentAccount(): Promise<string> {
+    return this.accountId;
+  }
+
+  async signIntent(intent: { nonce: string; [k: string]: any }) {
+    const message = JSON.stringify(intent);
+    const { signature, publicKey } = await this.signMessage({
+      nonce: Buffer.from(intent.nonce, "base64"),
+      recipient: "intents.near",
+      message: message,
+    });
+
+    return {
+      standard: "nep413",
+      payload: { nonce: intent.nonce, recipient: "intents.near", message },
+      signature: "ed25519:" + baseEncode(Buffer.from(signature, "base64")),
+      public_key: publicKey,
+    };
   }
 
   async signMessage(config: SignMessageOptionsNEP0413) {

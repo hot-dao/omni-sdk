@@ -33,6 +33,11 @@ class OmniApi {
       method: "POST",
     });
 
+    if (!response.ok) {
+      const result = await response.json();
+      throw new Error(result.detail);
+    }
+
     const result = await response.json();
     const { quote, signed_quote, amount_out } = result;
     return { quote, signed_quote, amountOut: BigInt(amount_out) };
