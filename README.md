@@ -73,6 +73,9 @@ const withdraw = await omni.withdrawToken({
   ...signer,
 });
 
+// Empty for withdraw to NEAR
+if (withdraw == null) return;
+
 // For claim onchain need any chain tx executor
 switch (withdraw.chain) {
   case Network.Solana:
