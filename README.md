@@ -1,4 +1,4 @@
-# HOT Bridge
+# HotBridge
 
 A fast and cheap bridge protocol over **HOT Protocol** that uses the **NEAR Intents** engine for exchange.<br/>
 **Available for EVM (10+ chains), NEAR, Solana, TON, Stellar**
@@ -15,22 +15,22 @@ A fast and cheap bridge protocol over **HOT Protocol** that uses the **NEAR Inte
 
 <br />
 
-## Setup OmniBridge
+## Setup HotBridge
 
 ```ts
 const omni = new OmniBridge({
   logger: console, // optional
   tonApiKey: env.TON_API_KEY, // only if use TON
   // Relayer for execute intents and omni bridge operations
-  executeNearTransaction: async (tx) => {
-    const hash = await nearRelayerAccount.signAndSendTransaction(tx).
-    return { sender: nearRelayerAccount.accountId, hash };
+  executeNearTransaction: async ({ receiverId, actions }) => {
+    const hash = await relayer.signAndSendTransaction({ receiverId, actions }).
+    return { sender: relayer.accountId, hash };
   },
 });
 
 ```
 
-### Deposit to Omni Bridge
+### Deposit to HotBridge
 
 ```ts
 const signer = {
@@ -54,7 +54,7 @@ for (const deposit of deposits) {
 }
 ```
 
-### Withdraw from Intent
+### Withdraw from HotBridge
 
 ```ts
 const signer = {
@@ -77,10 +77,13 @@ const withdraw = await omni.withdrawToken({
 switch (withdraw.chain) {
   case Network.Solana:
     await omni.solana.withdraw({ ...withdraw, ...signer });
+
   case Network.Ton:
     await omni.ton.withdraw({ ...withdraw, ...signer });
+
   case Netwok.Stellar:
     await omni.stellar.withdraw({ ...withdraw, ...signer });
+
   default:
     await omni.evm.withdraw({ ...withdraw, ...signer });
 }

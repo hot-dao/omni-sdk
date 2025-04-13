@@ -1,10 +1,10 @@
-import { HereCall } from "@here-wallet/core";
+import { HereCall, createAction } from "@here-wallet/core";
+import { Action } from "near-api-js/lib/transaction";
 
 import { OMNI_HOT_V2, TGAS, toOmni } from "../utils";
 import { Network } from "../chains";
 import OmniService from "../bridge";
 import NearRpcProvider from "./provider";
-
 class NearBridge {
   readonly rpc = new NearRpcProvider();
   constructor(readonly omni: OmniService) {}
@@ -18,7 +18,7 @@ class NearBridge {
     amount: bigint;
     getAddress: () => Promise<string>;
     getIntentAccount: () => Promise<string>;
-    sendTransaction: (tx: HereCall) => Promise<string>;
+    sendTransaction: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<string>;
   }) {
     const token = args.token === "native" ? "wrap.near" : args.token;
     const depositWnear: any[] = [];
@@ -28,33 +28,33 @@ class NearBridge {
     }
 
     this.logger?.log(`Depositing token to HOT Bridge`);
-    const tx = await args.sendTransaction({
-      receiverId: token,
-      actions: [
-        ...depositWnear,
-        {
-          type: "FunctionCall",
-          params: {
-            methodName: "ft_transfer_call",
-            gas: String(80n * TGAS),
-            deposit: "1",
-            args: {
+    const actions = [
+      ...depositWnear,
+      {
+        type: "FunctionCall",
+        params: {
+          methodName: "ft_transfer_call",
+          gas: String(80n * TGAS),
+          deposit: "1",
+          args: {
+            amount: args.amount,
+            receiver_id: OMNI_HOT_V2,
+            msg: JSON.stringify({
+              // TODO: support intents
+              receiver_id: "intents.near",
+              token_id: toOmni(Network.Near, args.token),
+              account_id: await args.getIntentAccount(),
               amount: args.amount,
-              receiver_id: OMNI_HOT_V2,
-              msg: JSON.stringify({
-                // TODO: support intents
-                receiver_id: "intents.near",
-                token_id: toOmni(Network.Near, args.token),
-                account_id: await args.getIntentAccount(),
-                amount: args.amount,
-              }),
-            },
+            }),
           },
         },
-      ],
-    });
+      },
+    ];
 
-    return { receiver: token, hash: tx };
+    return await args.sendTransaction({
+      actions: actions.map((a) => createAction(a)),
+      receiverId: token,
+    });
   }
 
   async parseWithdrawalNonce(tx: string, sender: string) {

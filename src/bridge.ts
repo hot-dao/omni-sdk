@@ -1,5 +1,6 @@
 import { baseDecode } from "@near-js/utils";
-import { HereCall } from "@here-wallet/core";
+import { createAction } from "@here-wallet/core";
+import { Action } from "near-api-js/lib/transaction";
 
 import { Logger, TGAS, address2base, base2Address, INTENT_PREFIX, OMNI_HOT_V2, toOmni, toOmniIntent, encodeReceiver } from "./utils";
 import { PendingDeposit, PendingWithdraw, TransferType } from "./types";
@@ -16,7 +17,7 @@ import NearBridge from "./bridge-near";
 
 class HotBridge {
   logger?: Logger;
-  executeNearTransaction: (tx: HereCall) => Promise<{ sender: string; hash: string }>;
+  executeNearTransaction: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
 
   stellar: StellarService;
   solana: SolanaOmniService;
@@ -31,7 +32,7 @@ class HotBridge {
   }: {
     logger?: Logger;
     tonApiKey?: string;
-    executeNearTransaction: (tx: HereCall) => Promise<{ sender: string; hash: string }>;
+    executeNearTransaction: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
   }) {
     this.executeNearTransaction = executeNearTransaction;
     this.logger = logger;
@@ -51,7 +52,7 @@ class HotBridge {
     return await this.executeNearTransaction({
       receiverId: "intents.near",
       actions: [
-        {
+        createAction({
           type: "FunctionCall",
           params: {
             methodName: "execute_intents",
@@ -59,7 +60,7 @@ class HotBridge {
             gas: String(300n * TGAS),
             deposit: "0",
           },
-        },
+        }),
       ],
     });
   }
@@ -217,7 +218,7 @@ class HotBridge {
       }),
     };
 
-    const depositAction: HereCall["actions"][0] = {
+    const depositAction = createAction({
       type: "FunctionCall",
       params: {
         methodName: "mt_deposit_call",
@@ -232,7 +233,7 @@ class HotBridge {
           signature,
         },
       },
-    };
+    });
 
     try {
       this.logger?.log(`Calling deposit to omni and deposit to intents`);
@@ -242,7 +243,7 @@ class HotBridge {
     }
   }
 
-  async checkWithdrawLocker(chain: number, receiver: string): Promise<HereCall["actions"]> {
+  async checkWithdrawLocker(chain: number, receiver: string): Promise<Action[]> {
     const withdrawals = await this.near.rpc.viewFunction({
       args: { receiver_id: encodeReceiver(chain, receiver), chain_id: chain },
       methodName: "get_withdrawals_by_receiver",
@@ -267,7 +268,7 @@ class HotBridge {
       })
     );
 
-    return actions.filter((a) => a !== null);
+    return actions.filter((a) => a !== null).map((a) => createAction(a));
   }
 
   async estimateSwap(intentAccount: string, intentFrom: string, intentTo: string, amount: number) {
