@@ -8,11 +8,11 @@ export default class EvmSigner {
   }
 
   async getIntentAccount(): Promise<string> {
-    return this.wallet.address;
+    throw "Not implemented";
   }
 
   async signIntent(intent: any): Promise<any> {
-    return; //
+    throw "Not implemented";
   }
 
   async getAddress(): Promise<string> {

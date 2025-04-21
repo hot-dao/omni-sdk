@@ -1,10 +1,8 @@
-export { default as EvmOmniService } from "./bridge-evm";
-export { default as SolanaOmniService } from "./bridge-solana";
-export { default as StellarOmniService } from "./bridge-stellar";
-export { default as TonOmniService } from "./bridge-ton";
+export { default as EvmBridge } from "./bridge-evm";
+export { default as SolanaBridge } from "./bridge-solana";
+export { default as StellarBridge } from "./bridge-stellar";
+export { default as TonBridge } from "./bridge-ton";
 
-export { default as OmniService } from "./bridge";
-export { OmniGroup, omniTokens } from "./tokens";
-export { Chains, Network } from "./chains";
-
+export { default as HotBridge } from "./bridge";
+export { chains, Network } from "./chains";
 export * as utils from "./utils";

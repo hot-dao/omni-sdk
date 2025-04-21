@@ -19,11 +19,11 @@ class StellarSigner {
   }
 
   async getIntentAccount(): Promise<string> {
-    return this.keyPair.publicKey();
+    throw "Not implemented";
   }
 
   async signIntent(intent: any): Promise<any> {
-    return; //
+    throw "Not implemented";
   }
 
   async getAddress() {

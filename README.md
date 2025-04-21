@@ -21,6 +21,7 @@ A fast and cheap bridge protocol over **HOT Protocol** that uses the **NEAR Inte
 const omni = new OmniBridge({
   logger: console, // optional
   tonApiKey: env.TON_API_KEY, // only if use TON
+  customEvmRpc: { 56: "rpc" }, // by default we use own back rpc
   // Relayer for execute intents and omni bridge operations
   executeNearTransaction: async ({ receiverId, actions }) => {
     const hash = await relayer.signAndSendTransaction({ receiverId, actions }).

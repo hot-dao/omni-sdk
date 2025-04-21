@@ -133,7 +133,7 @@ class TonOmniService {
     sendTransaction: (tx: SenderArguments) => Promise<string>;
   }) {
     const intentAccount = await args.getIntentAccount();
-    const receiver = omniEphemeralReceiver(intentAccount, Network.Ton, args.token, args.amount);
+    const receiver = omniEphemeralReceiver(intentAccount);
     const executor = this.executor(args.sendTransaction);
 
     if (args.token === "native") {

@@ -1,17 +1,13 @@
-import { getBytes, hexlify, sha256 } from "ethers";
+import { getBytes, hexlify } from "ethers";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import { Address as StellarAddress, xdr } from "@stellar/stellar-sdk";
 import { Address } from "@ton/core";
 import crypto from "crypto";
 
 import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
-import { Network, Chains } from "./chains";
-
-export const OMNI_HOT = "v1-1.omni.hot.tg";
-export const OMNI_HELPER = "v1-1.omni-helper.hot.tg";
+import { Network, chains } from "./chains";
 
 export const OMNI_HOT_V2 = "v2.omni.hot.tg";
-export const OMNI_HELPER_V2 = "v2.omni-helper.hot.tg";
 export const INTENT_PREFIX = "nep245:v2.omni.hot.tg:";
 
 export const TGAS = 1000000000000n;
@@ -23,9 +19,10 @@ export const TGAS = 1000000000000n;
  * -4:nep245:v2.omni.hot.tg:56_11111111111111111111 -> 56:native
  */
 export const fromOmni = (id: string) => {
-  id = id.includes(":") ? id.split(/:(.*)/s)[1] : id;
-  const [chain, encodedAddress] = id.replace(INTENT_PREFIX, "").split("_");
-  return `${chain}:${base2Address(+chain, encodedAddress)}`;
+  id = id.split(":").pop() || id;
+  if (!id.includes("_")) return `1010:${id}`;
+  const [chain, encodedAddress] = id.split("_");
+  return `${chain}:${decodeTokenAddress(+chain, encodedAddress)}`;
 };
 
 /**
@@ -33,29 +30,35 @@ export const fromOmni = (id: string) => {
  * 56:native -> 56_11111111111111111111
  * nep245:v2.omni.hot.tg:56_11111111111111111111 -> 56_11111111111111111111
  * -4:nep245:v2.omni.hot.tg:56_11111111111111111111 -> 56_11111111111111111111 (format with chainId, Intens has -4 chain id)
+ * nep141:wrap.near -> nep141:wrap.near
  */
 export const toOmni = (id: string | number, addr?: string) => {
+  if (id.toString().startsWith("nep141:")) return id.toString();
   if (id.toString().startsWith(INTENT_PREFIX)) return id.toString().replace(INTENT_PREFIX, "");
   const [chain, address] = addr ? [id, addr] : String(id).split(/:(.*)/s);
   if (+chain === Network.Hot) return address.replace(INTENT_PREFIX, "");
-  return `${chain}_${address2base(+chain, address)}`;
+  if (+chain === Network.Near) return address;
+  return `${chain}_${encodeTokenAddress(+chain, address)}`;
 };
 
 /**
  * Convert token id to omni intent id, example:
  * 56:0x391E7C679d29bD940d63be94AD22A25d25b5A604 -> nep245:v2.omni.hot.tg:56_base56encoded
+ * 1010:native -> nep141:wrap.near
  */
-export const toOmniIntent = (id: string | number, addr?: string) => {
-  const [chain, address] = addr ? [id, addr] : String(id).split(/:(.*)/s);
+export const toOmniIntent = (id: string | number, addr?: string): string => {
+  let [chain, address] = addr ? [id, addr] : String(id).split(/:(.*)/s);
   if (+chain === Network.Hot) return address;
-  return `${INTENT_PREFIX}${chain}_${address2base(+chain, address)}`;
+  if (+chain === 1010 && address === "native") address = "wrap.near";
+  if (+chain === 1010) return `nep141:${address}`;
+  return `${INTENT_PREFIX}${chain}_${encodeTokenAddress(+chain, address)}`;
 };
 
 /**
- * Convert address to omni address format (base58 encoded)
+ * Convert token address to unified omni address format (base58 encoded)
  */
-export const address2base = (chain: Network, addr: string) => {
-  if (Chains.get(chain)?.isEvm) {
+export const encodeTokenAddress = (chain: Network, addr: string) => {
+  if (chains.get(chain)?.isEvm) {
     if (addr === "native") return "11111111111111111111";
     return baseEncode(getBytes(addr));
   }
@@ -79,9 +82,9 @@ export const address2base = (chain: Network, addr: string) => {
 };
 
 /**
- * Convert omni address format (base58 encoded) to native chain address format
+ * Convert unified omni address format (base58 encoded) to native chain address format
  */
-export const base2Address = (chain: Network, addr: string) => {
+export const decodeTokenAddress = (chain: Network, addr: string) => {
   try {
     if (addr === "1") return "native";
     if (addr === "11111111111111111111") return "native";
@@ -92,55 +95,30 @@ export const base2Address = (chain: Network, addr: string) => {
     if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(addr)))).toString();
     if (chain === Network.Ton) return parseAddressRlp(addr);
     if (chain === Network.Solana) return addr;
-    if (Chains.get(chain)?.isEvm) return hexlify(baseDecode(addr));
+    if (chains.get(chain)?.isEvm) return hexlify(baseDecode(addr));
     return Buffer.from(baseDecode(addr)).toString("utf8");
   } catch {
     return "";
   }
 };
 
-export const omniEphemeralReceiver = (intentAccount: string, chain: Network, token: string, amount: bigint) => {
-  const depositMsg = JSON.stringify({
-    receiver_id: intentAccount,
-    token_id: toOmni(chain, token),
-    amount: amount,
-  });
-
-  const receiver = crypto
+/** Build ephemeral receiver for OMNI contract, its just a user 'proxy' address to send tokens directly to intents  */
+export const omniEphemeralReceiver = (intentAccount: string) => {
+  return crypto
     .createHash("sha256") //
     .update(Buffer.from("intents.near", "utf8"))
-    .update(Buffer.from(depositMsg, "utf8"))
+    .update(Buffer.from(JSON.stringify({ receiver_id: intentAccount }), "utf8"))
     .digest();
-
-  return receiver;
 };
 
+// Encode receiver address to omni unified format (base58 encoded)
 export const encodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Near) return address;
   if (chain === Network.Solana) return address;
-  if (Chains.get(chain)?.isEvm) return baseEncode(getBytes(address));
+  if (chains.get(chain)?.isEvm) return baseEncode(getBytes(address));
   if (chain === Network.Stellar) return baseEncode(StellarAddress.fromString(address).toScVal().toXDR());
   if (chain === Network.Ton) return baseEncode(createAddressRlp(Address.parse(address)));
   throw `Unsupported chain address ${chain}`;
-};
-
-/**
- * Convert near address to omni address format (base58 encoded)
- */
-export const getOmniAddress = (address: string) => {
-  return baseEncode(getBytes(sha256(Buffer.from(address, "utf8"))));
-};
-
-/**
- * Convert near address to omni address format (hex encoded)
- */
-export const getOmniAddressHex = (address: string) => {
-  return crypto.createHash("sha256").update(Buffer.from(address, "utf8")).digest();
-};
-
-// @ts-ignore
-BigInt.prototype.toJSON = function () {
-  return this.toString();
 };
 
 export class Logger {

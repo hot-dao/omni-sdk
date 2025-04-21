@@ -2,17 +2,27 @@ import RLP from "rlp";
 import crypto from "crypto";
 import { baseEncode } from "@near-js/utils";
 
-const OMNI_API = ["https://rpc0.hotdao.ai", "https://rpc2.hotdao.ai", "https://api0.herewallet.app/api/v1/evm/rpc0"];
+const OMNI_API = ["https://rpc0.hotdao.ai"];
 
 class OmniApi {
   static shared = new OmniApi();
 
   async request(req: RequestInfo, init: any) {
+    if (!init.endpoint) init.endpoint = OMNI_API;
+    const endpoints = Array.isArray(init.endpoint) ? init.endpoint : [init.endpoint];
     let error: Error | null = null;
-    for (const endpoint of OMNI_API) {
+
+    for (const endpoint of endpoints) {
       try {
         const headers = Object.assign({}, init.headers, { "omni-version": `v2`, "Content-Type": "application/json" });
-        return await fetch(`${endpoint}${req}`, { ...init, headers });
+        const res = await fetch(`${endpoint}${req}`, { ...init, headers });
+
+        if (!res.ok) {
+          const result = await res.json();
+          throw new Error(result.detail);
+        }
+
+        return res;
       } catch (e) {
         error = e as Error;
       }
@@ -22,23 +32,25 @@ class OmniApi {
   }
 
   async getTime() {
-    const res = await fetch("https://api0.herewallet.app/api/v1/web/time", { method: "GET" });
+    const res = await this.request("/api/v1/web/time", { method: "GET", endpoint: "https://api0.herewallet.app" });
     const { ts } = await res.json();
     return ts;
   }
 
+  async getBridgeTokens(): Promise<{ groups: Record<string, string[]>; liquidityContract: string }> {
+    const res = await this.request("/api/v1/exchange/intent_swap/groups", { method: "GET", endpoint: "https://api0.herewallet.app" });
+    const { groups, stable_swap_contract } = await res.json();
+    return { groups, liquidityContract: stable_swap_contract };
+  }
+
   async estimateSwap(nearAddress: string, group: Record<string, string>, intentTo: string, amount: number) {
-    const response = await fetch("https://dev.herewallet.app/api/v1/exchange/intent_swap", {
+    const res = await this.request("/api/v1/exchange/intent_swap", {
       body: JSON.stringify({ token_out: intentTo, amount_in: amount, tokens_in: group, sender_id: nearAddress }),
+      endpoint: "https://api0.herewallet.app",
       method: "POST",
     });
 
-    if (!response.ok) {
-      const result = await response.json();
-      throw new Error(result.detail);
-    }
-
-    const result = await response.json();
+    const result = await res.json();
     const { quote, signed_quote, amount_out } = result;
     return { quote, signed_quote, amountOut: BigInt(amount_out) };
   }
@@ -49,13 +61,6 @@ class OmniApi {
     const res = await this.request("/clear/sign", { body: JSON.stringify({ nonce, ownership_proof: baseEncode(proof) }), method: "POST" });
     const { signature } = await res.json();
     return signature;
-  }
-
-  async getPublicKey(walletDerive: string) {
-    const body = JSON.stringify({ wallet_derive: walletDerive });
-    const res = await this.request("/public_key", { body, method: "POST" });
-    const { eddsa } = await res.json();
-    return Buffer.from(eddsa, "hex");
   }
 
   async withdrawSign(nonce: string) {

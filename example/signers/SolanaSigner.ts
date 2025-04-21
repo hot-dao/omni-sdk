@@ -1,6 +1,6 @@
-import AdvancedConnection from "solana-advanced-connection";
 import { baseDecode } from "@near-js/utils";
 import * as sol from "@solana/web3.js";
+import AdvancedConnection from "../../src/bridge-solana/provider";
 
 export default class SolanaSigner {
   private readonly keyPair: sol.Keypair;
@@ -14,11 +14,11 @@ export default class SolanaSigner {
   }
 
   async signIntent(intent: any): Promise<any> {
-    return; //
+    throw "Not implemented";
   }
 
   async getIntentAccount(): Promise<string> {
-    return this.keyPair.publicKey.toBase58();
+    throw "Not implemented";
   }
 
   async getAddress(): Promise<string> {

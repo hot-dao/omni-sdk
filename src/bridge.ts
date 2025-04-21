@@ -1,11 +1,10 @@
 import { baseDecode } from "@near-js/utils";
-import { createAction } from "@here-wallet/core";
 import { Action } from "near-api-js/lib/transaction";
+import chunk from "lodash/chunk";
 
-import { Logger, TGAS, address2base, base2Address, INTENT_PREFIX, OMNI_HOT_V2, toOmni, toOmniIntent, encodeReceiver } from "./utils";
-import { PendingDeposit, PendingWithdraw, TransferType } from "./types";
-import { Network, Chains } from "./chains";
-import { omniTokens } from "./tokens";
+import { Logger, TGAS, OMNI_HOT_V2, toOmniIntent, encodeReceiver, encodeTokenAddress, decodeTokenAddress } from "./utils";
+import { PendingDeposit, PendingWithdraw, ContractTransferType } from "./types";
+import { Network, chains } from "./chains";
 import OmniApi from "./api";
 
 import { buildWithdrawIntentAction } from "./intents";
@@ -28,72 +27,55 @@ class HotBridge {
   constructor({
     logger,
     tonApiKey,
+    evmRpc,
+    solanaRpc,
     executeNearTransaction,
   }: {
     logger?: Logger;
     tonApiKey?: string;
+    evmRpc?: Record<number, string>;
+    solanaRpc?: string[];
     executeNearTransaction: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
   }) {
     this.executeNearTransaction = executeNearTransaction;
     this.logger = logger;
 
     this.ton = new TonOmniService(this, tonApiKey);
-    this.solana = new SolanaOmniService(this);
+    this.evm = new EvmOmniService(this, evmRpc);
+    this.solana = new SolanaOmniService(this, solanaRpc);
     this.stellar = new StellarService(this);
-    this.evm = new EvmOmniService(this);
     this.near = new NearBridge(this);
-  }
-
-  get assets() {
-    return Object.values(omniTokens).map((t) => Object.entries(t).map(([chain, { address }]) => toOmniIntent(+chain, address)));
   }
 
   async executeIntents(intents: any[]) {
     return await this.executeNearTransaction({
       receiverId: "intents.near",
       actions: [
-        createAction({
-          type: "FunctionCall",
-          params: {
-            methodName: "execute_intents",
-            args: { signed: intents },
-            gas: String(300n * TGAS),
-            deposit: "0",
-          },
+        this.near.functionCall({
+          methodName: "execute_intents",
+          args: { signed: intents },
+          gas: String(300n * TGAS),
+          deposit: "0",
         }),
       ],
     });
   }
 
-  async getPendingWithdrawals(receiver: string) {
-    const pending = new Set<PendingWithdraw>();
-    const chains = new Set(Object.values(omniTokens).flatMap((t) => Object.keys(t).map((t) => +t)));
+  async getAllIntentBalances(intentAccount: string) {
+    const data = await fetch(`https://api.fastnear.com/v0/account/intents.near/ft`)
+      .then((t) => t.json())
+      .catch(() => null);
 
-    const tasks = Array.from(chains).map(async (chain) => {
-      const withdraw = await this.near.rpc.viewFunction({
-        args: { receiver_id: receiver, chain_id: chain },
-        methodName: "get_withdraw_by_receiver",
-        contractId: OMNI_HOT_V2,
-      });
+    const ids = new Set<string>(data?.contract_ids.map((t: any) => toOmniIntent(Network.Near, t)));
+    const chunks = chunk(Array.from(ids), 200);
+    const balances: Record<string, bigint> = {};
 
-      if (!withdraw) return;
+    for (const chunk of chunks) {
+      const batch = await this.getIntentBalances(chunk, intentAccount);
+      Object.assign(balances, batch);
+    }
 
-      const isUsed = await this.isWithdrawUsed(chain, withdraw.nonce, withdraw.receiver_id);
-      if (isUsed) return;
-
-      pending.add({
-        nonce: withdraw.nonce,
-        chain: withdraw.chain_id,
-        amount: withdraw.amount,
-        timestamp: withdraw.created_ts * 1000,
-        token: base2Address(withdraw.chain_id, withdraw.contract_id),
-        receiver: withdraw.receiver_id,
-        completed: false,
-      });
-    });
-
-    await Promise.allSettled(tasks);
-    return pending;
+    return balances;
   }
 
   async getIntentBalances(intents: string[], intentAccount: string) {
@@ -119,28 +101,44 @@ class HotBridge {
     if (chain === Network.Near) return await this.near.getTokenBalance(token, address);
     if (chain === Network.Solana) return await this.solana.getTokenBalance(token, address);
     if (chain === Network.Stellar) return await this.stellar.getTokenBalance(token, address);
-    if (Chains.get(chain).isEvm) return await this.evm.getTokenBalance(token, chain, address);
+    if (chains.get(chain)?.isEvm) return await this.evm.getTokenBalance(token, chain, address);
     throw `Unsupported chain address ${chain}`;
   }
 
-  async getGroup(intentId: string, intentAccount: string) {
-    const groups = await this.near.rpc.viewFunction({ contractId: "stable-swap.hot.tg", methodName: "get_groups" });
-    const stables: Record<string, { group: string; decimal: number }> = {};
-    groups.forEach((t: any) => (stables[t.contract_id] = { group: t.group_id, decimal: t.decimal }));
+  async getPendingWithdrawals(chain: number, receiver: string): Promise<PendingWithdraw[]> {
+    const withdrawals = await this.near.rpc.viewFunction({
+      args: { receiver_id: receiver, chain_id: chain },
+      methodName: "get_withdrawals_by_receiver",
+      contractId: OMNI_HOT_V2,
+    });
 
-    const balances = await this.getIntentBalances(
-      this.assets.flatMap((t) => t),
-      intentAccount
-    );
+    if (!withdrawals) return [];
 
-    const linked = Object.entries(stables)
-      .filter(([_, symbol]) => symbol.group === stables[toOmni(intentId)]?.group)
-      .map((t) => INTENT_PREFIX + t[0]);
+    const tasks = withdrawals.map(async (withdraw: any) => {
+      const isUsed = await this.isWithdrawUsed(chain, withdraw.nonce, withdraw.receiver_id);
+      if (isUsed) return;
 
-    return linked.reduce((acc, id) => {
-      if (BigInt(balances[id] || 0n) === 0n) return acc;
-      return { ...acc, [id]: String(balances[id] || 0n) };
-    }, {} as Record<string, string>);
+      return {
+        nonce: withdraw.nonce,
+        chain: withdraw.chain_id,
+        amount: withdraw.amount,
+        timestamp: withdraw.created_ts * 1000,
+        token: decodeTokenAddress(withdraw.chain_id, withdraw.contract_id),
+        receiver: withdraw.receiver_id,
+        completed: false,
+      };
+    });
+
+    const pending = await Promise.all(tasks);
+    return pending.filter((p) => p !== undefined);
+  }
+
+  async getWithdrawal(nonce: string): Promise<ContractTransferType | null> {
+    return await this.near.rpc.viewFunction({
+      contractId: OMNI_HOT_V2,
+      methodName: "get_transfer",
+      args: { nonce },
+    });
   }
 
   async isDepositUsed(chain: number, nonce: string) {
@@ -155,17 +153,14 @@ class HotBridge {
     if (chain === Network.Ton) return await this.ton.isWithdrawUsed(nonce, receiver);
     if (chain === Network.Solana) return await this.solana.isWithdrawUsed(nonce, receiver);
     if (chain === Network.Stellar) return await this.stellar.isWithdrawUsed(nonce);
-    if (Chains.get(chain).isEvm) return await this.evm.isWithdrawUsed(chain, nonce);
+    if (chains.get(chain)?.isEvm) return await this.evm.isWithdrawUsed(chain, nonce);
     return false;
   }
 
   async buildWithdraw(nonce: string) {
     this.logger?.log(`Getting withdrawal by nonce ${nonce}`);
-    const transfer: TransferType = await this.near.rpc.viewFunction({
-      contractId: OMNI_HOT_V2,
-      methodName: "get_transfer",
-      args: { nonce },
-    });
+    const transfer = await this.getWithdrawal(nonce);
+    if (!transfer) throw "Withdrawal not found";
 
     this.logger?.log(`Transfer: ${JSON.stringify(transfer, null, 2)}`);
 
@@ -173,8 +168,8 @@ class HotBridge {
     const isUsed = await this.isWithdrawUsed(transfer.chain_id, nonce, transfer.receiver_id).catch(() => false);
     if (isUsed) throw "Already claimed";
 
-    this.logger?.log(`Depositing on ${Chains.get(transfer.chain_id).symbol}`);
-    const token = base2Address(transfer.chain_id, transfer.contract_id);
+    this.logger?.log(`Depositing on ${chains.get(transfer.chain_id)?.symbol}`);
+    const token = decodeTokenAddress(transfer.chain_id, transfer.contract_id);
 
     this.logger?.log("Signing withdraw");
     const signature = await OmniApi.shared.withdrawSign(nonce);
@@ -205,32 +200,23 @@ class HotBridge {
       deposit.nonce,
       deposit.sender,
       deposit.receiver,
-      address2base(deposit.chain, deposit.token),
+      encodeTokenAddress(deposit.chain, deposit.token),
       deposit.amount
     );
 
-    const depositArgs = {
-      account_id: "intents.near",
-      msg: JSON.stringify({
-        receiver_id: deposit.intentAccount,
-        token_id: toOmni(deposit.chain, deposit.token),
+    const depositAction = this.near.functionCall({
+      methodName: "mt_deposit_call",
+      gas: String(80n * TGAS),
+      deposit: "1",
+      args: {
+        signature,
+        nonce: deposit.nonce,
+        chain_id: deposit.chain,
         amount: deposit.amount,
-      }),
-    };
-
-    const depositAction = createAction({
-      type: "FunctionCall",
-      params: {
-        methodName: "mt_deposit_call",
-        gas: String(80n * TGAS),
-        deposit: "1",
-        args: {
-          nonce: deposit.nonce,
-          chain_id: deposit.chain,
-          contract_id: address2base(deposit.chain, deposit.token),
-          deposit_call_args: depositArgs,
-          amount: deposit.amount,
-          signature,
+        contract_id: encodeTokenAddress(deposit.chain, deposit.token),
+        deposit_call_args: {
+          account_id: "intents.near",
+          msg: JSON.stringify({ receiver_id: deposit.intentAccount }),
         },
       },
     });
@@ -256,48 +242,16 @@ class HotBridge {
         if (!isUsed) return null;
 
         const signature = await OmniApi.shared.clearWithdrawSign(withdraw.nonce, Buffer.from(baseDecode(withdraw.receiver_id)));
-        return {
-          type: "FunctionCall",
-          params: {
-            deposit: "0",
-            methodName: "clear_withdraw",
-            args: { nonce: withdraw.nonce, signature },
-            gas: String(80n * TGAS),
-          },
-        };
+        return this.near.functionCall({
+          methodName: "clear_withdraw",
+          args: { nonce: withdraw.nonce, signature },
+          gas: String(80n * TGAS),
+          deposit: "0",
+        });
       })
     );
 
-    return actions.filter((a) => a !== null).map((a) => createAction(a));
-  }
-
-  async estimateSwap(intentAccount: string, intentFrom: string, intentTo: string, amount: number) {
-    const group = await this.getGroup(intentFrom, intentAccount);
-    const { amountOut } = await OmniApi.shared.estimateSwap(intentAccount, group, intentTo, amount);
-    return amountOut;
-  }
-
-  async swapToken(args: {
-    intentFrom: string;
-    intentTo: string;
-    amount: number;
-    intentAccount: string;
-    signIntent: (intent: any) => Promise<string>;
-  }) {
-    this.logger?.log(`Swapping ${args.amount} ${args.intentFrom} to ${args.intentTo}`);
-
-    this.logger?.log(`Get stable group`);
-    const group = await this.getGroup(args.intentFrom, args.intentAccount);
-
-    this.logger?.log(`Estimate swap`);
-    const { quote, signed_quote, amountOut } = await OmniApi.shared.estimateSwap(args.intentAccount, group, args.intentTo, args.amount);
-
-    this.logger?.log(`Signing intent`);
-    const signed = await args.signIntent(quote);
-
-    this.logger?.log(`Executing intents`);
-    const { hash } = await this.executeIntents([signed, signed_quote]);
-    return { hash, amountOut };
+    return actions.filter((a) => a !== null);
   }
 
   async withdrawToken(args: {
@@ -333,7 +287,7 @@ class HotBridge {
     this.logger?.log(`Parsing withdrawal nonce`);
     const nonce = await this.near.parseWithdrawalNonce(tx.hash, tx.sender);
 
-    this.logger?.log(`Depositing to ${Chains.get(args.chain).symbol}`);
+    this.logger?.log(`Depositing to ${chains.get(args.chain)?.symbol}`);
     return await this.buildWithdraw(nonce);
   }
 }

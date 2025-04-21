@@ -2,15 +2,17 @@ import { Contract, ethers, getBytes, hexlify, Interface, TransactionReceipt } fr
 import { baseDecode, baseEncode } from "@near-js/utils";
 
 import { ERC20_ABI, OMNI_ABI, OMNI_CONTRACT, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
-import { address2base, omniEphemeralReceiver, wait } from "../utils";
+import { encodeTokenAddress, omniEphemeralReceiver, wait } from "../utils";
+import { PendingDeposit } from "../types";
 import { Network } from "../chains";
 import OmniService from "../bridge";
-import { PendingDeposit } from "../types";
+
 class EvmOmniService {
-  constructor(readonly omni: OmniService) {}
+  constructor(readonly omni: OmniService, readonly rpcs: Record<number, string> = {}) {}
 
   getProvider(chain: number) {
-    return new ethers.JsonRpcProvider(`https://api0.herewallet.app/api/v1/evm/rpc/${chain}`, chain, { staticNetwork: true });
+    if (!this.rpcs[chain]) throw `No rpc for chain ${chain}`;
+    return new ethers.JsonRpcProvider(this.rpcs[chain], chain, { staticNetwork: true });
   }
 
   async approveToken(args: {
@@ -61,7 +63,7 @@ class EvmOmniService {
     const contract = new Contract(OMNI_CONTRACT, OMNI_ABI);
     const tx = await contract.withdraw.populateTransaction(
       args.nonce,
-      hexlify(baseDecode(address2base(args.chain, args.token))),
+      hexlify(baseDecode(encodeTokenAddress(args.chain, args.token))),
       args.receiver,
       BigInt(args.amount),
       hexlify(baseDecode(args.signature))
@@ -82,7 +84,7 @@ class EvmOmniService {
     const intentAccount = await args.getIntentAccount();
     this.omni.logger?.log(`Call deposit ${args.amount} ${args.token} to ${intentAccount}`);
 
-    const receiver = omniEphemeralReceiver(intentAccount, args.chain, args.token, args.amount);
+    const receiver = omniEphemeralReceiver(intentAccount);
     const sender = await args.getAddress();
 
     if (args.token === "native") {

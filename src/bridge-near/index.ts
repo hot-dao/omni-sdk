@@ -1,10 +1,10 @@
-import { HereCall, createAction } from "@here-wallet/core";
 import { Action } from "near-api-js/lib/transaction";
+import { transactions } from "near-api-js";
 
-import { OMNI_HOT_V2, TGAS, toOmni } from "../utils";
-import { Network } from "../chains";
+import { TGAS } from "../utils";
 import OmniService from "../bridge";
 import NearRpcProvider from "./provider";
+
 class NearBridge {
   readonly rpc = new NearRpcProvider();
   constructor(readonly omni: OmniService) {}
@@ -22,6 +22,7 @@ class NearBridge {
   }) {
     const token = args.token === "native" ? "wrap.near" : args.token;
     const depositWnear: any[] = [];
+
     if (token === "wrap.near") {
       this.logger?.log(`Wrapping native NEAR`);
       depositWnear.push(await this.getWrapNearDepositAction(args.amount, await args.getAddress()));
@@ -30,31 +31,15 @@ class NearBridge {
     this.logger?.log(`Depositing token to HOT Bridge`);
     const actions = [
       ...depositWnear,
-      {
-        type: "FunctionCall",
-        params: {
-          methodName: "ft_transfer_call",
-          gas: String(80n * TGAS),
-          deposit: "1",
-          args: {
-            amount: args.amount,
-            receiver_id: OMNI_HOT_V2,
-            msg: JSON.stringify({
-              // TODO: support intents
-              receiver_id: "intents.near",
-              token_id: toOmni(Network.Near, args.token),
-              account_id: await args.getIntentAccount(),
-              amount: args.amount,
-            }),
-          },
-        },
-      },
+      this.functionCall({
+        args: { amount: args.amount, receiver_id: "intents.near", msg: await args.getIntentAccount() },
+        methodName: "ft_transfer_call",
+        gas: String(80n * TGAS),
+        deposit: "1",
+      }),
     ];
 
-    return await args.sendTransaction({
-      actions: actions.map((a) => createAction(a)),
-      receiverId: token,
-    });
+    return await args.sendTransaction({ actions, receiverId: token });
   }
 
   async parseWithdrawalNonce(tx: string, sender: string) {
@@ -85,27 +70,25 @@ class NearBridge {
     });
   }
 
-  async getRegisterTokenTrx(token: string, address: string, deposit?: string): Promise<HereCall | null> {
+  async getRegisterTokenTrx(token: string, address: string, deposit?: string) {
     const storage = await this.rpc.viewFunction({ args: { account_id: address }, methodName: "storage_balance_of", contractId: token });
     if (storage != null) return null;
 
     return {
       receiverId: token,
       actions: [
-        {
-          type: "FunctionCall",
-          params: {
-            gas: String(10n * TGAS),
-            methodName: "storage_deposit",
-            deposit: deposit || "12500000000000000000000",
-            args: {
-              account_id: address,
-              registration_only: true,
-            },
-          },
-        },
+        this.functionCall({
+          gas: String(10n * TGAS),
+          methodName: "storage_deposit",
+          deposit: deposit || "12500000000000000000000",
+          args: { account_id: address, registration_only: true },
+        }),
       ],
     };
+  }
+
+  functionCall(args: { methodName: string; args: any; gas: string; deposit: string }) {
+    return transactions.functionCall(args.methodName, args.args, BigInt(args.gas), BigInt(args.deposit));
   }
 
   public async getWrapNearDepositAction(amount: string | bigint, address: string) {
@@ -115,27 +98,22 @@ class NearBridge {
       args: { account_id: address },
     });
 
-    const depositAction = {
-      type: "FunctionCall",
-      params: {
-        methodName: "near_deposit",
-        deposit: amount.toString(),
-        gas: String(50n * TGAS),
-        args: {},
-      },
-    };
+    const depositAction = this.functionCall({
+      methodName: "near_deposit",
+      deposit: amount.toString(),
+      gas: String(50n * TGAS),
+      args: {},
+    });
 
     if (storage != null) return [depositAction];
+
     return [
-      {
-        type: "FunctionCall",
-        params: {
-          gas: String(30n * TGAS),
-          methodName: "storage_deposit",
-          deposit: "12500000000000000000000",
-          args: { account_id: address, registration_only: true },
-        },
-      },
+      this.functionCall({
+        gas: String(30n * TGAS),
+        methodName: "storage_deposit",
+        deposit: "12500000000000000000000",
+        args: { account_id: address, registration_only: true },
+      }),
       depositAction,
     ];
   }

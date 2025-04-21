@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { Command } from "commander";
 
-import OmniBridge from "../src/bridge";
-import { Network, Chains } from "../src/chains";
+import HotBridge from "../src/bridge";
+import { Network, chains } from "../src/chains";
 
 import NearSigner from "./signers/NearSigner";
 import TonSigner from "./signers/TonSigner";
@@ -11,11 +11,26 @@ import EvmSigner from "./signers/EvmSigner";
 import StellarSigner from "./signers/StellarSigner";
 
 const env = process.env as any;
-const omni = new OmniBridge({
+const nearExecutor = new NearSigner(env.NEAR_ACCOUNT_ID, env.NEAR_PRIVATE_KEY);
+const omni = new HotBridge({
   logger: console,
   tonApiKey: env.TON_API_KEY,
+  solanaRpc: [env.SOLANA_RPC],
+  evmRpc: {
+    [Network.Base]: env.BASE_RPC,
+    [Network.Arbitrum]: env.ARBITRUM_RPC,
+    [Network.Aurora]: env.AURORA_RPC,
+    [Network.Polygon]: env.POLYGON_RPC,
+    [Network.Optimism]: env.OPTIMISM_RPC,
+    [Network.Kava]: env.KAVA_RPC,
+    [Network.Linea]: env.LINEA_RPC,
+    [Network.Eth]: env.ETH_RPC,
+    [Network.Bnb]: env.BNB_RPC,
+  },
+
   executeNearTransaction: async (tx) => {
-    return { sender: "", hash: "" };
+    const result = await nearExecutor.signAndSendTransaction(tx);
+    return { sender: nearExecutor.accountId, hash: result.transaction.hash };
   },
 });
 
@@ -24,7 +39,7 @@ const createSignerInstance = (chain: Network, privateKey: string, accountId?: st
   if (chain === Network.Ton) return new TonSigner(privateKey, "v5r1", env.TON_API_KEY);
   if (chain === Network.Solana) return new SolanaSigner(privateKey, []);
   if (chain === Network.Stellar) return new StellarSigner(privateKey);
-  if (Chains.get(chain).isEvm) return new EvmSigner(privateKey);
+  if (chains.get(chain)?.isEvm) return new EvmSigner(privateKey);
   throw new Error(`Unsupported chain: ${chain}`);
 };
 
@@ -44,15 +59,16 @@ program.name("omni-cli").description("CLI utility for HOT Bridge").version("1.0.
 program
   .command("deposit")
   .description("Deposit tokens to HOT Bridge")
-  .option("--token <token>", "Token to withdraw (usdc, usdt, bnb, sol, ton, eth...)")
-  .option("--chain <chain>", "Chain ID (e.g., number id (1, 56 and etc) or name (near, solana, ton, stellar))")
+  .option("--token <token>", "Token address to withdraw")
+  .option("--chain <chain>", "Chain ID (e.g., number id (1, 56 and etc)")
   .option("--amount <amount>", "Amount to withdraw")
   .option("--private-key <private-key>", "Private key")
   .option("--near-account-id <near-account-id>", "Near account id")
   .action(async (options) => {
     const chain = +options.chain;
-    const signer = createSigner(chain, options.privateKey, options.nearAccountId);
+    if (!chains.get(chain)) throw `Unsupported chain: ${chain}`;
 
+    const signer = createSigner(chain, options.privateKey, options.nearAccountId);
     const balanceBefore = await omni.getTokenBalance(chain, options.token, await signer.getAddress());
     console.log("Balance Before:", balanceBefore);
 
@@ -77,7 +93,7 @@ program
       await omni.finishDeposit(deposit); // Processed by near relayer
     }
 
-    if (Chains.get(chain).isEvm) {
+    if (chains.get(chain)!.isEvm) {
       const deposit = await omni.evm.deposit({ chain: chain, token: options.token, amount: BigInt(options.amount), ...signer });
       await omni.finishDeposit(deposit); // Processed by near relayer
     }
@@ -90,14 +106,16 @@ program
 program
   .command("withdraw")
   .description("Withdraw tokens from HOT Bridge")
-  .option("--token <token>", "Token to withdraw (usdc, usdt, bnb, sol, ton, eth...)")
-  .option("--chain <chain>", "Chain ID (e.g., number id (1, 56 and etc) or name (near, solana, ton, stellar))")
+  .option("--token <token>", "Token address to withdraw")
+  .option("--chain <chain>", "Chain ID (e.g., number id (1, 56 and etc)")
   .option("--amount <amount>", "Amount to withdraw")
   .option("--receiver <receiver>", "Receiver address")
   .option("--private-key <private-key>", "Private key")
   .option("--near-account-id <near-account-id>", "Near account id")
   .action(async (options) => {
     const chain = +options.chain;
+    if (!chains.get(chain)) throw `Unsupported chain: ${chain}`;
+
     const signer = createSigner(chain, options.privateKey, options.nearAccountId);
     const receiver = options.receiver || (await signer.getAddress());
 
@@ -112,7 +130,7 @@ program
       if (chain === Network.Ton) await omni.ton.withdraw(args);
       if (chain === Network.Solana) await omni.solana.withdraw(args);
       if (chain === Network.Stellar) await omni.stellar.withdraw(args);
-      if (Chains.get(chain).isEvm) await omni.evm.withdraw(args);
+      if (chains.get(chain)!.isEvm) await omni.evm.withdraw(args);
     }
 
     console.log("Withdrawal successful");

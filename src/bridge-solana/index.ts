@@ -1,7 +1,6 @@
 import * as sol from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
 import { baseDecode, baseEncode } from "@near-js/utils";
-import AdvancedConnection from "solana-advanced-connection";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountInstruction,
@@ -15,13 +14,16 @@ import { PendingDeposit } from "../types";
 import { omniEphemeralReceiver, wait } from "../utils";
 import { Network } from "../chains";
 
+import AdvancedConnection from "./provider";
 import { findDepositAddress, PROGRAM_ID } from "./helpers";
 import IDL from "./idl.json";
 
 class SolanaOmniService {
-  public connection = new AdvancedConnection([]);
+  public connection: sol.Connection;
 
-  constructor(readonly omni: OmniService) {}
+  constructor(readonly omni: OmniService, rpc?: string[]) {
+    this.connection = new AdvancedConnection(rpc || []);
+  }
 
   async isWithdrawUsed(nonce: string, receiver: string) {
     const env = this.env(receiver);
@@ -146,7 +148,7 @@ class SolanaOmniService {
     sendTransaction: (tx: sol.Transaction) => Promise<string>;
   }): Promise<PendingDeposit> {
     const intentAccount = await args.getIntentAccount();
-    const receiver = omniEphemeralReceiver(intentAccount, Network.Solana, args.token, args.amount);
+    const receiver = omniEphemeralReceiver(intentAccount);
 
     const sender = await args.getAddress();
     const lastDeposit = await this.getLastDepositNonce(sender);

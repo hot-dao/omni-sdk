@@ -67,11 +67,11 @@ class TonSigner {
   }
 
   async getIntentAccount(): Promise<string> {
-    return baseEncode(this.keyPair.publicKey);
+    throw "Not implemented";
   }
 
   async signIntent(intent: any): Promise<any> {
-    return; //
+    throw "Not implemented";
   }
 
   async pendingProcessing() {
