@@ -1,0 +1,30 @@
+{
+  "name": "@hot-labs/omni-sdk-cli",
+  "description": "A fast and cheap bridge protocol over HOT Protocol that uses the NEAR Intents engine for exchange",
+  "version": "2.3.1",
+  "type": "commonjs",
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "exports": {
+    ".": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "cli": "npx tsx ./example/cli.ts"
+  },
+  "author": "HOT Labs",
+  "license": "MIT",
+  "dependencies": {
+    "@here-wallet/core": "^3.4.0",
+    "@near-wallet-selector/core": "^8.10.1",
+    "@near-wallet-selector/meteor-wallet": "^8.10.1",
+    "@near-wallet-selector/modal-ui": "^8.10.1",
+    "@near-wallet-selector/wallet-connect": "^8.10.1",
+    "@types/bn.js": "^5.1.6",
+    "@types/lodash": "^4.17.14",
+    "@types/uuid4": "^2.0.3",
+    "commander": "^12.0.0",
+    "dotenv": "^16.4.7",
+    "typescript": "^5.7.2"
+  }
+}

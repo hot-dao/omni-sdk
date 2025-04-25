@@ -20,6 +20,7 @@ export const TGAS = 1000000000000n;
  */
 export const fromOmni = (id: string) => {
   id = id.split(":").pop() || id;
+  if (id.startsWith("nep141:")) return `1010:${id.replace("nep141:", "")}`;
   if (!id.includes("_")) return `1010:${id}`;
   const [chain, encodedAddress] = id.split("_");
   return `${chain}:${decodeTokenAddress(+chain, encodedAddress)}`;

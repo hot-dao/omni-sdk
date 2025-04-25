@@ -67,9 +67,12 @@ class HotBridge {
       .catch(() => null);
 
     const ids = new Set<string>(data?.contract_ids.map((t: any) => toOmniIntent(Network.Near, t)));
+
+    const tokens = await OmniApi.shared.getBridgeTokens();
+    Object.values(tokens.groups).forEach((t) => t.forEach((t) => ids.add(toOmniIntent(t))));
+
     const chunks = chunk(Array.from(ids), 200);
     const balances: Record<string, bigint> = {};
-
     for (const chunk of chunks) {
       const batch = await this.getIntentBalances(chunk, intentAccount);
       Object.assign(balances, batch);
