@@ -99,8 +99,37 @@ program
     }
 
     console.log("Deposit successful");
-    const balanceAfter = await omni.getTokenBalance(chain, options.token, "");
+    const balanceAfter = await omni.getTokenBalance(chain, options.token, await signer.getAddress());
     console.log("Balance After:", balanceAfter);
+  });
+
+program
+  .command("pendings")
+  .description("Get pendings withdrawals")
+  .option("--receiver <receiver>", "Receiver address")
+  .option("--chain <chain>", "Chain ID (e.g., number id (1, 56 and etc)")
+  .action(async (options) => {
+    const pendings = await omni.getPendingWithdrawals(+options.chain, options.receiver);
+    console.log("Pendings:", pendings);
+  });
+
+program
+  .command("finish-pending")
+  .description("Finish pendings withdrawals")
+  .option("--nonce <nonce>", "Nonce")
+  .option("--private-key <private-key>", "Private key")
+  .option("--near-account-id <near-account-id>", "Near account id")
+  .action(async (options) => {
+    const withdraw = await omni.buildWithdraw(options.nonce);
+    const signer = createSigner(withdraw.chain, options.privateKey, options.nearAccountId);
+
+    if (withdraw) {
+      const args = { ...withdraw, ...signer };
+      if (withdraw.chain === Network.Ton) await omni.ton.withdraw(args);
+      if (withdraw.chain === Network.Solana) await omni.solana.withdraw(args);
+      if (withdraw.chain === Network.Stellar) await omni.stellar.withdraw(args);
+      if (chains.get(withdraw.chain)!.isEvm) await omni.evm.withdraw(args);
+    }
   });
 
 program
@@ -134,7 +163,7 @@ program
     }
 
     console.log("Withdrawal successful");
-    const balanceAfter = await omni.getTokenBalance(chain, options.token, "");
+    const balanceAfter = await omni.getTokenBalance(chain, options.token, await signer.getAddress());
     console.log("Balance After:", balanceAfter);
   });
 

@@ -2,7 +2,7 @@ import RLP from "rlp";
 import crypto from "crypto";
 import { baseEncode } from "@near-js/utils";
 
-const OMNI_API = ["https://rpc0.hotdao.ai"];
+const OMNI_API = ["https://rpc1.hotdao.ai"];
 
 class OmniApi {
   static shared = new OmniApi();
@@ -18,8 +18,8 @@ class OmniApi {
         const res = await fetch(`${endpoint}${req}`, { ...init, headers });
 
         if (!res.ok) {
-          const result = await res.json();
-          throw new Error(result.detail);
+          const result = await res.text();
+          throw result;
         }
 
         return res;

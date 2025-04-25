@@ -1,7 +1,7 @@
 {
   "name": "@hot-wallet/omni-sdk",
   "description": "A fast and cheap bridge protocol over HOT Protocol that uses the NEAR Intents engine for exchange",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "type": "commonjs",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
@@ -24,12 +24,10 @@
     "@ton-api/client": "^0.3.0",
     "@ton-api/ton-adapter": "^0.3.0",
     "@ton/core": "^0.59.1",
-    "bn.js": "^5.2.1",
     "ethers": "^6.13.5",
     "lodash": "^4.17.21",
     "near-api-js": "^5.0.1",
-    "rlp": "^3.0.0",
-    "uuid4": "^2.0.3"
+    "rlp": "^3.0.0"
   },
   "devDependencies": {
     "@ton/crypto": "^3.3.0",

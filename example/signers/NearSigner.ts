@@ -1,7 +1,8 @@
 import { baseDecode, baseEncode } from "@near-js/utils";
-import { authPayloadSchema, createAction, HereCall, SignMessageOptionsNEP0413 } from "@here-wallet/core";
+import { authPayloadSchema, SignMessageOptionsNEP0413 } from "@here-wallet/core";
 import { Account, Connection, InMemorySigner, KeyPair } from "near-api-js";
 import { InMemoryKeyStore } from "near-api-js/lib/key_stores";
+import { Action } from "near-api-js/lib/transaction";
 import { PublicKey } from "near-api-js/lib/utils";
 import { serialize } from "borsh";
 
@@ -51,7 +52,7 @@ export default class NearSigner extends Account {
   }
 
   async signIntent(intent: { nonce: string; [k: string]: any }) {
-    const message = JSON.stringify(intent);
+    const message = intent.message;
     const { signature, publicKey } = await this.signMessage({
       nonce: Buffer.from(intent.nonce, "base64"),
       recipient: "intents.near",
@@ -81,9 +82,8 @@ export default class NearSigner extends Account {
     return { accountId: this.accountId, signature: base64, publicKey: publicKey.toString(), nonce: config.nonce };
   }
 
-  async sendTransaction(call: HereCall): Promise<string> {
-    const actions = call.actions.map((a) => createAction(a));
-    const tx = await this.signAndSendTransaction({ receiverId: call.receiverId!, actions });
+  async sendTransaction(call: { receiverId: string; actions: Action[] }): Promise<string> {
+    const tx = await this.signAndSendTransaction(call);
     return tx.transaction.hash;
   }
 }

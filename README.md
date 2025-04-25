@@ -92,3 +92,16 @@ switch (withdraw.chain) {
     await omni.evm.withdraw({ ...withdraw, ...signer });
 }
 ```
+
+## Finish pending withdraw
+
+```ts
+// Get all uncompleted withdrawals for this bnb address
+const pendings = await omni.getPendingWithdrawals(56, "0xAddress");
+
+// Finish all
+for (const pending of pendings) {
+  const withdraw = await omni.buildWithdraw(pending.nonce); // get signature
+  await omni.evm.withdraw({ ...withdraw, ...signer }); // push tx
+}
+```

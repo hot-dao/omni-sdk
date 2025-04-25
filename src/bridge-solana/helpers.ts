@@ -1,5 +1,5 @@
-import { BN } from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
 
 export const PROGRAM_ID = new PublicKey("8sXzdKW2jFj7V5heRwPMcygzNH3JZnmie5ZRuNoTuKQC");
 

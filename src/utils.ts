@@ -7,16 +7,16 @@ import crypto from "crypto";
 import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
 import { Network, chains } from "./chains";
 
-export const OMNI_HOT_V2 = "v2.omni.hot.tg";
-export const INTENT_PREFIX = "nep245:v2.omni.hot.tg:";
+export const OMNI_HOT_V2 = "v2_1.omni.hot.tg";
+export const INTENT_PREFIX = "nep245:v2_1.omni.hot.tg:";
 
 export const TGAS = 1000000000000n;
 
 /**
  * Convert omni id  or intent id to native chain token id, example:
  * 56_11111111111111111111 -> 56:native
- * nep245:v2.omni.hot.tg:56_11111111111111111111 -> 56:native
- * -4:nep245:v2.omni.hot.tg:56_11111111111111111111 -> 56:native
+ * nep245:v2_1.omni.hot.tg:56_11111111111111111111 -> 56:native
+ * -4:nep245:v2_1.omni.hot.tg:56_11111111111111111111 -> 56:native
  */
 export const fromOmni = (id: string) => {
   id = id.split(":").pop() || id;
@@ -28,8 +28,8 @@ export const fromOmni = (id: string) => {
 /**
  * Convert token id or intent id to omni address format (base58 encoded), example:
  * 56:native -> 56_11111111111111111111
- * nep245:v2.omni.hot.tg:56_11111111111111111111 -> 56_11111111111111111111
- * -4:nep245:v2.omni.hot.tg:56_11111111111111111111 -> 56_11111111111111111111 (format with chainId, Intens has -4 chain id)
+ * nep245:v2_1.omni.hot.tg:56_11111111111111111111 -> 56_11111111111111111111
+ * -4:nep245:v2_1.omni.hot.tg:56_11111111111111111111 -> 56_11111111111111111111 (format with chainId, Intens has -4 chain id)
  * nep141:wrap.near -> nep141:wrap.near
  */
 export const toOmni = (id: string | number, addr?: string) => {
@@ -43,7 +43,7 @@ export const toOmni = (id: string | number, addr?: string) => {
 
 /**
  * Convert token id to omni intent id, example:
- * 56:0x391E7C679d29bD940d63be94AD22A25d25b5A604 -> nep245:v2.omni.hot.tg:56_base56encoded
+ * 56:0x391E7C679d29bD940d63be94AD22A25d25b5A604 -> nep245:v2_1.omni.hot.tg:56_base56encoded
  * 1010:native -> nep141:wrap.near
  */
 export const toOmniIntent = (id: string | number, addr?: string): string => {
@@ -118,6 +118,15 @@ export const encodeReceiver = (chain: Network, address: string) => {
   if (chains.get(chain)?.isEvm) return baseEncode(getBytes(address));
   if (chain === Network.Stellar) return baseEncode(StellarAddress.fromString(address).toScVal().toXDR());
   if (chain === Network.Ton) return baseEncode(createAddressRlp(Address.parse(address)));
+  throw `Unsupported chain address ${chain}`;
+};
+
+export const decodeReceiver = (chain: Network, address: string) => {
+  if (chain === Network.Near) return address;
+  if (chain === Network.Solana) return address;
+  if (chains.get(chain)?.isEvm) return hexlify(baseDecode(address));
+  if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(address)))).toString();
+  if (chain === Network.Ton) return parseAddressRlp(address);
   throw `Unsupported chain address ${chain}`;
 };
 

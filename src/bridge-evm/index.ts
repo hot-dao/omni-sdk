@@ -30,8 +30,7 @@ class EvmOmniService {
     const allowance = await erc20.allowance(address, args.allowed);
     if (allowance >= args.need) return;
 
-    const MAX_APPROVE = 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
-    const tx = await erc20.approve.populateTransaction(args.allowed, MAX_APPROVE);
+    const tx = await erc20.approve.populateTransaction(args.allowed, args.need);
     const hash = await args.sendTransaction(tx);
     this.omni.logger?.log(`Approve tx: ${hash}`);
   }
@@ -60,7 +59,8 @@ class EvmOmniService {
     sendTransaction: (tx: ethers.TransactionRequest) => Promise<string>;
   }) {
     this.omni.logger?.log(`Withdrawing ${args.amount} ${args.token} from ${args.chain}`);
-    const contract = new Contract(OMNI_CONTRACT, OMNI_ABI);
+    const contract = new Contract(OMNI_CONTRACT, OMNI_ABI, this.getProvider(args.chain));
+
     const tx = await contract.withdraw.populateTransaction(
       args.nonce,
       hexlify(baseDecode(encodeTokenAddress(args.chain, args.token))),
@@ -89,7 +89,7 @@ class EvmOmniService {
 
     if (args.token === "native") {
       this.omni.logger?.log(`Depositing native`);
-      const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_NATIVE]);
+      const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_NATIVE], this.getProvider(args.chain));
       const depositTx = await contract.deposit.populateTransaction(hexlify(receiver), { value: args.amount });
       const hash = await args.sendTransaction(depositTx);
 
@@ -119,7 +119,7 @@ class EvmOmniService {
     });
 
     this.omni.logger?.log(`Depositing token`);
-    const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_FT]);
+    const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_FT], this.getProvider(args.chain));
     const depositTx = await contract.deposit.populateTransaction(hexlify(receiver), args.token, args.amount);
     const hash = await args.sendTransaction(depositTx);
 

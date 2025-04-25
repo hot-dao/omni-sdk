@@ -1,7 +1,8 @@
-import { randomBytes } from "tweetnacl";
+import { randomBytes } from "ethers";
+import { OMNI_HOT_V2 } from "./utils";
 
 export const buildWithdrawIntentAction = async (intentAccount: string, omniIntent: string, amount: bigint, receiverAddr: string) => {
-  const [format, address] = omniIntent.split(/:/);
+  const [format, address] = omniIntent.split(/:(.*)/s);
   let message = "";
 
   if (format === "nep245") {
@@ -12,8 +13,8 @@ export const buildWithdrawIntentAction = async (intentAccount: string, omniInten
       intents: [
         {
           intent: "mt_withdraw",
-          amounts: [amount],
-          receiver_id: "v2.omni.hot.tg",
+          amounts: [amount.toString()],
+          receiver_id: OMNI_HOT_V2,
           token_ids: [token_id],
           token: mt_contract,
           memo: receiverAddr,

@@ -17,7 +17,7 @@ import { Operation, Transaction } from "@stellar/stellar-sdk";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import BigNumber from "bignumber.js"; // @ts-ignore
 
-import { intentReceiver, parseAmount } from "../utils";
+import { omniEphemeralReceiver, parseAmount } from "../utils";
 import { Network } from "../chains";
 import { PendingDeposit } from "../types";
 import OmniService from "../bridge";
@@ -71,7 +71,7 @@ class StellarService {
   }): Promise<PendingDeposit> {
     const sender = await args.getAddress();
     const intentAccount = await args.getIntentAccount();
-    const receiver = intentReceiver(intentAccount, Network.Stellar, args.token, args.amount);
+    const receiver = omniEphemeralReceiver(intentAccount);
     const { tx, nonce } = await this.buildDepositTx(sender, args.token, args.amount, receiver);
     const hash = await args.sendTransaction(tx);
 

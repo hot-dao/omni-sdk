@@ -88,7 +88,12 @@ class NearBridge {
   }
 
   functionCall(args: { methodName: string; args: any; gas: string; deposit: string }) {
-    return transactions.functionCall(args.methodName, args.args, BigInt(args.gas), BigInt(args.deposit));
+    return transactions.functionCall(
+      args.methodName,
+      JSON.parse(JSON.stringify(args.args, (_, v) => (typeof v === "bigint" ? v.toString() : v))),
+      BigInt(args.gas),
+      BigInt(args.deposit)
+    );
   }
 
   public async getWrapNearDepositAction(amount: string | bigint, address: string) {

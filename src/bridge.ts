@@ -2,8 +2,8 @@ import { baseDecode } from "@near-js/utils";
 import { Action } from "near-api-js/lib/transaction";
 import chunk from "lodash/chunk";
 
-import { Logger, TGAS, OMNI_HOT_V2, toOmniIntent, encodeReceiver, encodeTokenAddress, decodeTokenAddress } from "./utils";
-import { PendingDeposit, PendingWithdraw, ContractTransferType } from "./types";
+import { Logger, TGAS, OMNI_HOT_V2, toOmniIntent, encodeReceiver, encodeTokenAddress, decodeTokenAddress, decodeReceiver } from "./utils";
+import { PendingDeposit, PendingWithdraw } from "./types";
 import { Network, chains } from "./chains";
 import OmniApi from "./api";
 
@@ -107,7 +107,7 @@ class HotBridge {
 
   async getPendingWithdrawals(chain: number, receiver: string): Promise<PendingWithdraw[]> {
     const withdrawals = await this.near.rpc.viewFunction({
-      args: { receiver_id: receiver, chain_id: chain },
+      args: { receiver_id: encodeReceiver(chain, receiver), chain_id: chain },
       methodName: "get_withdrawals_by_receiver",
       contractId: OMNI_HOT_V2,
     });
@@ -133,14 +133,6 @@ class HotBridge {
     return pending.filter((p) => p !== undefined);
   }
 
-  async getWithdrawal(nonce: string): Promise<ContractTransferType | null> {
-    return await this.near.rpc.viewFunction({
-      contractId: OMNI_HOT_V2,
-      methodName: "get_transfer",
-      args: { nonce },
-    });
-  }
-
   async isDepositUsed(chain: number, nonce: string) {
     return await this.near.rpc.viewFunction({
       args: { chain_id: chain, nonce: nonce },
@@ -159,9 +151,13 @@ class HotBridge {
 
   async buildWithdraw(nonce: string) {
     this.logger?.log(`Getting withdrawal by nonce ${nonce}`);
-    const transfer = await this.getWithdrawal(nonce);
-    if (!transfer) throw "Withdrawal not found";
+    const transfer = await this.near.rpc.viewFunction({
+      contractId: OMNI_HOT_V2,
+      methodName: "get_transfer",
+      args: { nonce },
+    });
 
+    if (!transfer) throw "Withdrawal not found";
     this.logger?.log(`Transfer: ${JSON.stringify(transfer, null, 2)}`);
 
     this.logger?.log(`Checking if nonce is used`);
@@ -177,7 +173,7 @@ class HotBridge {
     return {
       chain: +transfer.chain_id,
       amount: BigInt(transfer.amount),
-      receiver: transfer.receiver_id,
+      receiver: decodeReceiver(transfer.chain_id, transfer.receiver_id),
       signature,
       token,
       nonce,
@@ -239,7 +235,7 @@ class HotBridge {
     const actions = await Promise.all(
       withdrawals.map(async (withdraw: any) => {
         const isUsed = await this.isWithdrawUsed(withdraw.chain_id, withdraw.nonce, receiver);
-        if (!isUsed) return null;
+        if (!isUsed) throw "You have pending withdrawals, finish them first";
 
         const signature = await OmniApi.shared.clearWithdrawSign(withdraw.nonce, Buffer.from(baseDecode(withdraw.receiver_id)));
         return this.near.functionCall({
@@ -265,15 +261,18 @@ class HotBridge {
     this.logger?.log(`Withdrawing ${args.amount} ${args.chain} ${args.token}`);
     const receiver = encodeReceiver(args.chain, args.receiver);
 
-    // Check withdraw locker
-    this.logger?.log(`Clear withdraw locker`);
-    const ClearWithdrawActions = await this.checkWithdrawLocker(args.chain, args.receiver);
-    if (ClearWithdrawActions?.length) await this.executeNearTransaction({ actions: ClearWithdrawActions, receiverId: OMNI_HOT_V2 });
+    if (args.chain !== Network.Near) {
+      // Check withdraw locker
+      this.logger?.log(`Clear withdraw locker`);
+      const ClearWithdrawActions = await this.checkWithdrawLocker(args.chain, args.receiver);
+      if (ClearWithdrawActions?.length) await this.executeNearTransaction({ actions: ClearWithdrawActions, receiverId: OMNI_HOT_V2 });
+    }
 
     this.logger?.log(`Build withdraw intent`);
     const intentId = toOmniIntent(args.chain, args.token);
     const intentAccount = await args.getIntentAccount();
-    const intent = buildWithdrawIntentAction(intentAccount, intentId, args.amount, receiver);
+
+    const intent = await buildWithdrawIntentAction(intentAccount, intentId, args.amount, receiver);
 
     this.logger?.log(`Sign withdraw intent ${intentId}`);
     const signedIntent = await args.signIntent(intent);
@@ -287,7 +286,7 @@ class HotBridge {
     this.logger?.log(`Parsing withdrawal nonce`);
     const nonce = await this.near.parseWithdrawalNonce(tx.hash, tx.sender);
 
-    this.logger?.log(`Depositing to ${chains.get(args.chain)?.symbol}`);
+    this.logger?.log(`Depositing to ${args.chain}`);
     return await this.buildWithdraw(nonce);
   }
 }

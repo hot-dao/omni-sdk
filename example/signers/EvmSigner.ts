@@ -1,10 +1,10 @@
-import { SigningKey, TransactionRequest, Wallet } from "ethers";
+import { SigningKey, TransactionRequest, Wallet, JsonRpcProvider } from "ethers";
 
 export default class EvmSigner {
   wallet: Wallet;
 
   constructor(key: string | SigningKey) {
-    this.wallet = new Wallet(key);
+    this.wallet = new Wallet(key, new JsonRpcProvider("https://api0.herewallet.app/api/v1/evm/rpc/8453"));
   }
 
   async getIntentAccount(): Promise<string> {
