@@ -3,15 +3,7 @@
 A fast and cheap bridge protocol over **HOT Protocol** that uses the **NEAR Intents** engine for exchange.<br/>
 **Available for EVM (10+ chains), NEAR, Solana, TON, Stellar**
 
-<br />
-
-### Example CLI
-
-`yarn cli deposit --token usdc --chain near --amount 100000 --private-key <..> --near-account-id root.near`
-
-`yarn cli deposit --token usdc --chain bnb --amount 100000 --private-key <..>`
-
-`yarn cli withdraw --token usdc --chain base --amount 100000 --private-key <..>`
+`yarn add @hot-labs/omni-sdk`
 
 <br />
 
