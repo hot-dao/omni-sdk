@@ -1,19 +1,26 @@
 import { type Config, http, createConfig, useConnectorClient, useDisconnect, useSwitchChain, useAccount } from "wagmi";
+import { base, mainnet, polygon, arbitrum, optimism, avalanche, aurora, linea, kava } from "wagmi/chains";
 import { BrowserProvider, JsonRpcSigner, toNumber, TransactionRequest } from "ethers";
 import type { Account, Chain, Client, Transport } from "viem";
 import { injected, metaMask, safe } from "wagmi/connectors";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
-import { base, mainnet } from "wagmi/chains";
 import { useMemo } from "react";
 
 import "@rainbow-me/rainbowkit/styles.css";
 
 export const config = createConfig({
-  chains: [mainnet, base],
+  chains: [mainnet, base, polygon, arbitrum, optimism, avalanche, aurora, linea, kava],
   connectors: [injected(), metaMask(), safe()],
   transports: {
+    [polygon.id]: http(),
     [mainnet.id]: http(),
+    [arbitrum.id]: http(),
+    [optimism.id]: http(),
+    [avalanche.id]: http(),
+    [aurora.id]: http(),
     [base.id]: http(),
+    [linea.id]: http(),
+    [kava.id]: http(),
   },
 });
 
