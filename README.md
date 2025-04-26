@@ -17,13 +17,18 @@ Deploy: https://hot-bridge-demo.surge.sh
 * Find pending withdrawals and finish them
 * View HOT Bridge tokens balances on Intents
 
+
+
 ## Setup HotBridge
 
 ```ts
 const omni = new OmniBridge({
   logger: console, // optional
+
   tonApiKey: env.TON_API_KEY, // only if use TON
-  customEvmRpc: { 56: "rpc" }, // by default we use own back rpc
+  evmRpc: { 56: ["rpc"] }, // only if use EVM
+  solanaRpc: ["rpc"], // only if use SOLANA
+
   // Relayer for execute intents and omni bridge operations
   executeNearTransaction: async ({ receiverId, actions }) => {
     const hash = await relayer.signAndSendTransaction({ receiverId, actions }).
