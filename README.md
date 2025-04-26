@@ -5,7 +5,7 @@ A fast and cheap bridge protocol over **HOT Protocol** that uses the **NEAR Inte
 
 `yarn add @hot-labs/omni-sdk`
 
-Demo UI Deploy: hot-bridge-demo.surge.sh
+Demo UI Deploy: https://hot-bridge-demo.surge.sh
 
 <br />
 
