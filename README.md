@@ -11,7 +11,7 @@ A fast and cheap bridge protocol over **HOT Protocol** that uses the **NEAR Inte
 Deploy: https://hot-bridge-demo.surge.sh
 
 **Covered cases:**
-* Connect NEAR, EVM (currently deposit only to NEAR address)
+* Connect NEAR, EVM _(currently deposit only to Intent account binded to NEAR wallet)_
 * Deposit token widget (from NEAR, EVM)
 * Withdraw token widget (to NEAR, EVM)
 * Find pending withdrawals and finish them
