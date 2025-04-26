@@ -1,7 +1,7 @@
 {
   "name": "@hot-labs/omni-sdk",
   "description": "A fast and cheap bridge protocol over HOT Protocol that uses the NEAR Intents engine for exchange",
-  "version": "2.3.2",
+  "version": "2.3.4",
   "type": "commonjs",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
@@ -30,5 +30,9 @@
     "lodash": "^4.17.21",
     "near-api-js": "^5.0.1",
     "rlp": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.6",
+    "typescript": "^5.8.3"
   }
 }

@@ -1,0 +1,35 @@
+import { useEffect } from "react";
+import { mainnet, base, arbitrum, optimism, polygon, bsc, avalanche } from "viem/chains";
+
+import { HotBridge } from "@hot-labs/omni-sdk";
+import { useNearWallet } from "./near";
+
+export const bridge = new HotBridge({
+  evmRpc: {
+    8453: base.rpcUrls.default.http as any,
+    42161: arbitrum.rpcUrls.default.http as any,
+    10: optimism.rpcUrls.default.http as any,
+    137: polygon.rpcUrls.default.http as any,
+    56: bsc.rpcUrls.default.http as any,
+    43114: avalanche.rpcUrls.default.http as any,
+    1: mainnet.rpcUrls.default.http as any,
+  },
+
+  executeNearTransaction: async () => {
+    throw "executor not implemented";
+  },
+});
+
+export const useBridge = () => {
+  const nearWallet = useNearWallet();
+
+  useEffect(() => {
+    bridge.executeNearTransaction = async (tx) => {
+      const result = await nearWallet.sendTransaction(tx);
+      if (!result) throw "Failed to send transaction";
+      return { sender: nearWallet.accountId!, hash: result!.transaction.hash };
+    };
+  }, [nearWallet.accountId]);
+
+  return { bridge };
+};

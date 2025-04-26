@@ -1,17 +1,17 @@
 import React from "react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { ThemeProvider as StyledThemeProvider } from "styled-components";
 
 import { useTheme } from "./theme/ThemeContext";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { lightTheme, darkTheme } from "./theme/theme";
+
 import { useNearWallet } from "./hooks/near";
+import { useEvmWallet } from "./hooks/evm";
 
 import {
   AppContainer,
   Header,
   AccountInfo,
-  AccountId,
   MainContent,
   LeftColumn,
   RightColumn,
@@ -36,7 +36,8 @@ const ThemeIcon = ({ isDark }: { isDark: boolean }) => (
 );
 
 function AppContent() {
-  const { wallet, signIn, signOut } = useNearWallet();
+  const nearWallet = useNearWallet();
+  const evmWallet = useEvmWallet();
   const { theme, toggleTheme } = useTheme();
   const themeObj = theme === "light" ? lightTheme : darkTheme;
 
@@ -52,18 +53,28 @@ function AppContent() {
             </ThemeToggleButton>
           </div>
 
-          {wallet && (
-            <AccountInfo>
-              <span>Connected: </span>
-              <AccountId>{wallet.accountId}</AccountId>
-              <LogoutButton onClick={signOut}>Logout</LogoutButton>
-            </AccountInfo>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {nearWallet.accountId && (
+              <AccountInfo>
+                <LogoutButton onClick={nearWallet.signOut}>
+                  NEAR: {nearWallet.accountId.slice(0, 6)}...{nearWallet.accountId.slice(-4)}
+                </LogoutButton>
+              </AccountInfo>
+            )}
 
-          <ConnectButton showBalance={false} />
+            {evmWallet.address && (
+              <AccountInfo>
+                <LogoutButton onClick={evmWallet.signOut}>
+                  EVM: {evmWallet.address.slice(0, 6)}...{evmWallet.address.slice(-4)}
+                </LogoutButton>
+              </AccountInfo>
+            )}
+
+            {!evmWallet.address && <LogoutButton onClick={() => evmWallet.signIn()}>Connect EVM</LogoutButton>}
+          </div>
         </Header>
 
-        {wallet ? (
+        {nearWallet.accountId ? (
           <MainContent>
             <LeftColumn>
               <DepositComponent />
@@ -77,7 +88,7 @@ function AppContent() {
         ) : (
           <LoginPrompt>
             <p>Please sign in to use the application</p>
-            <StyledButton onClick={signIn} style={{ marginTop: "10px", width: 200 }}>
+            <StyledButton onClick={() => nearWallet.signIn()} style={{ marginTop: "10px", width: 200 }}>
               Sign In
             </StyledButton>
           </LoginPrompt>

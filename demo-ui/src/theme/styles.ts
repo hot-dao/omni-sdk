@@ -362,7 +362,7 @@ export const TokenAmount = styled.p`
 export const FormContainer = styled.form`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 `;
 
 export const Input = styled.input`
@@ -418,10 +418,10 @@ export const Button = styled.button`
 `;
 
 export const InputLabel = styled.label`
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   margin-bottom: 4px;
-  color: ${({ theme }) => theme.text};
+  color: ${({ theme }) => theme.accountText};
 `;
 
 export const FormGroup = styled.div`

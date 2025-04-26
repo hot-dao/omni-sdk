@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 
-import { utils } from "../../../src";
+import { utils } from "@hot-labs/omni-sdk";
 import { useNearWallet } from "../hooks/near";
-import { omni } from "../hooks/bridge";
+import { useBridge } from "../hooks/bridge";
 
 import {
   BalancesContainer,
@@ -15,21 +15,23 @@ import {
 } from "../theme/styles";
 
 const BalancesComponent = () => {
+  const { bridge } = useBridge();
   const nearSigner = useNearWallet();
+
   const [balances, setBalances] = useState<Record<string, bigint>>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBalances = async () => {
-      if (!nearSigner.wallet) return;
+      if (!nearSigner.accountId) return;
 
       setIsLoading(true);
       setError(null);
 
       try {
         // Fetch intent balances
-        const intentBalances = await omni.getAllIntentBalances(await nearSigner.wallet!.getIntentAccount());
+        const intentBalances = await bridge.getAllIntentBalances(nearSigner.accountId);
         setBalances(intentBalances);
       } catch (err) {
         console.error("Error fetching balances:", err);
@@ -40,7 +42,7 @@ const BalancesComponent = () => {
     };
 
     fetchBalances();
-  }, [nearSigner.wallet]);
+  }, [nearSigner.accountId]);
 
   if (isLoading) {
     return (

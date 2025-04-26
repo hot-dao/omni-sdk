@@ -1,8 +1,7 @@
 import React, { useState } from "react";
-import { PendingWithdraw } from "../../../src/types";
-import { Network, chains } from "../../../src";
-import { useNearWallet } from "../hooks/near";
-import { omni } from "../hooks/bridge";
+import type { PendingWithdraw } from "@hot-labs/omni-sdk/src/types";
+import { Network, chains } from "@hot-labs/omni-sdk";
+
 import {
   Card,
   EmptyState,
@@ -22,11 +21,19 @@ import {
   Button,
 } from "../theme/styles";
 
+import { useNearWallet } from "../hooks/near";
+import { useBridge } from "../hooks/bridge";
+import { useEvmWallet } from "../hooks/evm";
+
 const PendingWithdrawalsComponent = () => {
-  const nearSigner = useNearWallet();
+  const nearWallet = useNearWallet();
+  const evmWallet = useEvmWallet();
+  const { bridge } = useBridge();
+
   const [pendingWithdraw, setPendingWithdraw] = useState<PendingWithdraw[]>([]);
   const [selectedNetwork, setSelectedNetwork] = useState<Network>(Network.Base);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [processingWithdrawals, setProcessingWithdrawals] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [receiver, setReceiver] = useState<string>("");
 
@@ -36,19 +43,41 @@ const PendingWithdrawalsComponent = () => {
     .map(([key, value]) => ({ label: key, value: Number(value), disabled: !chains.has(Number(value)) }));
 
   const fetchPendingWithdrawals = async () => {
-    if (!nearSigner.wallet) return setError("Wallet not connected. Please connect your wallet first.");
+    if (!nearWallet.accountId) return setError("Wallet not connected. Please connect your wallet first.");
     if (!receiver.trim()) return setError("Please enter a receiver address.");
     setIsLoading(true);
     setError(null);
 
     try {
-      const pending = await omni.getPendingWithdrawals(selectedNetwork, receiver);
+      const pending = await bridge.getPendingWithdrawals(selectedNetwork, receiver);
       setPendingWithdraw(pending);
     } catch (err) {
       console.error("Error fetching pending withdrawals:", err);
       setError("Failed to load pending withdrawals. Please try refreshing.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const finishWithdrawal = async (withdraw: PendingWithdraw) => {
+    if (!nearWallet.accountId) return setError("Wallet not connected. Please connect your wallet first.");
+    setProcessingWithdrawals((prev) => ({ ...prev, [withdraw.nonce]: true }));
+    setError(null);
+
+    try {
+      // Get withdrawal data using buildWithdraw
+      const withdrawData = await bridge.buildWithdraw(withdraw.nonce);
+      if (chains.get(withdrawData.chain)?.isEvm) {
+        await bridge.evm.withdraw({ ...withdrawData, sendTransaction: evmWallet.sendTransaction });
+      } else {
+        throw new Error("Finishing withdrawal is only supported for EVM chains at this time");
+      }
+
+      setPendingWithdraw((prev) => prev.filter((item) => item.nonce !== withdraw.nonce));
+    } catch (err) {
+      setError(`Failed to complete withdrawal #${withdraw.nonce}. ${err}`);
+    } finally {
+      setProcessingWithdrawals((prev) => ({ ...prev, [withdraw.nonce]: false }));
     }
   };
 
@@ -93,7 +122,7 @@ const PendingWithdrawalsComponent = () => {
       {error && <ErrorMessage>{error}</ErrorMessage>}
 
       {isLoading ? (
-        <LoadingContainer>
+        <LoadingContainer style={{ width: "100%" }}>
           <p>Loading pending withdrawals...</p>
         </LoadingContainer>
       ) : pendingWithdraw.length === 0 ? (
@@ -104,7 +133,12 @@ const PendingWithdrawalsComponent = () => {
             <WithdrawalCard key={withdraw.nonce}>
               <WithdrawalHeader>
                 <span>Withdrawal #{withdraw.nonce}</span>
-                <StatusBadge>Pending</StatusBadge>
+                <StatusBadge
+                  onClick={() => !processingWithdrawals[withdraw.nonce] && finishWithdrawal(withdraw)}
+                  style={{ cursor: processingWithdrawals[withdraw.nonce] ? "default" : "pointer" }}
+                >
+                  {processingWithdrawals[withdraw.nonce] ? "Processing..." : "Click to finish"}
+                </StatusBadge>
               </WithdrawalHeader>
               <WithdrawalDetails>
                 <WithdrawalDetail>

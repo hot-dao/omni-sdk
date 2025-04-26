@@ -22,7 +22,7 @@ class SolanaOmniService {
   public connection: sol.Connection;
 
   constructor(readonly omni: OmniService, rpc?: string[]) {
-    this.connection = new AdvancedConnection(rpc || []);
+    this.connection = new AdvancedConnection(rpc || ["https://api.mainnet-beta.solana.com"]);
   }
 
   async isWithdrawUsed(nonce: string, receiver: string) {

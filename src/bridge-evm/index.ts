@@ -8,11 +8,13 @@ import { Network } from "../chains";
 import OmniService from "../bridge";
 
 class EvmOmniService {
-  constructor(readonly omni: OmniService, readonly rpcs: Record<number, string> = {}) {}
+  constructor(readonly omni: OmniService, readonly rpcs: Record<number, string[]> = {}) {}
 
   getProvider(chain: number) {
     if (!this.rpcs[chain]) throw `No rpc for chain ${chain}`;
-    return new ethers.JsonRpcProvider(this.rpcs[chain], chain, { staticNetwork: true });
+    const list = Array.isArray(this.rpcs[chain]) ? this.rpcs[chain] : [this.rpcs[chain]];
+    const provider = list.map((rpc) => new ethers.JsonRpcProvider(rpc, chain, { staticNetwork: true }));
+    return new ethers.FallbackProvider(provider, chain, {});
   }
 
   async approveToken(args: {
@@ -31,14 +33,14 @@ class EvmOmniService {
     if (allowance >= args.need) return;
 
     const tx = await erc20.approve.populateTransaction(args.allowed, args.need);
-    const hash = await args.sendTransaction(tx);
+    const hash = await args.sendTransaction({ ...tx, chainId: args.chain });
     this.omni.logger?.log(`Approve tx: ${hash}`);
   }
 
   async getTokenBalance(token: string, chain: Network, address = OMNI_CONTRACT): Promise<bigint> {
-    const rpc = new ethers.JsonRpcProvider(`https://api0.herewallet.app/api/v1/evm/rpc/${chain}`, chain, { staticNetwork: true });
-    if (token === "native") return await rpc.getBalance(address);
-    const contract = new Contract(token, ERC20_ABI, rpc);
+    const provider = this.getProvider(chain);
+    if (token === "native") return await provider.getBalance(address);
+    const contract = new Contract(token, ERC20_ABI, provider);
     const result = await contract.balanceOf(address);
     return BigInt(result);
   }
@@ -69,7 +71,7 @@ class EvmOmniService {
       hexlify(baseDecode(args.signature))
     );
 
-    const hash = await args.sendTransaction(tx);
+    const hash = await args.sendTransaction({ ...tx, chainId: args.chain });
     this.omni.logger?.log(`Withdraw tx: ${hash}`);
   }
 
@@ -91,7 +93,7 @@ class EvmOmniService {
       this.omni.logger?.log(`Depositing native`);
       const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_NATIVE], this.getProvider(args.chain));
       const depositTx = await contract.deposit.populateTransaction(hexlify(receiver), { value: args.amount });
-      const hash = await args.sendTransaction(depositTx);
+      const hash = await args.sendTransaction({ ...depositTx, chainId: args.chain });
 
       this.omni.logger?.log(`Parsing receipt`);
       const logs = await this.parseDeposit(args.chain, hash);
@@ -121,7 +123,7 @@ class EvmOmniService {
     this.omni.logger?.log(`Depositing token`);
     const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_FT], this.getProvider(args.chain));
     const depositTx = await contract.deposit.populateTransaction(hexlify(receiver), args.token, args.amount);
-    const hash = await args.sendTransaction(depositTx);
+    const hash = await args.sendTransaction({ ...depositTx, chainId: args.chain });
 
     this.omni.logger?.log(`Parsing receipt`);
     const logs = await this.parseDeposit(args.chain, hash);

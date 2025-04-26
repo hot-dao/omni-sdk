@@ -33,7 +33,7 @@ class HotBridge {
   }: {
     logger?: Logger;
     tonApiKey?: string;
-    evmRpc?: Record<number, string>;
+    evmRpc?: Record<number, string[]>;
     solanaRpc?: string[];
     executeNearTransaction: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
   }) {
@@ -67,9 +67,8 @@ class HotBridge {
       .catch(() => null);
 
     const ids = new Set<string>(data?.contract_ids.map((t: any) => toOmniIntent(Network.Near, t)));
-
     const tokens = await OmniApi.shared.getBridgeTokens();
-    Object.values(tokens.groups).forEach((t) => t.forEach((t) => ids.add(toOmniIntent(t))));
+    Object.values(tokens.groups).forEach((t) => t.forEach((t) => ids.add(t)));
 
     const chunks = chunk(Array.from(ids), 200);
     const balances: Record<string, bigint> = {};
@@ -242,7 +241,7 @@ class HotBridge {
 
         const signature = await OmniApi.shared.clearWithdrawSign(withdraw.nonce, Buffer.from(baseDecode(withdraw.receiver_id)));
         return this.near.functionCall({
-          methodName: "clear_withdraw",
+          methodName: "clear_completed_withdrawal",
           args: { nonce: withdraw.nonce, signature },
           gas: String(80n * TGAS),
           deposit: "0",
