@@ -58,7 +58,7 @@ const deposits = [
 
 // Processed by near relayer without signers
 for (const deposit of deposits) {
-  await omni.near.finishDeposit(deposit);
+  await omni.finishDeposit(deposit);
 }
 ```
 
