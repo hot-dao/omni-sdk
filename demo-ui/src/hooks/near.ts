@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
 import { setupWalletSelector, Wallet } from "@near-wallet-selector/core";
 import { setupHotWallet } from "@near-wallet-selector/hot-wallet";
-import { base_encode } from "near-api-js/lib/utils/serialize";
+import { setupMeteorWallet } from "@near-wallet-selector/meteor-wallet";
+import { setupLedger } from "@near-wallet-selector/ledger";
+import { setupOKXWallet } from "@near-wallet-selector/okx-wallet";
 import { setupModal } from "@near-wallet-selector/modal-ui";
-
+import { base_encode } from "near-api-js/lib/utils/serialize";
 import { Action } from "near-api-js/lib/transaction";
 import "@near-wallet-selector/modal-ui/styles.css";
 
 export async function initNearWallet() {
-  const selector = await setupWalletSelector({ network: "mainnet", modules: [setupHotWallet()] });
+  const selector = await setupWalletSelector({
+    modules: [setupHotWallet(), setupLedger(), setupOKXWallet(), setupMeteorWallet()],
+    network: "mainnet",
+  });
+
   const modal = setupModal(selector, { contractId: "" });
   return { selector, modal };
 }
