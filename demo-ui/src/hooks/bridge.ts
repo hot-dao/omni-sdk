@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { mainnet, base, arbitrum, optimism, polygon, bsc, avalanche } from "viem/chains";
-
 import { HotBridge } from "@hot-labs/omni-sdk";
 import { useNearWallet } from "./near";
 
@@ -25,9 +24,8 @@ export const useBridge = () => {
 
   useEffect(() => {
     bridge.executeNearTransaction = async (tx) => {
-      const result = await nearWallet.sendTransaction(tx);
-      if (!result) throw "Failed to send transaction";
-      return { sender: nearWallet.accountId!, hash: result!.transaction.hash };
+      const hash = await nearWallet.sendTransaction(tx);
+      return { sender: nearWallet.accountId!, hash };
     };
   }, [nearWallet.accountId]);
 

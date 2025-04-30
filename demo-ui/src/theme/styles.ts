@@ -193,7 +193,7 @@ export const TokenCard = styled.div`
   overflow: hidden;
   padding: 12px;
   margin-bottom: 10px;
-  gap: 12px;
+  gap: 10px;
   transition: transform 0.2s, box-shadow 0.2s;
   background-color: ${({ theme }) => theme.cardBackground};
 
@@ -213,14 +213,24 @@ export const TokenCard = styled.div`
     font-weight: 600;
     color: ${({ theme }) => theme.text};
   }
+`;
 
-  img {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
-  }
+export const TokenImage = styled.img`
+  width: 36px;
+  height: 36px;
+  background: ${({ theme }) => theme.inputBorder};
+  border-radius: 50%;
+  object-fit: cover;
+`;
+
+export const ChainImage = styled.img`
+  width: 16px;
+  height: 16px;
+  background: ${({ theme }) => theme.inputBorder};
+  margin-left: -24px;
+  margin-bottom: -30px;
+  border-radius: 50%;
+  border: 1px solid #ccc;
 `;
 
 export const EmptyState = styled.div`

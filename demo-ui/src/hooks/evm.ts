@@ -27,11 +27,7 @@ export const config = createConfig({
 
 export function clientToSigner(client: Client<Transport, Chain, Account>) {
   const { account, chain, transport } = client;
-  const network = {
-    chainId: chain.id,
-    name: chain.name,
-    ensAddress: chain.contracts?.ensRegistry?.address,
-  };
+  const network = { chainId: chain.id, name: chain.name, ensAddress: chain.contracts?.ensRegistry?.address };
   const provider = new BrowserProvider(transport, network);
   const signer = new JsonRpcSigner(provider, account.address);
   return signer;
@@ -53,14 +49,8 @@ export const useEvmWallet = () => {
   return {
     wallet,
     address: wallet?.address,
-
-    signIn: () => {
-      openConnectModal?.();
-    },
-
-    signOut: () => {
-      disconnect();
-    },
+    signIn: () => openConnectModal?.(),
+    signOut: () => disconnect(),
 
     sendTransaction: async (tx: TransactionRequest) => {
       if (!wallet) throw new Error("Wallet not found");

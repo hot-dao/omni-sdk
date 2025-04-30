@@ -13,6 +13,8 @@ import {
   InputLabel,
   FormGroup,
 } from "../theme/styles";
+
+import { useAvailableTokens } from "../hooks/tokens";
 import { useEvmWallet } from "../hooks/evm";
 import { useNearWallet } from "../hooks/near";
 import { useBridge } from "../hooks/bridge";
@@ -31,6 +33,7 @@ const DepositComponent = () => {
   const nearSigner = useNearWallet();
   const evmSigner = useEvmWallet();
   const { bridge } = useBridge();
+
   const [amount, setAmount] = useState<string>("");
   const [token, setToken] = useState<string>("");
   const [network, setNetwork] = useState<Network>(Network.Near);
@@ -38,9 +41,7 @@ const DepositComponent = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const handleNetworkChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setNetwork(Number(e.target.value) as Network);
-  };
+  const { tokens } = useAvailableTokens(network);
 
   const handleDeposit = async (e: any) => {
     e.preventDefault();
@@ -55,12 +56,12 @@ const DepositComponent = () => {
       if (chains.get(network)?.isEvm) {
         if (evmSigner == null) throw "Connect EVM to deposit";
         const deposit = await bridge.evm.deposit({
-          token: token,
-          chain: network,
-          amount: BigInt(amount),
           getAddress: async () => evmSigner.address!,
           getIntentAccount: async () => nearSigner.intentAccount!,
           sendTransaction: evmSigner.sendTransaction,
+          amount: BigInt(amount),
+          chain: network,
+          token: token,
         });
 
         await bridge.finishDeposit(deposit);
@@ -68,14 +69,11 @@ const DepositComponent = () => {
 
       if (network === Network.Near) {
         await bridge.near.depositToken({
-          token: token,
-          amount: BigInt(amount),
           getAddress: async () => nearSigner.accountId!,
           getIntentAccount: async () => nearSigner.intentAccount!,
-          sendTransaction: async ({ receiverId, actions }: TransactionParams) => {
-            const txHash = await nearSigner.sendTransaction({ receiverId, actions });
-            return txHash!.transaction.hash;
-          },
+          sendTransaction: nearSigner.sendTransaction,
+          amount: BigInt(amount),
+          token: token,
         });
       }
 
@@ -104,7 +102,7 @@ const DepositComponent = () => {
 
         <FormGroup>
           <InputLabel>Deposit from chain</InputLabel>
-          <Select value={network} onChange={handleNetworkChange} disabled={isLoading}>
+          <Select value={network} onChange={(e) => setNetwork(Number(e.target.value) as Network)} disabled={isLoading}>
             <option value="" disabled>
               Select Network
             </option>
@@ -118,13 +116,16 @@ const DepositComponent = () => {
 
         <FormGroup>
           <InputLabel>Deposit token</InputLabel>
-          <StyledInput
-            type="text"
-            placeholder="Token"
-            value={token}
-            disabled={isLoading}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value)}
-          />
+          <Select value={token} onChange={(e) => setToken(e.target.value)} disabled={isLoading}>
+            <option value="" disabled>
+              Select token
+            </option>
+            {tokens.map((token) => (
+              <option key={token} value={token}>
+                {token}
+              </option>
+            ))}
+          </Select>
         </FormGroup>
 
         <FormGroup>

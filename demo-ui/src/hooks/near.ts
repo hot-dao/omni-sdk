@@ -79,9 +79,15 @@ export const useNearWallet = () => {
     };
   };
 
-  const sendTransaction = async ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => {
+  const sendTransaction = async ({
+    receiverId,
+    actions,
+  }: {
+    receiverId: string;
+    actions: Action[];
+  }): Promise<string> => {
     if (!wallet) throw "Wallet not connected";
-    return wallet.signAndSendTransaction({
+    const tx = await wallet.signAndSendTransaction({
       receiverId,
       signerId: accountId!,
       actions: actions.map((action) => ({
@@ -94,6 +100,9 @@ export const useNearWallet = () => {
         },
       })),
     });
+
+    if (!tx) throw "Failed to send transaction";
+    return tx.transaction.hash;
   };
 
   return {

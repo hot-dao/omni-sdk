@@ -155,8 +155,8 @@ class EvmOmniService {
     const intrfc = new Interface([OMNI_DEPOSIT_LOG]);
     if (receipt.logs[0] == null) throw "no deposit logs";
 
-    const log = intrfc.parseLog(receipt.logs[receipt.logs.length - 1]);
-    if (log?.args[0] == null) throw "no deposit nonce yet";
+    const log = receipt.logs.map((t) => intrfc.parseLog(t)).find((t) => t?.args[0] != null);
+    if (log == null) throw "no deposit nonce yet";
 
     const nonce = String(log.args[0]);
     const amount = String(log.args[1]);

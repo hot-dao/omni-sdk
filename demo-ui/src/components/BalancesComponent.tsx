@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
-
+import React from "react";
 import { utils } from "@hot-labs/omni-sdk";
+
 import { useNearWallet } from "../hooks/near";
-import { useBridge } from "../hooks/bridge";
+import { useIntentBalances } from "../hooks/balances";
 
 import {
   BalancesContainer,
@@ -12,37 +12,13 @@ import {
   TokenAmount,
   LoadingContainer,
   ErrorMessage,
+  ChainImage,
+  TokenImage,
 } from "../theme/styles";
 
 const BalancesComponent = () => {
-  const { bridge } = useBridge();
   const nearSigner = useNearWallet();
-
-  const [balances, setBalances] = useState<Record<string, bigint>>({});
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchBalances = async () => {
-      if (!nearSigner.accountId) return;
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        // Fetch intent balances
-        const intentBalances = await bridge.getAllIntentBalances(nearSigner.accountId);
-        setBalances(intentBalances);
-      } catch (err) {
-        console.error("Error fetching balances:", err);
-        setError("Failed to load balances. Please try refreshing.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchBalances();
-  }, [nearSigner.accountId]);
+  const { balances, isLoading, error } = useIntentBalances(nearSigner?.intentAccount || undefined);
 
   if (isLoading) {
     return (
@@ -52,28 +28,24 @@ const BalancesComponent = () => {
     );
   }
 
-  return (
-    <>
-      {error && <ErrorMessage>{error}</ErrorMessage>}
+  if (error) {
+    return <ErrorMessage>{error}</ErrorMessage>;
+  }
 
-      {Object.entries(balances).some(([_, balance]) => balance > 0n) && (
-        <BalancesContainer>
-          <BalanceSectionTitle>Bridge Balances</BalanceSectionTitle>
-          {Object.entries(balances).map(
-            ([token, balance]) =>
-              balance > 0n && (
-                <TokenCard key={token}>
-                  <img src={`https://storage.herewallet.app/ft/${utils.fromOmni(token)}.png`} alt={token} />
-                  <div>
-                    <TokenName>{utils.fromOmni(token)}</TokenName>
-                    <TokenAmount>{balance.toString()}</TokenAmount>
-                  </div>
-                </TokenCard>
-              )
-          )}
-        </BalancesContainer>
-      )}
-    </>
+  return (
+    <BalancesContainer>
+      <BalanceSectionTitle>Bridge Balances</BalanceSectionTitle>
+      {balances.map((balance) => (
+        <TokenCard key={balance.address}>
+          <TokenImage src={`https://storage.herewallet.app/ft/${balance.chain}:${balance.address}.png`} />
+          <ChainImage src={`https://storage.herewallet.app/ft/${balance.chain}:native.png`} />
+          <div>
+            <TokenName>{balance.address}</TokenName>
+            <TokenAmount>{balance.amount}</TokenAmount>
+          </div>
+        </TokenCard>
+      ))}
+    </BalancesContainer>
   );
 };
 

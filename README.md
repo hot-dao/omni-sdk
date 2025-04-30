@@ -8,16 +8,16 @@ A fast and cheap bridge protocol over **HOT Protocol** that uses the **NEAR Inte
 <br />
 
 ## Demo UI
+
 Deploy: https://hot-bridge-demo.surge.sh
 
 **Covered cases:**
-* Connect NEAR, EVM _(currently deposit only to Intent account binded to NEAR wallet)_
-* Deposit token widget (from NEAR, EVM)
-* Withdraw token widget (to NEAR, EVM)
-* Find pending withdrawals and finish them
-* View HOT Bridge tokens balances on Intents
 
-
+- Connect NEAR, EVM _(currently deposit only to Intent account binded to NEAR wallet)_
+- Deposit token widget (from NEAR, EVM)
+- Withdraw token widget (to NEAR, EVM)
+- Find pending withdrawals and finish them
+- View HOT Bridge tokens balances on Intents
 
 ## Setup HotBridge
 

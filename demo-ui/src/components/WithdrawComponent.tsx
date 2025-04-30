@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Network, chains } from "@hot-labs/omni-sdk";
 
+import { useAvailableTokens } from "../hooks/tokens";
+import { useBridge } from "../hooks/bridge";
 import { useNearWallet } from "../hooks/near";
 import { useEvmWallet } from "../hooks/evm";
-import { useBridge } from "../hooks/bridge";
 
 import {
   Card,
@@ -35,9 +36,7 @@ const WithdrawComponent = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const handleNetworkChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setNetwork(Number(e.target.value) as Network);
-  };
+  const { tokens } = useAvailableTokens(network);
 
   useEffect(() => {
     if (chains.get(network)?.isEvm) return setReceiver(evmSigner.address || "");
@@ -58,12 +57,12 @@ const WithdrawComponent = () => {
       setSuccess(null);
 
       const result = await bridge.withdrawToken({
-        token: token,
-        amount: BigInt(amount),
-        chain: network,
-        receiver: receiver.trim(),
         getIntentAccount: async () => nearSigner.intentAccount!,
         signIntent: async (intent: any) => await nearSigner.signIntent(intent),
+        receiver: receiver.trim(),
+        amount: BigInt(amount),
+        chain: network,
+        token: token,
       });
 
       if (result) {
@@ -94,7 +93,7 @@ const WithdrawComponent = () => {
       <FormContainer>
         <FormGroup>
           <InputLabel>Withdrawal to chain</InputLabel>
-          <Select value={network} onChange={handleNetworkChange} disabled={isLoading}>
+          <Select value={network} onChange={(e) => setNetwork(Number(e.target.value) as Network)} disabled={isLoading}>
             <option value="" disabled>
               Select Network
             </option>
@@ -119,13 +118,16 @@ const WithdrawComponent = () => {
 
         <FormGroup>
           <InputLabel>Withdrawal token</InputLabel>
-          <StyledInput
-            type="text"
-            placeholder="Enter token address"
-            value={token}
-            disabled={isLoading}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value)}
-          />
+          <Select value={token} onChange={(e) => setToken(e.target.value)} disabled={isLoading}>
+            <option value="" disabled>
+              Select token
+            </option>
+            {tokens.map((token) => (
+              <option key={token} value={token}>
+                {token}
+              </option>
+            ))}
+          </Select>
         </FormGroup>
 
         <FormGroup>
