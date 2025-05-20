@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { mainnet, base, arbitrum, optimism, polygon, bsc, avalanche } from "viem/chains";
-
 import HotBridge from "../../../src/bridge";
 import { useNearWallet } from "./near";
 

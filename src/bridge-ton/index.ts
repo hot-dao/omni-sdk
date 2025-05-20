@@ -7,7 +7,7 @@ import { Network } from "../chains";
 import { omniEphemeralReceiver, wait } from "../utils";
 import OmniService from "../bridge";
 
-import { PendingDeposit } from "../types";
+import { PendingDepositWithIntent } from "../types";
 import { generateUserId, MIN_COMMISSION } from "./constants";
 import { JettonMinter } from "./wrappers/jetton/JettonMinter";
 import { JettonWallet } from "./wrappers/jetton/JettonWallet";
@@ -172,7 +172,7 @@ class TonOmniService {
 
     if (!executor.hash) throw "Failed to send transaction";
     const sender = await args.getAddress();
-    const deposit = {
+    const deposit: PendingDepositWithIntent = {
       chain: Network.Ton,
       intentAccount,
       receiver: baseEncode(receiver),
@@ -199,33 +199,40 @@ class TonOmniService {
     return await waitParseDeposit();
   }
 
-  async clearDepositNonceIfNeeded(args: { deposit: PendingDeposit; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
-    const isUsed = await this.omni.isDepositUsed(Network.Ton, args.deposit.nonce);
+  async clearDepositNonceIfNeeded(args: { nonce: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
+    const isUsed = await this.omni.isDepositUsed(Network.Ton, args.nonce);
     if (!isUsed) return;
 
-    const depositAddress = await this.metaWallet.getDepositJettonAddress(BigInt(args.deposit.nonce));
+    const depositAddress = await this.metaWallet.getDepositJettonAddress(BigInt(args.nonce));
     const depositJetton = this.client.open(DepositJetton.createFromAddress(depositAddress));
     await depositJetton.sendSelfDestruct(this.executor(args.sendTransaction), { value: MIN_COMMISSION });
   }
 
-  async parseDeposit(deposit: PendingDeposit): Promise<PendingDeposit> {
+  async parseDeposit(deposit: PendingDepositWithIntent): Promise<PendingDepositWithIntent> {
     if (deposit.nonce) return deposit;
 
     const events = await this.tonApi.events.getEvent(deposit.tx);
-    const deployTxHash = events.actions.reverse().find((t) => t.ContractDeploy != null)?.baseTransactions[0];
-    if (deployTxHash == null) throw "Deposit address not found";
+    const deployTxHashes = events.actions.filter((t) => t.ContractDeploy != null).map((t) => t.baseTransactions[0]);
 
-    const tx = await this.tonApi.blockchain.getBlockchainTransaction(deployTxHash);
-    if (tx.inMsg?.init?.boc == null) throw "Deploy tx not found";
+    const parseDeployTx = async (hash: string) => {
+      const tx = await this.tonApi.blockchain.getBlockchainTransaction(hash);
+      if (tx.inMsg?.init?.boc == null) throw "Deploy tx not found";
 
-    const slice = tx.inMsg.init.boc.beginParse();
-    slice.loadRef();
+      const slice = tx.inMsg.init.boc.beginParse();
+      slice.loadRef();
 
-    const slice1 = slice.loadRef().beginParse();
-    slice1.loadAddressAny();
-    slice1.loadAddressAny();
+      const slice1 = slice.loadRef().beginParse();
+      slice1.loadAddressAny();
+      slice1.loadAddressAny();
+      return slice1.loadUintBig(128).toString();
+    };
 
-    return { ...deposit, nonce: slice1.loadUintBig(128).toString() };
+    for (const hash of deployTxHashes) {
+      const nonce = await parseDeployTx(hash).catch(() => null);
+      if (nonce) return { ...deposit, nonce };
+    }
+
+    throw "Deposit not found";
   }
 }
 

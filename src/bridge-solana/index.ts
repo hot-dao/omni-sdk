@@ -10,7 +10,7 @@ import {
 } from "@solana/spl-token";
 
 import OmniService from "../bridge";
-import { PendingDeposit } from "../types";
+import { PendingDeposit, PendingDepositWithIntent } from "../types";
 import { omniEphemeralReceiver, wait } from "../utils";
 import { Network } from "../chains";
 
@@ -146,7 +146,7 @@ class SolanaOmniService {
     getAddress: () => Promise<string>;
     getIntentAccount: () => Promise<string>;
     sendTransaction: (tx: sol.Transaction) => Promise<string>;
-  }): Promise<PendingDeposit> {
+  }): Promise<PendingDepositWithIntent> {
     const intentAccount = await args.getIntentAccount();
     const receiver = omniEphemeralReceiver(intentAccount);
 

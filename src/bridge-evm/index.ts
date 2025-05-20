@@ -3,7 +3,7 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 
 import { ERC20_ABI, OMNI_ABI, OMNI_CONTRACT, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
 import { encodeTokenAddress, omniEphemeralReceiver, wait } from "../utils";
-import { PendingDeposit } from "../types";
+import { PendingDepositWithIntent } from "../types";
 import { Network } from "../chains";
 import OmniService from "../bridge";
 
@@ -82,7 +82,7 @@ class EvmOmniService {
     getAddress: () => Promise<string>;
     getIntentAccount: () => Promise<string>;
     sendTransaction: (tx: ethers.TransactionRequest) => Promise<string>;
-  }): Promise<PendingDeposit> {
+  }): Promise<PendingDepositWithIntent> {
     const intentAccount = await args.getIntentAccount();
     this.omni.logger?.log(`Call deposit ${args.amount} ${args.token} to ${intentAccount}`);
 
@@ -97,11 +97,12 @@ class EvmOmniService {
 
       this.omni.logger?.log(`Parsing receipt`);
       const logs = await this.parseDeposit(args.chain, hash);
+
       return {
+        intentAccount,
         timestamp: Date.now(),
         amount: String(args.amount),
         receiver: baseEncode(receiver),
-        intentAccount,
         token: args.token,
         chain: args.chain,
         nonce: logs.nonce,

@@ -17,7 +17,6 @@ export interface PendingWithdraw {
 }
 
 export interface PendingDeposit {
-  intentAccount: string;
   token: string;
   chain: number;
   timestamp: number;
@@ -26,4 +25,8 @@ export interface PendingDeposit {
   amount: string;
   nonce: string;
   tx: string;
+}
+
+export interface PendingDepositWithIntent extends PendingDeposit {
+  intentAccount: string;
 }

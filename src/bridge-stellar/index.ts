@@ -18,8 +18,8 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import BigNumber from "bignumber.js"; // @ts-ignore
 
 import { omniEphemeralReceiver, parseAmount } from "../utils";
+import { PendingDeposit, PendingDepositWithIntent } from "../types";
 import { Network } from "../chains";
-import { PendingDeposit } from "../types";
 import OmniService from "../bridge";
 import OmniApi from "../api";
 
@@ -68,7 +68,7 @@ class StellarService {
     getIntentAccount: () => Promise<string>;
     getAddress: () => Promise<string>;
     sendTransaction: (tx: Transaction) => Promise<string>;
-  }): Promise<PendingDeposit> {
+  }): Promise<PendingDepositWithIntent> {
     const sender = await args.getAddress();
     const intentAccount = await args.getIntentAccount();
     const receiver = omniEphemeralReceiver(intentAccount);

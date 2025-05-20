@@ -3,7 +3,7 @@ import { Action } from "near-api-js/lib/transaction";
 import chunk from "lodash/chunk";
 
 import { Logger, TGAS, OMNI_HOT_V2, toOmniIntent, encodeReceiver, encodeTokenAddress, decodeTokenAddress, decodeReceiver } from "./utils";
-import { PendingDeposit, PendingWithdraw } from "./types";
+import { PendingDepositWithIntent, PendingWithdraw } from "./types";
 import { Network, chains } from "./chains";
 import OmniApi from "./api";
 
@@ -182,7 +182,7 @@ class HotBridge {
     };
   }
 
-  async finishDeposit(deposit: PendingDeposit) {
+  async finishDeposit(deposit: PendingDepositWithIntent) {
     this.logger?.log(`Checking if depos it is executed`);
     const isExecuted = await this.near.rpc.viewFunction({
       args: { nonce: deposit.nonce, chain_id: deposit.chain },
