@@ -7,6 +7,7 @@ import { lightTheme, darkTheme } from "./theme/theme";
 
 import { useNearWallet } from "./hooks/near";
 import { useEvmWallet } from "./hooks/evm";
+import { useTonWallet } from "./hooks/ton";
 
 import {
   AppContainer,
@@ -38,6 +39,8 @@ const ThemeIcon = ({ isDark }: { isDark: boolean }) => (
 function AppContent() {
   const nearWallet = useNearWallet();
   const evmWallet = useEvmWallet();
+  const tonWallet = useTonWallet();
+
   const { theme, toggleTheme } = useTheme();
   const themeObj = theme === "light" ? lightTheme : darkTheme;
 
@@ -70,7 +73,16 @@ function AppContent() {
               </AccountInfo>
             )}
 
+            {tonWallet.address && (
+              <AccountInfo>
+                <LogoutButton onClick={tonWallet.signOut}>
+                  TON: {tonWallet.address.slice(0, 6)}...{tonWallet.address.slice(-4)}
+                </LogoutButton>
+              </AccountInfo>
+            )}
+
             {!evmWallet.address && <LogoutButton onClick={() => evmWallet.signIn()}>Connect EVM</LogoutButton>}
+            {!tonWallet.address && <LogoutButton onClick={() => tonWallet.signIn()}>Connect TON</LogoutButton>}
           </div>
         </Header>
 

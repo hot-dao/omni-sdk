@@ -5,6 +5,7 @@ import { useAvailableTokens } from "../hooks/tokens";
 import { useBridge } from "../hooks/bridge";
 import { useNearWallet } from "../hooks/near";
 import { useEvmWallet } from "../hooks/evm";
+import { useTonWallet } from "../hooks/ton";
 
 import {
   Card,
@@ -20,12 +21,15 @@ import {
 
 // Get available networks for the selector
 const availableNetworks = Object.entries(Network)
-  .filter(([key, value]) => value === 1010 || (!isNaN(Number(value)) && chains.get(Number(value))?.isEvm))
+  .filter(
+    ([key, value]) => value === 1010 || value === 1111 || (!isNaN(Number(value)) && chains.get(Number(value))?.isEvm)
+  )
   .map(([key, value]) => ({ label: key, value: Number(value), disabled: !chains.has(Number(value)) }));
 
 const WithdrawComponent = () => {
   const nearSigner = useNearWallet();
   const evmSigner = useEvmWallet();
+  const tonSigner = useTonWallet();
   const { bridge } = useBridge();
 
   const [amount, setAmount] = useState<string>("");
@@ -56,6 +60,10 @@ const WithdrawComponent = () => {
       setError(null);
       setSuccess(null);
 
+      if (network === Network.Ton) {
+        await bridge.ton.createUserIfNeeded({ sendTransaction: tonSigner.sendTransaction, address: receiver });
+      }
+
       const result = await bridge.withdrawToken({
         getIntentAccount: async () => nearSigner.intentAccount!,
         signIntent: async (intent: any) => await nearSigner.signIntent(intent),
@@ -66,7 +74,9 @@ const WithdrawComponent = () => {
       });
 
       if (result) {
-        if (chains.get(result.chain)?.isEvm) {
+        if (result.chain === Network.Ton) {
+          await bridge.ton.withdraw({ sendTransaction: tonSigner.sendTransaction, ...result });
+        } else if (chains.get(result.chain)?.isEvm) {
           await bridge.evm.withdraw({ sendTransaction: evmSigner.sendTransaction, ...result });
         } else {
           throw new Error("Finish withdraw unsupported for this network");

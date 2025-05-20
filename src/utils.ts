@@ -4,7 +4,7 @@ import { Address as StellarAddress, xdr } from "@stellar/stellar-sdk";
 import { Address } from "@ton/core";
 import crypto from "crypto";
 
-import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
+import { bigintToBuffer, createAddressRlp, generateUserId, parseAddressRlp } from "./bridge-ton/constants";
 import { Network, chains } from "./chains";
 
 export const OMNI_HOT_V2 = "v2_1.omni.hot.tg";
@@ -118,7 +118,12 @@ export const encodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Solana) return address;
   if (chains.get(chain)?.isEvm) return baseEncode(getBytes(address));
   if (chain === Network.Stellar) return baseEncode(StellarAddress.fromString(address).toScVal().toXDR());
-  if (chain === Network.Ton) return baseEncode(createAddressRlp(Address.parse(address)));
+
+  if (chain === Network.Ton) {
+    const id = generateUserId(Address.parse(address), 0n);
+    return baseEncode(bigintToBuffer(id, 32));
+  }
+
   throw `Unsupported chain address ${chain}`;
 };
 
@@ -127,7 +132,7 @@ export const decodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Solana) return address;
   if (chains.get(chain)?.isEvm) return hexlify(baseDecode(address));
   if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(address)))).toString();
-  if (chain === Network.Ton) return parseAddressRlp(address);
+  if (chain === Network.Ton) return BigInt("0x" + Buffer.from(baseDecode(address)).toString("hex")).toString();
   throw `Unsupported chain address ${chain}`;
 };
 

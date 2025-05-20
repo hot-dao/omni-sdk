@@ -1,6 +1,4 @@
 import React from "react";
-import { utils } from "@hot-labs/omni-sdk";
-
 import { useNearWallet } from "../hooks/near";
 import { useIntentBalances } from "../hooks/balances";
 

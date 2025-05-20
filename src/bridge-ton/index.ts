@@ -39,8 +39,7 @@ class TonOmniService {
     return executor;
   }
 
-  async getUserJettonAddress(receiver: string) {
-    const userId = generateUserId(Address.parse(receiver), 0n);
+  async getUserJettonAddress(userId: bigint) {
     const address = await this.metaWallet.getUserJettonAddress(userId);
     return this.client.open(UserJetton.createFromAddress(address));
   }
@@ -53,15 +52,21 @@ class TonOmniService {
     return await userJetton.getJettonBalance();
   }
 
-  async isWithdrawUsed(nonce: string, receiver: string): Promise<boolean> {
-    const omniUser = await this.getUserJettonAddress(receiver);
+  async isWithdrawUsed(nonce: string, userId: string): Promise<boolean> {
+    const omniUser = await this.getUserJettonAddress(BigInt(userId));
     const lastNonce = await omniUser.getLastWithdrawnNonce();
     return BigInt(nonce) <= BigInt(lastNonce.toString());
   }
 
-  async createUserIfNeeded(args: { receiver: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
-    const userId = generateUserId(Address.parse(args.receiver), 0n);
-    const omniUser = await this.getUserJettonAddress(args.receiver);
+  async isUserExists(userId: string): Promise<boolean> {
+    const omniUser = await this.getUserJettonAddress(BigInt(userId));
+    let lastNonce = await omniUser.getLastWithdrawnNonce().catch(() => null);
+    return lastNonce != null;
+  }
+
+  async createUserIfNeeded(args: { address: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
+    const userId = generateUserId(Address.parse(args.address), 0n);
+    const omniUser = await this.getUserJettonAddress(userId);
 
     const waitLastNonce = async (attemps = 0) => {
       if (attemps > 20) throw "Failed to fetch new last withdraw nonce";
@@ -76,10 +81,10 @@ class TonOmniService {
     if (lastNonce != null) return;
 
     await this.metaWallet.sendCreateUser(this.executor(args.sendTransaction), {
-      userWalletAddress: Address.parse(args.receiver),
+      userWalletAddress: Address.parse(args.address),
       value: toNano(0.05),
+      userId: userId,
       bump: 0n,
-      userId,
     });
 
     await waitLastNonce();
@@ -93,9 +98,7 @@ class TonOmniService {
     receiver: string;
     sendTransaction: (tx: SenderArguments) => Promise<string>;
   }) {
-    const omniUser = await this.getUserJettonAddress(args.receiver);
-
-    await this.createUserIfNeeded(args);
+    const omniUser = await this.getUserJettonAddress(BigInt(args.receiver));
     let lastNonce = await omniUser.getLastWithdrawnNonce().catch(() => null);
     if (lastNonce == null) throw "Create user before initiate withdraw on TON";
     if (lastNonce >= BigInt(args.nonce)) throw "Withdraw nonce already used";
@@ -152,7 +155,7 @@ class TonOmniService {
       const minter = this.client.open(JettonMinter.createFromAddress(Address.parse(args.token)));
 
       this.omni.logger?.log(`Getting wallet address of ${address}`);
-      const userJettonWalletAddress = await minter.getWalletAddressOf(Address.parse(args.token));
+      const userJettonWalletAddress = await minter.getWalletAddressOf(Address.parse(await args.getAddress()));
 
       this.omni.logger?.log(`Sending transfer`);
       const userJetton = this.client.open(JettonWallet.createFromAddress(userJettonWalletAddress));

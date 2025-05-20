@@ -24,10 +24,12 @@ import {
 import { useNearWallet } from "../hooks/near";
 import { useBridge } from "../hooks/bridge";
 import { useEvmWallet } from "../hooks/evm";
+import { useTonWallet } from "../hooks/ton";
 
 const PendingWithdrawalsComponent = () => {
   const nearWallet = useNearWallet();
   const evmWallet = useEvmWallet();
+  const tonWallet = useTonWallet();
   const { bridge } = useBridge();
 
   const [pendingWithdraw, setPendingWithdraw] = useState<PendingWithdraw[]>([]);
@@ -69,6 +71,8 @@ const PendingWithdrawalsComponent = () => {
       const withdrawData = await bridge.buildWithdraw(withdraw.nonce);
       if (chains.get(withdrawData.chain)?.isEvm) {
         await bridge.evm.withdraw({ ...withdrawData, sendTransaction: evmWallet.sendTransaction });
+      } else if (withdrawData.chain === Network.Ton) {
+        await bridge.ton.withdraw({ ...withdrawData, sendTransaction: tonWallet.sendTransaction });
       } else {
         throw new Error("Finishing withdrawal is only supported for EVM chains at this time");
       }
@@ -103,6 +107,7 @@ const PendingWithdrawalsComponent = () => {
           <option value="" disabled>
             Select Network
           </option>
+
           {availableNetworks.map((network) => (
             <option key={network.value} value={network.value} disabled={network.disabled}>
               {network.label}

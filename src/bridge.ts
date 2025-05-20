@@ -126,7 +126,7 @@ class HotBridge {
         amount: withdraw.amount,
         timestamp: withdraw.created_ts * 1000,
         token: decodeTokenAddress(withdraw.chain_id, withdraw.contract_id),
-        receiver: withdraw.receiver_id,
+        receiver: decodeReceiver(withdraw.chain_id, withdraw.receiver_id),
         completed: false,
       };
     });
@@ -144,7 +144,7 @@ class HotBridge {
   }
 
   async isWithdrawUsed(chain: number, nonce: string, receiver: string) {
-    if (chain === Network.Ton) return await this.ton.isWithdrawUsed(nonce, receiver);
+    if (chain === Network.Ton) return await this.ton.isWithdrawUsed(nonce, decodeReceiver(chain, receiver));
     if (chain === Network.Solana) return await this.solana.isWithdrawUsed(nonce, receiver);
     if (chain === Network.Stellar) return await this.stellar.isWithdrawUsed(nonce);
     if (chains.get(chain)?.isEvm) return await this.evm.isWithdrawUsed(chain, nonce);
@@ -236,7 +236,7 @@ class HotBridge {
 
     const actions = await Promise.all(
       withdrawals.map(async (withdraw: any) => {
-        const isUsed = await this.isWithdrawUsed(withdraw.chain_id, withdraw.nonce, receiver);
+        const isUsed = await this.isWithdrawUsed(withdraw.chain_id, withdraw.nonce, withdraw.receiver_id);
         if (!isUsed) throw "You have pending withdrawals, finish them first";
 
         const signature = await OmniApi.shared.clearWithdrawSign(withdraw.nonce, Buffer.from(baseDecode(withdraw.receiver_id)));
@@ -261,7 +261,12 @@ class HotBridge {
     signIntent: (intent: any) => Promise<any>;
   }) {
     this.logger?.log(`Withdrawing ${args.amount} ${args.chain} ${args.token}`);
-    const receiver = encodeReceiver(args.chain, args.receiver);
+
+    if (args.chain === Network.Ton) {
+      const receiver = decodeReceiver(args.chain, encodeReceiver(args.chain, args.receiver));
+      const isUserExists = await this.ton.isUserExists(receiver);
+      if (!isUserExists) throw "User jetton not created, call bridge.createUserIfNeeded({ address, sendTransaction }) before withdraw";
+    }
 
     if (args.chain !== Network.Near) {
       // Check withdraw locker
@@ -274,6 +279,7 @@ class HotBridge {
     const intentId = toOmniIntent(args.chain, args.token);
     const intentAccount = await args.getIntentAccount();
 
+    const receiver = encodeReceiver(args.chain, args.receiver);
     const intent = await buildWithdrawIntentAction(intentAccount, intentId, args.amount, receiver);
 
     this.logger?.log(`Sign withdraw intent ${intentId}`);

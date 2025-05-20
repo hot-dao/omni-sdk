@@ -18,19 +18,18 @@ import { useAvailableTokens } from "../hooks/tokens";
 import { useEvmWallet } from "../hooks/evm";
 import { useNearWallet } from "../hooks/near";
 import { useBridge } from "../hooks/bridge";
-
-interface TransactionParams {
-  receiverId: string;
-  actions: any[];
-}
+import { useTonWallet } from "../hooks/ton";
 
 // Get available networks for the selector
 const availableNetworks = Object.entries(Network)
-  .filter(([key, value]) => value === 1010 || (!isNaN(Number(value)) && chains.get(Number(value))?.isEvm))
+  .filter(
+    ([key, value]) => value === 1010 || value === 1111 || (!isNaN(Number(value)) && chains.get(Number(value))?.isEvm)
+  )
   .map(([key, value]) => ({ label: key, value: Number(value), disabled: !chains.has(Number(value)) }));
 
 const DepositComponent = () => {
   const nearSigner = useNearWallet();
+  const tonSigner = useTonWallet();
   const evmSigner = useEvmWallet();
   const { bridge } = useBridge();
 
@@ -61,6 +60,18 @@ const DepositComponent = () => {
           sendTransaction: evmSigner.sendTransaction,
           amount: BigInt(amount),
           chain: network,
+          token: token,
+        });
+
+        await bridge.finishDeposit(deposit);
+      }
+
+      if (network === Network.Ton) {
+        const deposit = await bridge.ton.deposit({
+          getAddress: async () => tonSigner.address!,
+          getIntentAccount: async () => nearSigner.intentAccount!,
+          sendTransaction: tonSigner.sendTransaction,
+          amount: BigInt(amount),
           token: token,
         });
 
