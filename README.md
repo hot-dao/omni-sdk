@@ -112,3 +112,21 @@ for (const pending of pendings) {
   await omni.evm.withdraw({ ...withdraw, ...signer }); // push tx
 }
 ```
+
+## Finish pendings deposits (not implemented yet)
+
+```ts
+// Get all uncompleted withdrawals for this bnb address
+const pendings = await omni.getPendingDeposits({
+  intentAccount: "receiver_intent",
+  solana: "sender_address", // optional
+  ton: "sender_address", // optional
+  stellar: "sender_address", // optional
+  evm: "sender_address", // optional
+});
+
+// Finish all
+for (const pending of pendings) {
+  await omni.finishDeposit(pendings);
+}
+```

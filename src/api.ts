@@ -2,7 +2,7 @@ import RLP from "rlp";
 import crypto from "crypto";
 import { baseEncode } from "@near-js/utils";
 
-const OMNI_API = ["https://rpc1.hotdao.ai"];
+const OMNI_API = ["https://rpc1.hotdao.ai", "https://rpc0.hotdao.ai"];
 
 class OmniApi {
   static shared = new OmniApi();
