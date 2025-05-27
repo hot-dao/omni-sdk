@@ -65,8 +65,8 @@ const WithdrawComponent = () => {
       }
 
       const result = await bridge.withdrawToken({
-        getIntentAccount: async () => nearSigner.intentAccount!,
         signIntent: async (intent: any) => await nearSigner.signIntent(intent),
+        intentAccount: nearSigner.intentAccount!,
         receiver: receiver.trim(),
         amount: BigInt(amount),
         chain: network,

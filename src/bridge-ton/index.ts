@@ -52,8 +52,9 @@ class TonOmniService {
     return await userJetton.getJettonBalance();
   }
 
-  async isWithdrawUsed(nonce: string, userId: string): Promise<boolean> {
-    const omniUser = await this.getUserJettonAddress(BigInt(userId));
+  async isWithdrawUsed(nonce: string, receiver: string): Promise<boolean> {
+    const userId = Address.isAddress(receiver) ? generateUserId(Address.parse(receiver), 0n) : BigInt(receiver);
+    const omniUser = await this.getUserJettonAddress(userId);
     const lastNonce = await omniUser.getLastWithdrawnNonce();
     return BigInt(nonce) <= BigInt(lastNonce.toString());
   }
@@ -62,6 +63,11 @@ class TonOmniService {
     const omniUser = await this.getUserJettonAddress(BigInt(userId));
     let lastNonce = await omniUser.getLastWithdrawnNonce().catch(() => null);
     return lastNonce != null;
+  }
+
+  async getUserAddress(userId: bigint) {
+    const omniUser = await this.getUserJettonAddress(userId);
+    return await omniUser.getUserWalletAddress();
   }
 
   async createUserIfNeeded(args: { address: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {

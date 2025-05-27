@@ -38,7 +38,7 @@ class StellarService {
   async isWithdrawUsed(nonce: string) {
     const tx = await this.buildSmartContactTx(ACCOUNT_FOR_SIMULATE, CONTRACT, "is_executed", new XdrLargeInt("u128", nonce).toU128());
     const result = (await this.soroban.simulateTransaction(tx)) as rpc.Api.SimulateTransactionSuccessResponse;
-    return result.result?.retval.value();
+    return !!result.result?.retval.value();
   }
 
   async buildDepositTx(sender: string, token: string, amount: bigint, intentAccount: Buffer) {

@@ -7,7 +7,6 @@ export interface ContractTransferType {
 }
 
 export interface PendingWithdraw {
-  completed: boolean;
   timestamp: number;
   receiver: string;
   chain: number;

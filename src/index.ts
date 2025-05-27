@@ -7,3 +7,4 @@ export { default as Api } from "./api";
 export { default as HotBridge } from "./bridge";
 export { chains, Network } from "./chains";
 export * as utils from "./utils";
+export * from "./types";

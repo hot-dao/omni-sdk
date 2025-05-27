@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import type { PendingWithdraw } from "@hot-labs/omni-sdk/src/types";
-import { Network, chains } from "@hot-labs/omni-sdk";
+import type { PendingWithdraw } from "../../../src";
+import { Network, chains } from "../../../src";
 
 import {
   Card,
@@ -51,8 +51,8 @@ const PendingWithdrawalsComponent = () => {
     setError(null);
 
     try {
-      const pending = await bridge.getPendingWithdrawals(selectedNetwork, receiver);
-      setPendingWithdraw(pending);
+      const pending = await bridge.getPendingWithdrawalsWithStatus(selectedNetwork, receiver);
+      setPendingWithdraw(pending.filter((t) => !t.completed));
     } catch (err) {
       console.error("Error fetching pending withdrawals:", err);
       setError("Failed to load pending withdrawals. Please try refreshing.");

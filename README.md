@@ -66,14 +66,22 @@ for (const deposit of deposits) {
 
 ```ts
 const signer = {
-  getIntentAccount: async () => "account", // intent account with omni balance
   signIntent: async () => signedIntent, // sign by intent account with omni balance
   sendTransaction: async () => "hash", // any tx executor for claim tokens for receiver
   getAddress: async () => "address", // any tx executor address
 };
 
+// Create TON user jetton for withdrawals (created once for user)
+if (chain === Network.Ton) {
+  await omni.ton.createUserIfNeeded({
+    sendTransaction: signer.sendTransaction,
+    address: receiver,
+  });
+}
+
 // Only intent signer need for withdraw
 const withdraw = await omni.withdrawToken({
+  intentAccount: "account",
   chain, // chain to withdraw
   receiver: "0x...", // any onchain receiver
   token, // onchain address of token to withdraw
@@ -104,11 +112,16 @@ switch (withdraw.chain) {
 
 ```ts
 // Get all uncompleted withdrawals for this bnb address
-const pendings = await omni.getPendingWithdrawals(56, "0xAddress");
+const pendings = await omni.getPendingWithdrawalsWithStatus(56, "0xAddress");
+
+// Clear completed withdrawals
+const completed = pendings.filter((t) => t.completed);
+if (completed.length) await omni.clearPendingWithdraw(completed);
 
 // Finish all
-for (const pending of pendings) {
-  const withdraw = await omni.buildWithdraw(pending.nonce); // get signature
+const uncompleted = pendings.filter((t) => !t.completed);
+for (const pending of uncompleted) {
+  const withdraw = await omni.buildWithdraw(pending.nonce); // build with signature
   await omni.evm.withdraw({ ...withdraw, ...signer }); // push tx
 }
 ```

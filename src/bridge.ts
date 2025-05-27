@@ -115,11 +115,7 @@ class HotBridge {
     });
 
     if (!withdrawals) return [];
-
-    const tasks = withdrawals.map(async (withdraw: any) => {
-      const isUsed = await this.isWithdrawUsed(chain, withdraw.nonce, withdraw.receiver_id);
-      if (isUsed) return;
-
+    return withdrawals.map((withdraw: any) => {
       return {
         nonce: withdraw.nonce,
         chain: withdraw.chain_id,
@@ -127,12 +123,34 @@ class HotBridge {
         timestamp: withdraw.created_ts * 1000,
         token: decodeTokenAddress(withdraw.chain_id, withdraw.contract_id),
         receiver: decodeReceiver(withdraw.chain_id, withdraw.receiver_id),
-        completed: false,
       };
     });
+  }
 
-    const pending = await Promise.all(tasks);
-    return pending.filter((p) => p !== undefined);
+  async getPendingWithdrawalsWithStatus(chain: number, receiver: string): Promise<(PendingWithdraw & { completed: boolean })[]> {
+    const pendings = await this.getPendingWithdrawals(chain, receiver);
+    const tasks = pendings.map<Promise<PendingWithdraw & { completed: boolean }>>(async (pending) => {
+      const completed = await this.isWithdrawUsed(chain, pending.nonce, receiver);
+      return { ...pending, completed };
+    });
+
+    return await Promise.all(tasks);
+  }
+
+  async clearPendingWithdrawals(withdrawals: PendingWithdraw[]) {
+    const tasks = withdrawals.map(async (withdraw) => {
+      const receiver = encodeReceiver(withdraw.chain, withdraw.receiver);
+      const signature = await OmniApi.shared.clearWithdrawSign(withdraw.nonce, Buffer.from(baseDecode(receiver)));
+      return this.near.functionCall({
+        methodName: "clear_completed_withdrawal",
+        args: { nonce: withdraw.nonce, signature },
+        gas: String(80n * TGAS),
+        deposit: "0",
+      });
+    });
+
+    const actions = await Promise.all(tasks);
+    return await this.executeNearTransaction({ receiverId: OMNI_HOT_V2, actions });
   }
 
   async isDepositUsed(chain: number, nonce: string) {
@@ -144,7 +162,7 @@ class HotBridge {
   }
 
   async isWithdrawUsed(chain: number, nonce: string, receiver: string) {
-    if (chain === Network.Ton) return await this.ton.isWithdrawUsed(nonce, decodeReceiver(chain, receiver));
+    if (chain === Network.Ton) return await this.ton.isWithdrawUsed(nonce, receiver);
     if (chain === Network.Solana) return await this.solana.isWithdrawUsed(nonce, receiver);
     if (chain === Network.Stellar) return await this.stellar.isWithdrawUsed(nonce);
     if (chains.get(chain)?.isEvm) return await this.evm.isWithdrawUsed(chain, nonce);
@@ -163,7 +181,9 @@ class HotBridge {
     this.logger?.log(`Transfer: ${JSON.stringify(transfer, null, 2)}`);
 
     this.logger?.log(`Checking if nonce is used`);
-    const isUsed = await this.isWithdrawUsed(transfer.chain_id, nonce, transfer.receiver_id).catch(() => false);
+    const receiver = decodeReceiver(transfer.chain_id, transfer.receiver_id);
+
+    const isUsed = await this.isWithdrawUsed(transfer.chain_id, nonce, receiver).catch(() => false);
     if (isUsed) throw "Already claimed";
 
     this.logger?.log(`Depositing on ${chains.get(transfer.chain_id)?.symbol}`);
@@ -175,13 +195,14 @@ class HotBridge {
     return {
       chain: +transfer.chain_id,
       amount: BigInt(transfer.amount),
-      receiver: decodeReceiver(transfer.chain_id, transfer.receiver_id),
+      receiver,
       signature,
       token,
       nonce,
     };
   }
 
+  /** Returns { hash } or null if deposit already finished */
   async finishDeposit(deposit: PendingDepositWithIntent) {
     this.logger?.log(`Checking if depos it is executed`);
     const isExecuted = await this.near.rpc.viewFunction({
@@ -190,7 +211,7 @@ class HotBridge {
       methodName: "is_executed",
     });
 
-    if (isExecuted) throw "Deposit already executed";
+    if (isExecuted) return null;
 
     this.logger?.log(`Signing deposit`);
     const signature = await OmniApi.shared.depositSign(
@@ -221,35 +242,23 @@ class HotBridge {
 
     try {
       this.logger?.log(`Calling deposit to omni and deposit to intents`);
-      await this.executeNearTransaction({ actions: [depositAction], receiverId: OMNI_HOT_V2 });
+      return await this.executeNearTransaction({ actions: [depositAction], receiverId: OMNI_HOT_V2 });
     } catch (e) {
       if (!e?.toString?.().includes("Nonce already used")) throw e;
+      return null;
     }
   }
 
-  async checkWithdrawLocker(chain: number, receiver: string): Promise<Action[]> {
-    const withdrawals = await this.near.rpc.viewFunction({
-      args: { receiver_id: encodeReceiver(chain, receiver), chain_id: chain },
-      methodName: "get_withdrawals_by_receiver",
-      contractId: OMNI_HOT_V2,
-    });
+  async canWithdrawOnTon(address: string) {
+    const receiver = decodeReceiver(Network.Ton, encodeReceiver(Network.Ton, address));
+    return await this.ton.isUserExists(receiver);
+  }
 
-    const actions = await Promise.all(
-      withdrawals.map(async (withdraw: any) => {
-        const isUsed = await this.isWithdrawUsed(withdraw.chain_id, withdraw.nonce, withdraw.receiver_id);
-        if (!isUsed) throw "You have pending withdrawals, finish them first";
-
-        const signature = await OmniApi.shared.clearWithdrawSign(withdraw.nonce, Buffer.from(baseDecode(withdraw.receiver_id)));
-        return this.near.functionCall({
-          methodName: "clear_completed_withdrawal",
-          args: { nonce: withdraw.nonce, signature },
-          gas: String(80n * TGAS),
-          deposit: "0",
-        });
-      })
-    );
-
-    return actions.filter((a) => a !== null);
+  async buildWithdrawIntent(args: { chain: Network; token: string; amount: bigint; receiver: string; intentAccount: string }) {
+    this.logger?.log(`Build withdraw intent`);
+    const token = toOmniIntent(args.chain, args.token);
+    const receiver = encodeReceiver(args.chain, args.receiver);
+    return await buildWithdrawIntentAction(args.intentAccount, token, args.amount, receiver);
   }
 
   async withdrawToken(args: {
@@ -257,35 +266,30 @@ class HotBridge {
     token: string;
     amount: bigint;
     receiver: string;
-    getIntentAccount: () => Promise<string>;
+    intentAccount: string;
     signIntent: (intent: any) => Promise<any>;
   }) {
     this.logger?.log(`Withdrawing ${args.amount} ${args.chain} ${args.token}`);
 
     if (args.chain === Network.Ton) {
-      const receiver = decodeReceiver(args.chain, encodeReceiver(args.chain, args.receiver));
-      const isUserExists = await this.ton.isUserExists(receiver);
+      const isUserExists = await this.canWithdrawOnTon(args.receiver);
       if (!isUserExists) throw "User jetton not created, call bridge.createUserIfNeeded({ address, sendTransaction }) before withdraw";
     }
 
     if (args.chain !== Network.Near) {
-      // Check withdraw locker
-      this.logger?.log(`Clear withdraw locker`);
-      const ClearWithdrawActions = await this.checkWithdrawLocker(args.chain, args.receiver);
-      if (ClearWithdrawActions?.length) await this.executeNearTransaction({ actions: ClearWithdrawActions, receiverId: OMNI_HOT_V2 });
+      const pendings = await this.getPendingWithdrawalsWithStatus(args.chain, args.receiver);
+      const completed = pendings.filter((t) => t.completed);
+
+      if (completed.length) await this.clearPendingWithdrawals(completed);
+      if (pendings.some((t) => !t.completed)) throw "Complete previous withdrawals before make new";
     }
 
-    this.logger?.log(`Build withdraw intent`);
-    const intentId = toOmniIntent(args.chain, args.token);
-    const intentAccount = await args.getIntentAccount();
+    const intent = await this.buildWithdrawIntent(args);
 
-    const receiver = encodeReceiver(args.chain, args.receiver);
-    const intent = await buildWithdrawIntentAction(intentAccount, intentId, args.amount, receiver);
-
-    this.logger?.log(`Sign withdraw intent ${intentId}`);
+    this.logger?.log(`Sign withdraw intent`);
     const signedIntent = await args.signIntent(intent);
 
-    this.logger?.log(`Push withdraw intent ${intentId}`);
+    this.logger?.log(`Push withdraw intent`);
     const tx = await this.executeIntents([signedIntent]);
 
     // Intent withdraw directry on NEAR for receiver
