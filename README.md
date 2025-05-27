@@ -116,7 +116,7 @@ const pendings = await omni.getPendingWithdrawalsWithStatus(56, "0xAddress");
 
 // Clear completed withdrawals
 const completed = pendings.filter((t) => t.completed);
-if (completed.length) await omni.clearPendingWithdraw(completed);
+if (completed.length) await omni.clearPendingWithdrawals(completed);
 
 // Finish all
 const uncompleted = pendings.filter((t) => !t.completed);
