@@ -66,7 +66,7 @@ for (const deposit of deposits) {
 
 ```ts
 const signer = {
-  signIntent: async () => signedIntent, // sign by intent account with omni balance
+  signIntents: async (intent) => signedIntent, // sign by intent account with omni balance
   sendTransaction: async () => "hash", // any tx executor for claim tokens for receiver
   getAddress: async () => "address", // any tx executor address
 };

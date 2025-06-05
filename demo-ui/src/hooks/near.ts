@@ -8,6 +8,7 @@ import { setupModal } from "@near-wallet-selector/modal-ui";
 import { base_encode } from "near-api-js/lib/utils/serialize";
 import { Action } from "near-api-js/lib/transaction";
 import "@near-wallet-selector/modal-ui/styles.css";
+import { randomBytes } from "ethers";
 
 export async function initNearWallet() {
   const selector = await setupWalletSelector({
@@ -57,23 +58,23 @@ export const useNearWallet = () => {
     modal.show();
   };
 
-  const signIntent = async (intent: { nonce: string; [k: string]: any }) => {
+  const signIntents = async (intents: Record<string, any>[]) => {
     if (!wallet) throw "Wallet not connected";
-    const message = intent.message;
-    const result = await wallet.signMessage?.({
-      nonce: Buffer.from(intent.nonce, "base64"),
-      recipient: "intents.near",
-      message: message,
+
+    const message = JSON.stringify({
+      deadline: new Date(Date.now() + 60_000).toISOString(),
+      signer_id: accountId,
+      intents: intents,
     });
 
-    if (!result) {
-      throw new Error("Failed to sign message");
-    }
+    const nonce = Buffer.from(randomBytes(32));
+    const result = await wallet.signMessage?.({ nonce: nonce, recipient: "intents.near", message: message });
+    if (!result) throw new Error("Failed to sign message");
 
     const { signature, publicKey } = result;
     return {
       standard: "nep413",
-      payload: { nonce: intent.nonce, recipient: "intents.near", message },
+      payload: { nonce: nonce.toString("base64"), recipient: "intents.near", message },
       signature: "ed25519:" + base_encode(Buffer.from(signature, "base64")),
       public_key: publicKey,
     };
@@ -109,7 +110,7 @@ export const useNearWallet = () => {
     signIn,
     signOut,
     sendTransaction,
-    signIntent,
+    signIntents,
     accountId,
     intentAccount: accountId,
   };

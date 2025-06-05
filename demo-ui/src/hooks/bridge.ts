@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { mainnet, base, arbitrum, optimism, polygon, bsc, avalanche } from "viem/chains";
+import { mainnet, base, arbitrum, optimism, polygon, bsc, avalanche, kava } from "viem/chains";
 import HotBridge from "../../../src/bridge";
 import { useNearWallet } from "./near";
 
@@ -13,6 +13,7 @@ export const bridge = new HotBridge({
     56: bsc.rpcUrls.default.http as any,
     43114: avalanche.rpcUrls.default.http as any,
     1: mainnet.rpcUrls.default.http as any,
+    2222: kava.rpcUrls.default.http as any,
   },
 
   executeNearTransaction: async () => {
