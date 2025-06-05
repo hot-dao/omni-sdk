@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import type { PendingWithdraw } from "../../../src";
-import { Network, chains } from "../../../src";
+import { Network, PendingWithdraw, chains } from "@hot-labs/omni-sdk";
 
 import {
   Card,

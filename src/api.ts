@@ -3,14 +3,14 @@ import crypto from "crypto";
 import { baseEncode } from "@near-js/utils";
 import { Network } from "./chains";
 
-const OMNI_API = ["https://rpc1.hotdao.ai", "https://rpc0.hotdao.ai"];
-const BACKEND_API = "https://api0.herewallet.app";
-
 class OmniApi {
-  static shared = new OmniApi();
+  constructor(
+    readonly api: string = "https://api0.herewallet.app",
+    readonly mpcApi: string[] = ["https://rpc1.hotdao.ai", "https://rpc0.hotdao.ai"]
+  ) {}
 
   async request(req: RequestInfo, init: any) {
-    if (!init.endpoint) init.endpoint = OMNI_API;
+    if (!init.endpoint) init.endpoint = this.mpcApi;
     const endpoints = Array.isArray(init.endpoint) ? init.endpoint : [init.endpoint];
     let error: Error | null = null;
 
@@ -34,13 +34,13 @@ class OmniApi {
   }
 
   async getTime() {
-    const res = await this.request("/api/v1/web/time", { method: "GET", endpoint: BACKEND_API });
+    const res = await this.request("/api/v1/web/time", { method: "GET", endpoint: this.api });
     const { ts } = await res.json();
     return ts;
   }
 
   async getWithdrawFee(chain: Network, token?: string): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
-    const res = await this.request(`/api/v1/evm/${chain}/bridge_gas_price`, { method: "GET", endpoint: BACKEND_API });
+    const res = await this.request(`/api/v1/evm/${chain}/bridge_gas_price`, { method: "GET", endpoint: this.api });
     const { gas_price, block_number } = await res.json();
     return { gasPrice: BigInt(gas_price), blockNumber: BigInt(block_number) };
   }
@@ -58,7 +58,7 @@ class OmniApi {
   }> {
     const body = JSON.stringify({ token_out: tokenTo, amount_in: amount, tokens_in: tokensFrom });
     const response = await this.request("/api/v1/exchange/intent_swap_quote", {
-      endpoint: BACKEND_API,
+      endpoint: this.api,
       timeout: 30_000,
       method: "POST",
       retries: 1,
@@ -80,7 +80,7 @@ class OmniApi {
   }> {
     const res = await this.request(`/api/v1/exchange/intent_quote_with_exact_amount_out`, {
       body: JSON.stringify({ token_in: tokenIn, token_out: tokenOut, exact_amount_out: amount.toString() }),
-      endpoint: BACKEND_API,
+      endpoint: this.api,
       method: "POST",
     });
 
@@ -88,7 +88,7 @@ class OmniApi {
   }
 
   async getBridgeTokens(): Promise<{ groups: Record<string, string[]>; liquidityContract: string }> {
-    const res = await this.request("/api/v1/exchange/intent_swap/groups", { method: "GET", endpoint: BACKEND_API });
+    const res = await this.request("/api/v1/exchange/intent_swap/groups", { method: "GET", endpoint: this.api });
     const { groups, stable_swap_contract } = await res.json();
     return { groups, liquidityContract: stable_swap_contract };
   }
@@ -96,7 +96,7 @@ class OmniApi {
   async estimateSwap(nearAddress: string, group: Record<string, string>, intentTo: string, amount: number) {
     const res = await this.request("/api/v1/exchange/intent_swap", {
       body: JSON.stringify({ token_out: intentTo, amount_in: amount, tokens_in: group, sender_id: nearAddress }),
-      endpoint: BACKEND_API,
+      endpoint: this.api,
       method: "POST",
     });
 

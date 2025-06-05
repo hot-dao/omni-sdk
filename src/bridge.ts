@@ -53,12 +53,16 @@ class HotBridge {
   ton: TonOmniService;
   evm: EvmOmniService;
   near: NearBridge;
+  api: OmniApi;
 
   constructor({
+    mpcApi,
+    api,
     logger,
     tonApiKey,
     evmRpc,
     solanaRpc,
+    solverBusRpc,
     executeNearTransaction,
   }: {
     logger?: Logger;
@@ -66,12 +70,15 @@ class HotBridge {
     evmRpc?: Record<number, string[]>;
     solanaRpc?: string[];
     solverBusRpc?: string;
+    mpcApi?: string[];
+    api?: string;
     executeNearTransaction: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
   }) {
     this.executeNearTransaction = executeNearTransaction;
     this.logger = logger;
 
-    this.solverBusRpc = "https://api.herewallet.app/api/v1/evm/intent-solver";
+    this.api = new OmniApi(api, mpcApi);
+    this.solverBusRpc = solverBusRpc ?? "https://api.herewallet.app/api/v1/evm/intent-solver";
     this.ton = new TonOmniService(this, tonApiKey);
     this.evm = new EvmOmniService(this, evmRpc);
     this.solana = new SolanaOmniService(this, solanaRpc);
@@ -124,7 +131,7 @@ class HotBridge {
       .catch(() => null);
 
     const ids = new Set<string>(data?.contract_ids.map((t: any) => toOmniIntent(Network.Near, t)));
-    const tokens = await OmniApi.shared.getBridgeTokens();
+    const tokens = await this.api.getBridgeTokens();
     Object.values(tokens.groups).forEach((t) => t.forEach((t) => ids.add(t)));
 
     const chunks = chunk(Array.from(ids), 200);
@@ -197,7 +204,7 @@ class HotBridge {
   async clearPendingWithdrawals(withdrawals: PendingWithdraw[]) {
     const tasks = withdrawals.map(async (withdraw) => {
       const receiver = encodeReceiver(withdraw.chain, withdraw.receiver);
-      const signature = await OmniApi.shared.clearWithdrawSign(withdraw.nonce, Buffer.from(baseDecode(receiver)));
+      const signature = await this.api.clearWithdrawSign(withdraw.nonce, Buffer.from(baseDecode(receiver)));
       return this.near.functionCall({
         methodName: "clear_completed_withdrawal",
         args: { nonce: withdraw.nonce, signature },
@@ -247,7 +254,7 @@ class HotBridge {
     const token = decodeTokenAddress(transfer.chain_id, transfer.contract_id);
 
     this.logger?.log("Signing withdraw");
-    const signature = await OmniApi.shared.withdrawSign(nonce);
+    const signature = await this.api.withdrawSign(nonce);
 
     return {
       chain: +transfer.chain_id,
@@ -271,7 +278,7 @@ class HotBridge {
     if (isExecuted) return null;
 
     this.logger?.log(`Signing deposit`);
-    const signature = await OmniApi.shared.depositSign(
+    const signature = await this.api.depositSign(
       deposit.chain,
       deposit.nonce,
       deposit.sender,
@@ -312,7 +319,7 @@ class HotBridge {
   }
 
   async getWithdrawFee(chain: Network, token: string): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
-    return await Api.shared.getWithdrawFee(chain, token);
+    return await this.api.getWithdrawFee(chain, token);
   }
 
   async buildWithdrawIntent(args: { chain: Network; token: string; amount: bigint; receiver: string; intentAccount: string }) {
@@ -345,7 +352,7 @@ class HotBridge {
   }
 
   async buildSwapExectInIntent(tokensFrom: Record<string, bigint>, tokenTo: string, amount: number) {
-    const quote = await Api.shared.getSwapQuoteExectIn(tokensFrom, tokenTo, amount);
+    const quote = await this.api.getSwapQuoteExectIn(tokensFrom, tokenTo, amount);
     // TODO: Add intents validations
 
     return {
@@ -360,7 +367,7 @@ class HotBridge {
   async buildSwapExectOutIntent(args: { chainFrom: Network; tokenFrom: string; chainTo: Network; tokenTo: string; amount: bigint }) {
     const from = toOmniIntent(args.chainFrom, args.tokenFrom);
     const to = toOmniIntent(args.chainTo, args.tokenTo);
-    const quote = await Api.shared.getSwapQuoteExectOut(from, to, args.amount);
+    const quote = await this.api.getSwapQuoteExectOut(from, to, args.amount);
 
     return {
       quote_hashes: quote.quote_hashes,
@@ -437,11 +444,22 @@ class HotBridge {
     intentAccount: string;
     signIntents: (intents: any[]) => Promise<any>;
   }) {
+    if (args.chain === Network.Near) throw new GaslessNotAvailable(args.chain);
+
+    // Clear previous withdrawals
+    const pendings = await this.getPendingWithdrawalsWithStatus(args.chain, args.receiver);
+    const completed = pendings.filter((t) => t.completed);
+    if (completed.length) await this.clearPendingWithdrawals(completed);
+    if (pendings.some((t) => !t.completed)) throw "Complete previous withdrawals before make new";
+
+    // Get gas price
     const { gasPrice } = await this.getWithdrawFee(args.chain, args.token).catch(() => ({ gasPrice: null }));
     if (gasPrice == null) throw new GaslessNotAvailable(args.chain);
+    this.logger?.log(`Gasless withdraw gas price: ${gasPrice}`);
 
+    // Swap part of input token to gas token
     let qoute;
-    if (gasPrice > 0n) {
+    if (gasPrice > 0n && args.token !== "native") {
       qoute = await this.buildSwapExectOutIntent({
         chainFrom: args.chain,
         tokenFrom: args.token,
@@ -449,6 +467,16 @@ class HotBridge {
         tokenTo: "native",
         amount: gasPrice,
       });
+
+      // Not enough input amount for gas covering
+      if (BigInt(qoute.amount_in) >= args.amount) {
+        throw new GaslessNotAvailable(args.chain);
+      }
+    }
+
+    // Not enough input amount for gas covering
+    if (args.token === "native" && args.amount <= gasPrice) {
+      throw new GaslessNotAvailable(args.chain);
     }
 
     const withdrawIntent = await this.buildGaslessWithdrawIntent({
@@ -464,6 +492,7 @@ class HotBridge {
     const signedIntents = await args.signIntents([qoute?.intent, withdrawIntent].filter((t) => t != null));
     const tx = await this.executeIntents([signedIntents], qoute?.quote_hashes || []);
     const nonce = await this.near.parseWithdrawalNonce(tx.hash, tx.sender);
+    this.logger?.log(`Gasless withdraw tx: ${tx.hash}, nonce: ${nonce}`);
 
     let attempts = 0;
     while (true) {
@@ -471,6 +500,8 @@ class HotBridge {
       await wait(2000);
 
       const status = await this.getGaslessWithdrawStatus(nonce);
+      this.logger?.log(`Gasless withdraw status: ${status}`);
+
       if (status?.startsWith("CANCELED")) throw new GaslessWithdrawCanceled(status, nonce, args.chain, args.receiver);
       if (status) return `0x${status}`;
       attempts += 1;

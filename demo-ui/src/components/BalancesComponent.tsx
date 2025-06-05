@@ -10,7 +10,6 @@ import {
   TokenAmount,
   LoadingContainer,
   ErrorMessage,
-  ChainImage,
   TokenImage,
 } from "../theme/styles";
 
@@ -36,9 +35,10 @@ const BalancesComponent = () => {
       {balances.map((balance) => (
         <TokenCard key={balance.address}>
           <TokenImage src={`https://storage.herewallet.app/ft/${balance.chain}:${balance.address}.png`} />
-          <ChainImage src={`https://storage.herewallet.app/ft/${balance.chain}:native.png`} />
           <div>
-            <TokenName>{balance.address}</TokenName>
+            <TokenName>
+              {balance.chain}:{balance.address}
+            </TokenName>
             <TokenAmount>{balance.amount}</TokenAmount>
           </div>
         </TokenCard>

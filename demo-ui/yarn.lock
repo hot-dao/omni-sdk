@@ -500,10 +500,10 @@
     "@emurgo/cardano-serialization-lib-browser" "^13.2.0"
     "@emurgo/cardano-serialization-lib-nodejs" "13.2.0"
 
-"@hot-labs/omni-sdk@^2.4.0":
-  version "2.4.0"
-  resolved "https://registry.yarnpkg.com/@hot-labs/omni-sdk/-/omni-sdk-2.4.0.tgz#417eb0f07266b873c360135e26d948072d2ec9f0"
-  integrity sha512-cg/ROSMvlsvKkfjAA4HGTcHU5Zs7EDm6I12H1JalCzOiTIM0ccv1FMfnvE8U4F4Ewi7XRo7dIOnjq7DufRLhlw==
+"@hot-labs/omni-sdk@^2.7.1":
+  version "2.7.1"
+  resolved "https://registry.yarnpkg.com/@hot-labs/omni-sdk/-/omni-sdk-2.7.1.tgz#f92901cfb81e31b70071cdaea1b3124e0fdf80d2"
+  integrity sha512-toV/IY1PqZMbICAUnjX2pF3uhyk9CecjVUXvJN8oga3AckT3O8+75fz5K26d3z+5Z1JFlZfvq7RgGxMrI0ZDPQ==
   dependencies:
     "@coral-xyz/anchor" "0.29.0"
     "@creit.tech/stellar-wallets-kit" "^1.7.3"

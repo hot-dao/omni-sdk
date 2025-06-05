@@ -21,7 +21,6 @@ import { omniEphemeralReceiver, parseAmount } from "../utils";
 import { PendingDeposit, PendingDepositWithIntent } from "../types";
 import { Network } from "../chains";
 import OmniService from "../bridge";
-import OmniApi from "../api";
 
 export const ACCOUNT_FOR_SIMULATE = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";
 export const CONTRACT = "CCLWL5NYSV2WJQ3VBU44AMDHEVKEPA45N2QP2LL62O3JVKPGWWAQUVAG";
@@ -42,8 +41,7 @@ class StellarService {
   }
 
   async buildDepositTx(sender: string, token: string, amount: bigint, intentAccount: Buffer) {
-    const ts = await OmniApi.shared.getTime();
-
+    const ts = await this.omni.api.getTime();
     const contractId = token === "native" ? new Asset("XLM").contractId(Networks.PUBLIC) : token;
     const call = new Contract(CONTRACT).call(
       "deposit",
