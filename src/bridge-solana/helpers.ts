@@ -7,13 +7,7 @@ export function findContractStateAddress(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], PROGRAM_ID);
 }
 
-export function findDepositAddress(
-  nonce: bigint,
-  sender: PublicKey,
-  receiver: Buffer,
-  mint: PublicKey,
-  amount: bigint
-): [PublicKey, number] {
+export function findDepositAddress(nonce: bigint, sender: PublicKey, receiver: Buffer, mint: PublicKey, amount: bigint): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [
       Buffer.from("deposit", "utf8"), //

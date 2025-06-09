@@ -50,7 +50,7 @@ export class JettonMinter implements Contract {
   }
 
   async getWalletCode(provider: ContractProvider) {
-    let stack = (await provider.get("get_jetton_data", [])).stack;
+    const stack = (await provider.get("get_jetton_data", [])).stack;
     stack.skip(4);
     return stack.readCell();
   }

@@ -1,16 +1,21 @@
 import { getBytes, hexlify } from "ethers";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import { Address as StellarAddress, xdr } from "@stellar/stellar-sdk";
+import { transactions } from "near-api-js";
 import { Address } from "@ton/core";
 import crypto from "crypto";
 
 import { bigintToBuffer, createAddressRlp, generateUserId, parseAddressRlp } from "./bridge-ton/constants";
-import { Network, chains } from "./chains";
+import { Network } from "./chains";
 
 export const OMNI_HOT_V2 = "v2_1.omni.hot.tg";
 export const INTENT_PREFIX = "nep245:v2_1.omni.hot.tg:";
 
 export const TGAS = 1000000000000n;
+
+export const functionCall = (args: { methodName: string; args: any; gas: string; deposit: string }) => {
+  return transactions.functionCall(args.methodName, JSON.parse(JSON.stringify(args.args, (_, v) => (typeof v === "bigint" ? v.toString() : v))), BigInt(args.gas), BigInt(args.deposit));
+};
 
 /**
  * Convert omni id  or intent id to native chain token id, example:
@@ -20,8 +25,15 @@ export const TGAS = 1000000000000n;
  */
 export const fromOmni = (id: string) => {
   id = id.split(":").pop() || id;
+
+  // TRON PoA bridge supported
+  if (id === "tron.omft.near") return `${Network.Tron}:native`;
+  if (id === "tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near") return `${Network.Tron}:TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`;
+
+  // Other PoA tokens only to NEAR
   if (id.startsWith("nep141:")) return `1010:${id.replace("nep141:", "")}`;
   if (!id.includes("_")) return `1010:${id}`;
+
   const [chain, encodedAddress] = id.split("_");
   return `${chain}:${decodeTokenAddress(+chain, encodedAddress)}`;
 };
@@ -37,6 +49,13 @@ export const toOmni = (id: string | number, addr?: string) => {
   if (id.toString().startsWith("nep141:")) return id.toString();
   if (id.toString().startsWith(INTENT_PREFIX)) return id.toString().replace(INTENT_PREFIX, "");
   const [chain, address] = addr ? [id, addr] : String(id).split(/:(.*)/s);
+
+  // PoA bridge tokens
+  if (+chain === Network.Tron && address === "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t") return `tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near`;
+  if (+chain === Network.Tron && address === "native") return `tron.omft.near`;
+  if (+chain === Network.Zcash && address === "native") return `zec.omft.near`;
+  if (+chain === Network.Btc && address === "native") return `btc.omft.near`;
+
   if (+chain === Network.Hot) return address.replace(INTENT_PREFIX, "");
   if (+chain === Network.Near) return address;
   return `${chain}_${encodeTokenAddress(+chain, address)}`;
@@ -48,10 +67,18 @@ export const toOmni = (id: string | number, addr?: string) => {
  * 1010:native -> nep141:wrap.near
  */
 export const toOmniIntent = (id: string | number, addr?: string): string => {
+  // eslint-disable-next-line prefer-const
   let [chain, address] = addr ? [id, addr] : String(id).split(/:(.*)/s);
   if (+chain === Network.Hot) return address;
   if (+chain === 1010 && address === "native") address = "wrap.near";
   if (+chain === 1010) return `nep141:${address}`;
+
+  // PoA bridge tokens
+  if (+chain === Network.Tron && address === "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t") return `nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near`;
+  if (+chain === Network.Tron && address === "native") return `nep141:tron.omft.near`;
+  if (+chain === Network.Zcash && address === "native") return `nep141:zec.omft.near`;
+  if (+chain === Network.Btc && address === "native") return `nep141:btc.omft.near`;
+
   return `${INTENT_PREFIX}${chain}_${encodeTokenAddress(+chain, address)}`;
 };
 
@@ -59,11 +86,6 @@ export const toOmniIntent = (id: string | number, addr?: string): string => {
  * Convert token address to unified omni address format (base58 encoded)
  */
 export const encodeTokenAddress = (chain: Network, addr: string) => {
-  if (chains.get(chain)?.isEvm) {
-    if (addr === "native") return "11111111111111111111";
-    return baseEncode(getBytes(addr));
-  }
-
   if (chain === Network.Solana) {
     if (addr === "native") return "11111111111111111111111111111111";
     return addr;
@@ -79,7 +101,13 @@ export const encodeTokenAddress = (chain: Network, addr: string) => {
     return baseEncode(StellarAddress.fromString(addr).toScVal().toXDR());
   }
 
-  return baseEncode(Buffer.from(addr, "utf8"));
+  if (chain === Network.Near) {
+    return baseEncode(Buffer.from(addr, "utf8"));
+  }
+
+  // EVM
+  if (addr === "native") return "11111111111111111111";
+  return baseEncode(getBytes(addr));
 };
 
 /**
@@ -93,11 +121,11 @@ export const decodeTokenAddress = (chain: Network, addr: string) => {
     if (addr === baseEncode(createAddressRlp())) return "native";
     if (addr === "111bzQBB5v7AhLyPMDwS8uJgQV24KaAPXtwyVWu2KXbbfQU6NXRCz") return "native";
 
+    if (chain === Network.Near) return Buffer.from(baseDecode(addr)).toString("utf8");
     if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(addr)))).toString();
     if (chain === Network.Ton) return parseAddressRlp(addr);
     if (chain === Network.Solana) return addr;
-    if (chains.get(chain)?.isEvm) return hexlify(baseDecode(addr));
-    return Buffer.from(baseDecode(addr)).toString("utf8");
+    return hexlify(baseDecode(addr));
   } catch {
     return "";
   }
@@ -116,24 +144,22 @@ export const omniEphemeralReceiver = (intentAccount: string) => {
 export const encodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Near) return address;
   if (chain === Network.Solana) return address;
-  if (chains.get(chain)?.isEvm) return baseEncode(getBytes(address));
   if (chain === Network.Stellar) return baseEncode(StellarAddress.fromString(address).toScVal().toXDR());
 
   if (chain === Network.Ton) {
-    const id = generateUserId(Address.parse(address), 0n);
+    const id = Address.isFriendly(address) ? generateUserId(Address.parse(address), 0n) : BigInt(address);
     return baseEncode(bigintToBuffer(id, 32));
   }
 
-  throw `Unsupported chain address ${chain}`;
+  return baseEncode(getBytes(address));
 };
 
 export const decodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Near) return address;
   if (chain === Network.Solana) return address;
-  if (chains.get(chain)?.isEvm) return hexlify(baseDecode(address));
   if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(address)))).toString();
   if (chain === Network.Ton) return BigInt("0x" + Buffer.from(baseDecode(address)).toString("hex")).toString();
-  throw `Unsupported chain address ${chain}`;
+  return hexlify(baseDecode(address));
 };
 
 export class Logger {

@@ -1,36 +1,43 @@
 export enum Network {
-  Hot = -4, // magic id
-  Tron = 999, // magic id
-  Solana = 1001, // magic id
-  Near = 1010, // magic id
-  Ton = 1111, // magic id
-  Stellar = 1100, // magic id
+  Omni_v1 = 0,
+  Hot = -4,
+  Zcash = -5,
+  Btc = -6,
 
   Eth = 1,
+  Tron = 999,
+  Solana = 1001,
+  Stellar = 1100,
+  Near = 1010,
   Polygon = 137,
   Arbitrum = 42161,
   Aurora = 1313161554,
+  Avalanche = 43114,
   Linea = 59144,
+  Xlayer = 196,
   Base = 8453,
+  Ton = 1111,
   Bnb = 56,
+  OpBnb = 204,
+  BnbTestnet = 97,
   Optimism = 10,
+  Scroll = 534352,
+  EbiChain = 98881,
+  Sei = 1329,
+  Blast = 81457,
+  Taiko = 167000,
+  Mantle = 5000,
+  Manta = 169,
   Kava = 2222,
+  ZkSync = 324,
+  Monad = 10143,
+  Metis = 1088,
+  Gnosis = 100,
+  Fantom = 250,
+  Cronos = 25,
+  Chiliz = 88888,
+  Moonbeam = 1284,
+  Ronin = 2020,
+  Lisk = 1135,
+  Sonic = 146,
 }
-
-export const chains = new Map<number, { symbol: string; decimal: number; isEvm: boolean }>([
-  [Network.Tron, { symbol: "TRX", decimal: 6, isEvm: false }],
-  [Network.Stellar, { symbol: "XLM", decimal: 7, isEvm: false }],
-  [Network.Solana, { symbol: "SOL", decimal: 9, isEvm: false }],
-  [Network.Near, { symbol: "NEAR", decimal: 24, isEvm: false }],
-  [Network.Ton, { symbol: "TON", decimal: 9, isEvm: false }],
-
-  [Network.Kava, { symbol: "KAVA", decimal: 18, isEvm: true }],
-  [Network.Base, { symbol: "ETH", decimal: 18, isEvm: true }],
-  [Network.Bnb, { symbol: "BNB", decimal: 18, isEvm: true }],
-  [Network.Polygon, { symbol: "POL", decimal: 18, isEvm: true }],
-  [Network.Arbitrum, { symbol: "ARB", decimal: 18, isEvm: true }],
-  [Network.Eth, { symbol: "ETH", decimal: 18, isEvm: true }],
-  [Network.Optimism, { symbol: "ETH", decimal: 18, isEvm: true }],
-  [Network.Linea, { symbol: "ETH", decimal: 18, isEvm: true }],
-  [Network.Aurora, { symbol: "ETH", decimal: 18, isEvm: true }],
-]);

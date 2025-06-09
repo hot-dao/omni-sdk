@@ -31,15 +31,7 @@ export class JettonWallet implements Contract {
     });
   }
 
-  async sendTransfer(
-    provider: ContractProvider,
-    via: Sender,
-    value: bigint,
-    forwardValue: bigint,
-    recipient: Address,
-    amount: bigint,
-    forwardPayload: Cell
-  ) {
+  async sendTransfer(provider: ContractProvider, via: Sender, value: bigint, forwardValue: bigint, recipient: Address, amount: bigint, forwardPayload: Cell) {
     await provider.internal(via, {
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: beginCell()
@@ -58,11 +50,9 @@ export class JettonWallet implements Contract {
   }
 
   async getJettonBalance(provider: ContractProvider) {
-    let state = await provider.getState();
-    if (state.state.type !== "active") {
-      return 0n;
-    }
-    let res = await provider.get("get_wallet_data", []);
+    const state = await provider.getState();
+    if (state.state.type !== "active") return 0n;
+    const res = await provider.get("get_wallet_data", []);
     return res.stack.readBigNumber();
   }
 }

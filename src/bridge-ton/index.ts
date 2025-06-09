@@ -7,7 +7,7 @@ import { Network } from "../chains";
 import { omniEphemeralReceiver, wait } from "../utils";
 import OmniService from "../bridge";
 
-import { PendingDepositWithIntent } from "../types";
+import { PendingDeposit, PendingDepositWithIntent, ReviewFee } from "../types";
 import { generateUserId, MIN_COMMISSION } from "./constants";
 import { JettonMinter } from "./wrappers/jetton/JettonMinter";
 import { JettonWallet } from "./wrappers/jetton/JettonWallet";
@@ -16,16 +16,44 @@ import { DepositJetton } from "./wrappers/DepositJetton";
 import { UserJetton } from "./wrappers/UserJetton";
 
 class TonOmniService {
-  tonApi: TonApiClient;
-  client: ContractAdapter;
+  readonly tonApi: TonApiClient;
+  readonly client: ContractAdapter;
 
-  constructor(readonly omni: OmniService, tonApiKey?: string) {
-    this.tonApi = new TonApiClient({ apiKey: tonApiKey });
+  constructor(readonly omni: OmniService, rpc?: TonApiClient | string) {
+    this.tonApi = rpc instanceof TonApiClient ? rpc : new TonApiClient({ apiKey: rpc });
     this.client = new ContractAdapter(this.tonApi);
   }
 
   get metaWallet() {
     return this.client.open(TonMetaWallet.createFromAddress(Address.parse("EQAbCbnq3QDZCN2qi3wu6pM6e1xrSHkCdtLLSqJnWDYRGhPV")));
+  }
+
+  async getWithdrawFee(receiver: string): Promise<ReviewFee> {
+    const userId = generateUserId(Address.parse(receiver), 0n);
+    const omniUser = await this.getUserJettonAddress(userId);
+    const lastNonce = await omniUser.getLastWithdrawnNonce().catch(() => null);
+    const additional = lastNonce ? 0n : toNano(0.05);
+    const needNative = toNano(0.05) + additional;
+    const realGas = toNano(0.025);
+
+    return { reserve: needNative, gasPrice: realGas, gasLimit: 1n, chain: Network.Ton, additional };
+  }
+
+  async getDepositFee(token: string): Promise<ReviewFee> {
+    const need = token === "native" ? toNano(0.05) : toNano(0.1);
+    return {
+      reserve: need,
+      gasPrice: need / 2n,
+      chain: Network.Ton,
+      gasLimit: 1n,
+    };
+  }
+
+  async getTokenLiquidity(token: string): Promise<bigint> {
+    const minter = this.client.open(JettonMinter.createFromAddress(Address.parse(token)));
+    const metaJettonWalletAddress = await minter.getWalletAddressOf(this.metaWallet.address);
+    const userJetton = this.client.open(JettonWallet.createFromAddress(metaJettonWalletAddress));
+    return await userJetton.getJettonBalance();
   }
 
   executor(sendTransaction: (tx: SenderArguments) => Promise<string>) {
@@ -53,7 +81,7 @@ class TonOmniService {
   }
 
   async isWithdrawUsed(nonce: string, receiver: string): Promise<boolean> {
-    const userId = Address.isAddress(receiver) ? generateUserId(Address.parse(receiver), 0n) : BigInt(receiver);
+    const userId = Address.isFriendly(receiver) ? generateUserId(Address.parse(receiver), 0n) : BigInt(receiver);
     const omniUser = await this.getUserJettonAddress(userId);
     const lastNonce = await omniUser.getLastWithdrawnNonce();
     return BigInt(nonce) <= BigInt(lastNonce.toString());
@@ -61,7 +89,7 @@ class TonOmniService {
 
   async isUserExists(userId: string): Promise<boolean> {
     const omniUser = await this.getUserJettonAddress(BigInt(userId));
-    let lastNonce = await omniUser.getLastWithdrawnNonce().catch(() => null);
+    const lastNonce = await omniUser.getLastWithdrawnNonce().catch(() => null);
     return lastNonce != null;
   }
 
@@ -83,7 +111,7 @@ class TonOmniService {
       return newNonce;
     };
 
-    let lastNonce = await omniUser.getLastWithdrawnNonce().catch(() => null);
+    const lastNonce = await omniUser.getLastWithdrawnNonce().catch(() => null);
     if (lastNonce != null) return;
 
     await this.metaWallet.sendCreateUser(this.executor(args.sendTransaction), {
@@ -96,16 +124,9 @@ class TonOmniService {
     await waitLastNonce();
   }
 
-  async withdraw(args: {
-    amount: bigint;
-    token: string;
-    signature: string;
-    nonce: string;
-    receiver: string;
-    sendTransaction: (tx: SenderArguments) => Promise<string>;
-  }) {
+  async withdraw(args: { amount: bigint; token: string; signature: string; nonce: string; receiver: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
     const omniUser = await this.getUserJettonAddress(BigInt(args.receiver));
-    let lastNonce = await omniUser.getLastWithdrawnNonce().catch(() => null);
+    const lastNonce = await omniUser.getLastWithdrawnNonce().catch(() => null);
     if (lastNonce == null) throw "Create user before initiate withdraw on TON";
     if (lastNonce >= BigInt(args.nonce)) throw "Withdraw nonce already used";
 
@@ -134,19 +155,12 @@ class TonOmniService {
     }
   }
 
-  async deposit(args: {
-    token: string;
-    amount: bigint;
-    getIntentAccount: () => Promise<string>;
-    getAddress: () => Promise<string>;
-    sendTransaction: (tx: SenderArguments) => Promise<string>;
-  }) {
-    const intentAccount = await args.getIntentAccount();
-    const receiver = omniEphemeralReceiver(intentAccount);
+  async deposit(args: { token: string; amount: bigint; intentAccount: string; sender: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
+    const receiver = omniEphemeralReceiver(args.intentAccount);
     const executor = this.executor(args.sendTransaction);
 
     if (args.token === "native") {
-      this.omni.logger?.log(`Depositing ${args.amount} TON to ${intentAccount}`);
+      this.omni.logger?.log(`Depositing ${args.amount} TON to ${args.intentAccount}`);
       await this.metaWallet.sendNativeDeposit(executor, {
         value: args.amount + toNano(0.05),
         receiver: receiver,
@@ -157,11 +171,11 @@ class TonOmniService {
 
     // deposit token
     else {
-      this.omni.logger?.log(`Depositing ${args.amount} ${args.token} to ${intentAccount}`);
+      this.omni.logger?.log(`Depositing ${args.amount} ${args.token} to ${args.intentAccount}`);
       const minter = this.client.open(JettonMinter.createFromAddress(Address.parse(args.token)));
 
       this.omni.logger?.log(`Getting wallet address of ${address}`);
-      const userJettonWalletAddress = await minter.getWalletAddressOf(Address.parse(await args.getAddress()));
+      const userJettonWalletAddress = await minter.getWalletAddressOf(Address.parse(args.sender));
 
       this.omni.logger?.log(`Sending transfer`);
       const userJetton = this.client.open(JettonWallet.createFromAddress(userJettonWalletAddress));
@@ -177,17 +191,16 @@ class TonOmniService {
     }
 
     if (!executor.hash) throw "Failed to send transaction";
-    const sender = await args.getAddress();
     const deposit: PendingDepositWithIntent = {
       chain: Network.Ton,
-      intentAccount,
+      intentAccount: args.intentAccount,
       receiver: baseEncode(receiver),
       timestamp: Date.now(),
       amount: String(args.amount),
-      tx: executor.hash,
+      sender: args.sender,
       token: args.token,
+      tx: executor.hash,
       nonce: "",
-      sender,
     };
 
     const waitParseDeposit = async (attemps = 0) => {
@@ -202,7 +215,8 @@ class TonOmniService {
     };
 
     this.omni.logger?.log(`Parsing deposit`);
-    return await waitParseDeposit();
+    const { nonce } = await waitParseDeposit();
+    return { ...deposit, nonce };
   }
 
   async clearDepositNonceIfNeeded(args: { nonce: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
@@ -214,7 +228,7 @@ class TonOmniService {
     await depositJetton.sendSelfDestruct(this.executor(args.sendTransaction), { value: MIN_COMMISSION });
   }
 
-  async parseDeposit(deposit: PendingDepositWithIntent): Promise<PendingDepositWithIntent> {
+  async parseDeposit(deposit: PendingDeposit): Promise<PendingDeposit> {
     if (deposit.nonce) return deposit;
 
     const events = await this.tonApi.events.getEvent(deposit.tx);

@@ -20,7 +20,7 @@ export function bigintToBuffer(bigInt: bigint, byteLength: number): Buffer {
 }
 
 export function crc32(str: string, crc = 0xffffffff) {
-  let bytes = Buffer.from(str);
+  const bytes = Buffer.from(str);
   if (crc32_table === undefined) {
     calcTable();
   }
@@ -97,7 +97,7 @@ export function createUserMsgHash(user_wallet: Address) {
 }
 
 export function generateUserId(address: Address, bump: bigint): bigint {
-  let hash = bufferToBigInt(createUserMsgHash(address));
+  const hash = bufferToBigInt(createUserMsgHash(address));
   return (hash % 2n ** 63n) + bump;
 }
 
