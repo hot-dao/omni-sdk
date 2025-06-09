@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Network, chains } from "@hot-labs/omni-sdk";
+import { Network } from "../../../src";
 
 import { useAvailableTokens } from "../hooks/tokens";
 import { useBridge } from "../hooks/bridge";
@@ -21,10 +21,8 @@ import {
 
 // Get available networks for the selector
 const availableNetworks = Object.entries(Network)
-  .filter(
-    ([key, value]) => value === 1010 || value === 1111 || (!isNaN(Number(value)) && chains.get(Number(value))?.isEvm)
-  )
-  .map(([key, value]) => ({ label: key, value: Number(value), disabled: !chains.has(Number(value)) }));
+  .filter(([key, value]) => value === 1010 || value === 1111 || !isNaN(Number(value)))
+  .map(([key, value]) => ({ label: key, value: Number(value) }));
 
 const WithdrawComponent = () => {
   const nearSigner = useNearWallet();
@@ -43,9 +41,8 @@ const WithdrawComponent = () => {
   const { tokens } = useAvailableTokens(network);
 
   useEffect(() => {
-    if (chains.get(network)?.isEvm) return setReceiver(evmSigner.address || "");
     if (network === Network.Near) return setReceiver(nearSigner.accountId || "");
-    setReceiver("");
+    setReceiver(evmSigner.address || "");
   }, [network]);
 
   const handleWithdraw = async () => {
@@ -61,7 +58,11 @@ const WithdrawComponent = () => {
       setSuccess(null);
 
       if (network === Network.Ton) {
-        await bridge.ton.createUserIfNeeded({ sendTransaction: tonSigner.sendTransaction, address: receiver });
+        await bridge.ton.createUserIfNeeded({
+          sendTransaction: tonSigner.sendTransaction,
+          address: receiver,
+          version: network,
+        });
       }
 
       const result = await bridge.withdrawToken({
@@ -75,11 +76,20 @@ const WithdrawComponent = () => {
 
       if (result) {
         if (result.chain === Network.Ton) {
-          await bridge.ton.withdraw({ sendTransaction: tonSigner.sendTransaction, ...result });
-        } else if (chains.get(result.chain)?.isEvm) {
-          await bridge.evm.withdraw({ sendTransaction: evmSigner.sendTransaction, ...result });
-        } else {
-          throw new Error("Finish withdraw unsupported for this network");
+          await bridge.ton.withdraw({
+            sendTransaction: tonSigner.sendTransaction,
+            refundAddress: tonSigner.address!,
+            version: Network.Ton,
+            ...result,
+          });
+        }
+
+        // EVM
+        else {
+          await bridge.evm.withdraw({
+            sendTransaction: evmSigner.sendTransaction,
+            ...result,
+          });
         }
       }
 
@@ -108,7 +118,7 @@ const WithdrawComponent = () => {
               Select Network
             </option>
             {availableNetworks.map((network) => (
-              <option key={network.value} value={network.value} disabled={network.disabled}>
+              <option key={network.value} value={network.value}>
                 {network.label}
               </option>
             ))}

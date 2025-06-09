@@ -1,7 +1,7 @@
-import { utils } from "@hot-labs/omni-sdk";
 import { useState, useEffect } from "react";
 import { uniq } from "lodash";
 
+import { utils } from "../../../src";
 import { bridge } from "./bridge";
 
 let tokens: { chain: number; address: string }[] = [];

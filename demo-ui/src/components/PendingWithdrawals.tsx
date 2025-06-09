@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Network, PendingWithdraw, chains } from "@hot-labs/omni-sdk";
+import { Network, PendingWithdraw } from "../../../src";
 
 import {
   Card,
@@ -41,7 +41,7 @@ const PendingWithdrawalsComponent = () => {
   // Get available networks for the selector
   const availableNetworks = Object.entries(Network)
     .filter(([key, value]) => !isNaN(Number(value)))
-    .map(([key, value]) => ({ label: key, value: Number(value), disabled: !chains.has(Number(value)) }));
+    .map(([key, value]) => ({ label: key, value: Number(value) }));
 
   const fetchPendingWithdrawals = async () => {
     if (!nearWallet.accountId) return setError("Wallet not connected. Please connect your wallet first.");
@@ -68,12 +68,19 @@ const PendingWithdrawalsComponent = () => {
     try {
       // Get withdrawal data using buildWithdraw
       const withdrawData = await bridge.buildWithdraw(withdraw.nonce);
-      if (chains.get(withdrawData.chain)?.isEvm) {
-        await bridge.evm.withdraw({ ...withdrawData, sendTransaction: evmWallet.sendTransaction });
-      } else if (withdrawData.chain === Network.Ton) {
-        await bridge.ton.withdraw({ ...withdrawData, sendTransaction: tonWallet.sendTransaction });
+
+      if (withdrawData.chain === Network.Ton) {
+        await bridge.ton.withdraw({
+          sendTransaction: tonWallet.sendTransaction,
+          refundAddress: tonWallet.address!,
+          version: Network.Ton,
+          ...withdrawData,
+        });
       } else {
-        throw new Error("Finishing withdrawal is only supported for EVM chains at this time");
+        await bridge.evm.withdraw({
+          sendTransaction: evmWallet.sendTransaction,
+          ...withdrawData,
+        });
       }
 
       setPendingWithdraw((prev) => prev.filter((item) => item.nonce !== withdraw.nonce));
@@ -108,7 +115,7 @@ const PendingWithdrawalsComponent = () => {
           </option>
 
           {availableNetworks.map((network) => (
-            <option key={network.value} value={network.value} disabled={network.disabled}>
+            <option key={network.value} value={network.value}>
               {network.label}
             </option>
           ))}

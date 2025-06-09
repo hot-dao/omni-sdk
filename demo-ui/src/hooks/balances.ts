@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { utils } from "@hot-labs/omni-sdk";
+import { utils } from "../../../src";
 import { useBridge } from "./bridge";
 
 export const useIntentBalances = (accountId?: string) => {

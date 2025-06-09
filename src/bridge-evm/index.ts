@@ -3,8 +3,7 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 
 import { ERC20_ABI, OMNI_ABI, OMNI_CONTRACT, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
 import { encodeTokenAddress, omniEphemeralReceiver, wait } from "../utils";
-import { PendingDeposit, PendingDepositWithIntent, ReviewFee } from "../types";
-import { Network } from "../chains";
+import { Network, PendingDeposit, PendingDepositWithIntent, ReviewFee } from "../types";
 import OmniService from "../bridge";
 
 const getProvider =

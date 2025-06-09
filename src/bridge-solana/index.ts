@@ -4,9 +4,8 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, getAccount } from "@solana/spl-token";
 
 import OmniService from "../bridge";
-import { PendingDeposit, PendingDepositWithIntent, ReviewFee } from "../types";
+import { Network, PendingDeposit, PendingDepositWithIntent, ReviewFee } from "../types";
 import { omniEphemeralReceiver, parseAmount, wait } from "../utils";
-import { Network } from "../chains";
 
 import AdvancedConnection from "./provider";
 import { findDepositAddress, PROGRAM_ID } from "./helpers";

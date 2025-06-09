@@ -6,7 +6,7 @@ import { Address } from "@ton/core";
 import crypto from "crypto";
 
 import { bigintToBuffer, createAddressRlp, generateUserId, parseAddressRlp } from "./bridge-ton/constants";
-import { Network } from "./chains";
+import { Network, TonVersion } from "./types";
 
 export const OMNI_HOT_V2 = "v2_1.omni.hot.tg";
 export const INTENT_PREFIX = "nep245:v2_1.omni.hot.tg:";
@@ -15,6 +15,10 @@ export const TGAS = 1000000000000n;
 
 export const functionCall = (args: { methodName: string; args: any; gas: string; deposit: string }) => {
   return transactions.functionCall(args.methodName, JSON.parse(JSON.stringify(args.args, (_, v) => (typeof v === "bigint" ? v.toString() : v))), BigInt(args.gas), BigInt(args.deposit));
+};
+
+export const isTon = (id: number): id is TonVersion => {
+  return id === Network.Ton || id === Network.LegacyTon;
 };
 
 /**
@@ -34,7 +38,7 @@ export const fromOmni = (id: string) => {
   if (id.startsWith("nep141:")) return `1010:${id.replace("nep141:", "")}`;
   if (!id.includes("_")) return `1010:${id}`;
 
-  const [chain, encodedAddress] = id.split("_");
+  let [chain, encodedAddress] = id.split("_");
   return `${chain}:${decodeTokenAddress(+chain, encodedAddress)}`;
 };
 
@@ -48,7 +52,7 @@ export const fromOmni = (id: string) => {
 export const toOmni = (id: string | number, addr?: string) => {
   if (id.toString().startsWith("nep141:")) return id.toString();
   if (id.toString().startsWith(INTENT_PREFIX)) return id.toString().replace(INTENT_PREFIX, "");
-  const [chain, address] = addr ? [id, addr] : String(id).split(/:(.*)/s);
+  let [chain, address] = addr ? [id, addr] : String(id).split(/:(.*)/s);
 
   // PoA bridge tokens
   if (+chain === Network.Tron && address === "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t") return `tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near`;
@@ -58,6 +62,7 @@ export const toOmni = (id: string | number, addr?: string) => {
 
   if (+chain === Network.Hot) return address.replace(INTENT_PREFIX, "");
   if (+chain === Network.Near) return address;
+
   return `${chain}_${encodeTokenAddress(+chain, address)}`;
 };
 
@@ -91,7 +96,7 @@ export const encodeTokenAddress = (chain: Network, addr: string) => {
     return addr;
   }
 
-  if (chain === Network.Ton) {
+  if (isTon(chain)) {
     if (addr === "native") return baseEncode(createAddressRlp());
     return baseEncode(createAddressRlp(Address.parse(addr)));
   }
@@ -121,9 +126,9 @@ export const decodeTokenAddress = (chain: Network, addr: string) => {
     if (addr === baseEncode(createAddressRlp())) return "native";
     if (addr === "111bzQBB5v7AhLyPMDwS8uJgQV24KaAPXtwyVWu2KXbbfQU6NXRCz") return "native";
 
+    if (isTon(chain)) return parseAddressRlp(addr);
     if (chain === Network.Near) return Buffer.from(baseDecode(addr)).toString("utf8");
     if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(addr)))).toString();
-    if (chain === Network.Ton) return parseAddressRlp(addr);
     if (chain === Network.Solana) return addr;
     return hexlify(baseDecode(addr));
   } catch {
@@ -146,7 +151,7 @@ export const encodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Solana) return address;
   if (chain === Network.Stellar) return baseEncode(StellarAddress.fromString(address).toScVal().toXDR());
 
-  if (chain === Network.Ton) {
+  if (isTon(+chain)) {
     const id = Address.isFriendly(address) ? generateUserId(Address.parse(address), 0n) : BigInt(address);
     return baseEncode(bigintToBuffer(id, 32));
   }
@@ -158,7 +163,7 @@ export const decodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Near) return address;
   if (chain === Network.Solana) return address;
   if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(address)))).toString();
-  if (chain === Network.Ton) return BigInt("0x" + Buffer.from(baseDecode(address)).toString("hex")).toString();
+  if (isTon(chain)) return BigInt("0x" + Buffer.from(baseDecode(address)).toString("hex")).toString();
   return hexlify(baseDecode(address));
 };
 

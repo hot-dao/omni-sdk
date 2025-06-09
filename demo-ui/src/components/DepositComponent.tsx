@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Network, chains } from "@hot-labs/omni-sdk";
+import { Network } from "../../../src";
 
 import {
   Card,
@@ -21,10 +21,8 @@ import { useTonWallet } from "../hooks/ton";
 
 // Get available networks for the selector
 const availableNetworks = Object.entries(Network)
-  .filter(
-    ([key, value]) => value === 1010 || value === 1111 || (!isNaN(Number(value)) && chains.get(Number(value))?.isEvm)
-  )
-  .map(([key, value]) => ({ label: key, value: Number(value), disabled: !chains.has(Number(value)) }));
+  .filter(([key, value]) => value === 1010 || value === 1111 || !isNaN(Number(value)))
+  .map(([key, value]) => ({ label: key, value: Number(value) }));
 
 const DepositComponent = () => {
   const nearSigner = useNearWallet();
@@ -51,24 +49,10 @@ const DepositComponent = () => {
       setError(null);
       setSuccess(null);
 
-      if (chains.get(network)?.isEvm) {
-        if (evmSigner == null) throw "Connect EVM to deposit";
-        const deposit = await bridge.evm.deposit({
-          getAddress: async () => evmSigner.address!,
-          getIntentAccount: async () => nearSigner.intentAccount!,
-          sendTransaction: evmSigner.sendTransaction,
-          amount: BigInt(amount),
-          chain: network,
-          token: token,
-        });
-
-        await bridge.finishDeposit(deposit);
-      }
-
       if (network === Network.Ton) {
         const deposit = await bridge.ton.deposit({
-          getAddress: async () => tonSigner.address!,
-          getIntentAccount: async () => nearSigner.intentAccount!,
+          sender: tonSigner.address!,
+          intentAccount: nearSigner.intentAccount!,
           sendTransaction: tonSigner.sendTransaction,
           amount: BigInt(amount),
           token: token,
@@ -77,14 +61,30 @@ const DepositComponent = () => {
         await bridge.finishDeposit(deposit);
       }
 
-      if (network === Network.Near) {
+      // Near
+      else if (network === Network.Near) {
         await bridge.near.depositToken({
-          getAddress: async () => nearSigner.accountId!,
-          getIntentAccount: async () => nearSigner.intentAccount!,
+          sender: nearSigner.accountId!,
+          intentAccount: nearSigner.intentAccount!,
           sendTransaction: nearSigner.sendTransaction,
           amount: BigInt(amount),
           token: token,
         });
+      }
+
+      // EVM
+      else {
+        if (evmSigner == null) throw "Connect EVM to deposit";
+        const deposit = await bridge.evm.deposit({
+          sender: evmSigner.address!,
+          intentAccount: nearSigner.intentAccount!,
+          sendTransaction: evmSigner.sendTransaction,
+          amount: BigInt(amount),
+          chain: network,
+          token: token,
+        });
+
+        await bridge.finishDeposit(deposit);
       }
 
       setSuccess(`Successfully deposited ${amount} of ${token}`);
@@ -117,7 +117,7 @@ const DepositComponent = () => {
               Select Network
             </option>
             {availableNetworks.map((network) => (
-              <option key={network.value} value={network.value} disabled={network.disabled}>
+              <option key={network.value} value={network.value}>
                 {network.label}
               </option>
             ))}

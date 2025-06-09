@@ -4,8 +4,7 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import BigNumber from "bignumber.js";
 
 import { omniEphemeralReceiver, parseAmount } from "../utils";
-import { PendingDeposit, PendingDepositWithIntent, ReviewFee } from "../types";
-import { Network } from "../chains";
+import { Network, PendingDeposit, PendingDepositWithIntent, ReviewFee } from "../types";
 import OmniService from "../bridge";
 
 export const ACCOUNT_FOR_SIMULATE = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";

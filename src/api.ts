@@ -1,7 +1,7 @@
 import RLP from "rlp";
 import crypto from "crypto";
 import { baseEncode } from "@near-js/utils";
-import { Network } from "./chains";
+import { Network } from "./types";
 
 class OmniApi {
   constructor(readonly api: string = "https://api0.herewallet.app", readonly mpcApi: string[] = ["https://rpc1.hotdao.ai", "https://rpc2.hotdao.ai"]) {}
