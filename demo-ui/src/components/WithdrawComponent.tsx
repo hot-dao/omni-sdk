@@ -57,14 +57,6 @@ const WithdrawComponent = () => {
       setError(null);
       setSuccess(null);
 
-      if (network === Network.Ton) {
-        await bridge.ton.createUserIfNeeded({
-          sendTransaction: tonSigner.sendTransaction,
-          address: receiver,
-          version: network,
-        });
-      }
-
       const result = await bridge.withdrawToken({
         signIntents: nearSigner.signIntents,
         intentAccount: nearSigner.intentAccount!,
@@ -79,7 +71,6 @@ const WithdrawComponent = () => {
           await bridge.ton.withdraw({
             sendTransaction: tonSigner.sendTransaction,
             refundAddress: tonSigner.address!,
-            version: Network.Ton,
             ...result,
           });
         }

@@ -1,9 +1,9 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Dictionary, Sender, SendMode, TupleItemInt } from "@ton/core";
-import { OpCode } from "../constants";
+import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Dictionary, Sender, SendMode, TupleItemInt, TupleItemSlice } from "@ton/core";
+import { OpCode } from "./constants";
 
 export type TonMetaWalletConfig = {
   ownerAddress: Address;
-  chainId: number;
+  chainId: bigint;
   verifyingAddress: Buffer;
   depositJettonCode: Cell;
   userJettonCode: Cell;
@@ -14,11 +14,10 @@ export function tonMetaWalletConfigToCell(config: TonMetaWalletConfig): Cell {
 
   return beginCell()
     .storeAddress(config.ownerAddress)
-    .storeUint(config.chainId, 16)
+    .storeUint(config.chainId, 64)
     .storeRef(verifierCell)
     .storeRef(config.depositJettonCode)
     .storeRef(config.userJettonCode)
-    .storeDict(Dictionary.empty(Dictionary.Keys.Address(), Dictionary.Values.Address()))
     .storeCoins(0)
     .storeCoins(0)
     .endCell();
@@ -53,24 +52,6 @@ export class TonMetaWallet implements Contract {
     });
   }
 
-  async sendCreateUser(
-    provider: ContractProvider,
-    via: Sender,
-    opts: {
-      queryId: bigint;
-      userId: bigint;
-      bump: bigint;
-      userWalletAddress: Address;
-      value: bigint;
-    }
-  ) {
-    await provider.internal(via, {
-      value: opts.value,
-      sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: beginCell().storeUint(OpCode.createUser, 32).storeUint(opts.queryId, 64).storeUint(opts.userId, 64).storeUint(opts.bump, 8).storeAddress(opts.userWalletAddress).endCell(),
-    });
-  }
-
   async sendNativeDeposit(
     provider: ContractProvider,
     via: Sender,
@@ -86,6 +67,61 @@ export class TonMetaWallet implements Contract {
       value: opts.value,
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: beginCell().storeUint(OpCode.nativeDeposit, 32).storeUint(opts.queryId, 64).storeBuffer(opts.receiver).storeCoins(opts.amount).storeAddress(opts.excessAcc).endCell(),
+    });
+  }
+
+  async sendUserNativeWithdraw(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      nonce: bigint;
+      amount: bigint;
+      userWallet: Address;
+      receiver: Address;
+      signature: Buffer;
+      excessAcc: Address;
+      value: bigint;
+    }
+  ) {
+    const signatureCell = beginCell().storeBuffer(opts.signature).endCell();
+    const addrCell = beginCell().storeAddress(opts.userWallet).storeAddress(opts.receiver).storeAddress(opts.excessAcc).endCell();
+
+    await provider.internal(via, {
+      value: opts.value,
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell().storeUint(OpCode.userNativeWithdraw, 32).storeUint(0, 64).storeUint(opts.nonce, 128).storeCoins(opts.amount).storeRef(signatureCell).storeRef(addrCell).endCell(),
+    });
+  }
+
+  async sendUserTokenWithdraw(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      nonce: bigint;
+      token: Address;
+      amount: bigint;
+      receiver: Address;
+      userWallet: Address;
+      signature: Buffer;
+      excessAcc: Address;
+      value: bigint;
+    }
+  ) {
+    const signatureCell = beginCell().storeBuffer(opts.signature).endCell();
+    const addrCell = beginCell().storeAddress(opts.userWallet).storeAddress(opts.receiver).storeAddress(opts.excessAcc).endCell();
+
+    await provider.internal(via, {
+      value: opts.value,
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell()
+        .storeUint(OpCode.userTokenWithdraw, 32)
+        .storeUint(0, 64)
+        .storeUint(opts.nonce, 128)
+        .storeCoins(opts.amount)
+        .storeRef(signatureCell)
+        .storeRef(addrCell)
+        .storeAddress(opts.token)
+        .endCell(),
     });
   }
 
@@ -143,13 +179,13 @@ export class TonMetaWallet implements Contract {
     via: Sender,
     opts: {
       value: bigint;
-      chainId: number;
+      chainId: bigint;
     }
   ) {
     await provider.internal(via, {
       value: opts.value,
       sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: beginCell().storeUint(OpCode.changeChainId, 32).storeInt(opts.chainId, 16).endCell(),
+      body: beginCell().storeUint(OpCode.changeChainId, 32).storeInt(opts.chainId, 64).endCell(),
     });
   }
 
@@ -178,37 +214,6 @@ export class TonMetaWallet implements Contract {
     });
   }
 
-  async sendAddToken(
-    provider: ContractProvider,
-    via: Sender,
-    opts: {
-      value: bigint;
-      tokenAddress: Address;
-      jettonWallet: Address;
-    }
-  ) {
-    await provider.internal(via, {
-      value: opts.value,
-      sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: beginCell().storeUint(OpCode.addToken, 32).storeAddress(opts.tokenAddress).storeAddress(opts.jettonWallet).endCell(),
-    });
-  }
-
-  async sendRemoveToken(
-    provider: ContractProvider,
-    via: Sender,
-    opts: {
-      value: bigint;
-      jettonWallet: Address;
-    }
-  ) {
-    await provider.internal(via, {
-      value: opts.value,
-      sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: beginCell().storeUint(OpCode.removeToken, 32).storeAddress(opts.jettonWallet).endCell(),
-    });
-  }
-
   async sendSelfDestruct(provider: ContractProvider, via: Sender, opts: { value: bigint }) {
     await provider.internal(via, {
       value: opts.value,
@@ -222,8 +227,8 @@ export class TonMetaWallet implements Contract {
     return result.stack.readAddress();
   }
 
-  async getUserJettonAddress(provider: ContractProvider, userId: bigint): Promise<Address> {
-    const result = await provider.get("get_user_jetton_address", [{ type: "int", value: userId } as TupleItemInt]);
+  async getUserJettonAddress(provider: ContractProvider, userWallet: Address): Promise<Address> {
+    const result = await provider.get("get_user_jetton_address", [{ type: "slice", cell: beginCell().storeAddress(userWallet).endCell() } as TupleItemSlice]);
     return result.stack.readAddress();
   }
 
@@ -250,9 +255,9 @@ export class TonMetaWallet implements Contract {
     return result.stack.readCellOpt()?.beginParse().loadDictDirect(Dictionary.Keys.Address(), Dictionary.Values.Address());
   }
 
-  async getChainId(provider: ContractProvider): Promise<number> {
+  async getChainId(provider: ContractProvider): Promise<bigint> {
     const result = await provider.get("get_chain_id", []);
-    return result.stack.readNumber();
+    return result.stack.readBigNumber();
   }
 
   async getMaxNonce(provider: ContractProvider): Promise<bigint> {
@@ -273,7 +278,6 @@ export class TonMetaWallet implements Contract {
     const verifyingAddress = res.stack.readBuffer();
     const depositJettonCode = res.stack.readCell();
     const userJettonCode = res.stack.readCell();
-    const tokens = res.stack.readCellOpt()?.beginParse().loadDictDirect(Dictionary.Keys.Address(), Dictionary.Values.Address());
     const maxNonce = res.stack.readBigNumber();
     const lastGeneratedNonce = res.stack.readBigNumber();
 
@@ -283,7 +287,6 @@ export class TonMetaWallet implements Contract {
       verifyingAddress,
       depositJettonCode,
       userJettonCode,
-      tokens,
       maxNonce,
       lastGeneratedNonce,
     };

@@ -73,7 +73,6 @@ const PendingWithdrawalsComponent = () => {
         await bridge.ton.withdraw({
           sendTransaction: tonWallet.sendTransaction,
           refundAddress: tonWallet.address!,
-          version: Network.Ton,
           ...withdrawData,
         });
       } else {

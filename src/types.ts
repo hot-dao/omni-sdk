@@ -83,15 +83,6 @@ export interface PendingDeposit {
   tx: string;
 }
 
-export interface ReviewFee {
-  chain: number;
-  gasPrice: bigint;
-  gasLimit: bigint;
-  additional?: bigint;
-  reserve: bigint;
-  token?: string;
-}
-
 export interface PendingWithdrawWithStatus extends PendingWithdraw {
   completed: boolean;
 }

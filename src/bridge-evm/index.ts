@@ -3,8 +3,9 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 
 import { ERC20_ABI, OMNI_ABI, OMNI_CONTRACT, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
 import { encodeTokenAddress, omniEphemeralReceiver, wait } from "../utils";
-import { Network, PendingDeposit, PendingDepositWithIntent, ReviewFee } from "../types";
+import { Network, PendingDeposit, PendingDepositWithIntent } from "../types";
 import OmniService from "../bridge";
+import { ReviewFee } from "../fee";
 
 const getProvider =
   (rpcs: Record<number, string[]>) =>
@@ -22,22 +23,21 @@ class EvmOmniService {
     this.getProvider = typeof rpcs === "function" ? rpcs : getProvider(rpcs || {});
   }
 
-  async getGasPrice(chain: number) {
-    const gasPrice = await this.getProvider(chain).getFeeData();
-    return gasPrice.gasPrice || gasPrice.maxFeePerGas || 0n;
+  async getGasPrice(chain: number): Promise<ReviewFee> {
+    const feeData = await this.getProvider(chain).getFeeData();
+    return ReviewFee.fromFeeData(feeData, chain);
   }
 
   // TODO: Compute gas dinamically
   async getWithdrawFee(chain: number): Promise<ReviewFee> {
-    const gasPrice = await this.getGasPrice(chain);
-    const needNative = gasPrice * 400_000n;
-    return { reserve: needNative, gasPrice, gasLimit: 200_000n, additional: 0n, chain };
+    const fee = await this.getGasPrice(chain);
+    return fee.changeGasLimit(200_000n);
   }
 
   async getDepositFee(chain: number, address: string, amount: bigint, sender: string): Promise<ReviewFee> {
-    const gasPrice = await this.getGasPrice(chain);
+    const fee = await this.getGasPrice(chain);
     const gasLimit = await this.depositEstimateGas(chain, address, amount, sender);
-    return { reserve: gasPrice * gasLimit, chain, gasLimit, gasPrice };
+    return fee.changeGasLimit(gasLimit);
   }
 
   async approveTokenEstimate(args: { chain: number; sender: string; token: string; allowed: string; need: bigint }) {

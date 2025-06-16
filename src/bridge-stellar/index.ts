@@ -4,8 +4,9 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import BigNumber from "bignumber.js";
 
 import { omniEphemeralReceiver, parseAmount } from "../utils";
-import { Network, PendingDeposit, PendingDepositWithIntent, ReviewFee } from "../types";
+import { Network, PendingDeposit, PendingDepositWithIntent } from "../types";
 import OmniService from "../bridge";
+import { ReviewFee } from "../fee";
 
 export const ACCOUNT_FOR_SIMULATE = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";
 export const CONTRACT = "CCLWL5NYSV2WJQ3VBU44AMDHEVKEPA45N2QP2LL62O3JVKPGWWAQUVAG";
@@ -21,14 +22,14 @@ class StellarService {
   async getWithdrawFee(): Promise<ReviewFee> {
     const needNative = 0n; // BigInt(parseAmount(0.15, 7));
     const realGas = 0n; // BigInt(parseAmount(0.1, 7));
-    return { reserve: needNative, gasPrice: realGas, gasLimit: 0n, chain: Network.Stellar };
+    return new ReviewFee({ reserve: needNative, baseFee: realGas, chain: Network.Stellar });
   }
 
   async getDepositFee(sender: string, token: string, amount: bigint, intentAccount: string): Promise<ReviewFee> {
     const receiver = omniEphemeralReceiver(intentAccount);
     const { tx } = await this.buildDepositTx(sender, token, 1n, receiver);
     const fee = BigInt(tx.fee);
-    return { reserve: fee, gasPrice: fee, gasLimit: 1n, chain: Network.Stellar };
+    return new ReviewFee({ reserve: fee, baseFee: fee, chain: Network.Stellar });
   }
 
   async isWithdrawUsed(nonce: string) {

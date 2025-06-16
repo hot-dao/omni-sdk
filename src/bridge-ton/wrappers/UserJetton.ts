@@ -1,5 +1,5 @@
 import { Address, beginCell, Cell, Contract, ContractProvider, Sender, SendMode } from "@ton/core";
-import { OpCode } from "../constants";
+import { OpCode } from "./constants";
 
 export class UserJetton implements Contract {
   constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) {}
@@ -30,54 +30,6 @@ export class UserJetton implements Contract {
     });
   }
 
-  async sendUserNativeWithdraw(
-    provider: ContractProvider,
-    via: Sender,
-    opts: {
-      nonce: bigint;
-      amount: bigint;
-      signature: Buffer;
-      excessAcc: Address;
-      value: bigint;
-    }
-  ) {
-    const signatureCell = beginCell().storeBuffer(opts.signature).endCell();
-
-    await provider.internal(via, {
-      value: opts.value,
-      sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: beginCell().storeUint(OpCode.userNativeWithdraw, 32).storeUint(opts.nonce, 128).storeCoins(opts.amount).storeRef(signatureCell).storeAddress(opts.excessAcc).endCell(),
-    });
-  }
-
-  async sendUserTokenWithdraw(
-    provider: ContractProvider,
-    via: Sender,
-    opts: {
-      nonce: bigint;
-      token: Address;
-      amount: bigint;
-      signature: Buffer;
-      excessAcc: Address;
-      value: bigint;
-    }
-  ) {
-    const signatureCell = beginCell().storeBuffer(opts.signature).endCell();
-
-    await provider.internal(via, {
-      value: opts.value,
-      sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: beginCell()
-        .storeUint(OpCode.userTokenWithdraw, 32)
-        .storeUint(opts.nonce, 128)
-        .storeCoins(opts.amount)
-        .storeAddress(opts.token)
-        .storeRef(signatureCell)
-        .storeAddress(opts.excessAcc)
-        .endCell(),
-    });
-  }
-
   async getBalance(provider: ContractProvider): Promise<bigint> {
     const result = await provider.get("get_smc_balance", []);
 
@@ -86,12 +38,6 @@ export class UserJetton implements Contract {
 
   async getMetaWalletAddress(provider: ContractProvider): Promise<Address> {
     const result = await provider.get("get_meta_wallet_address", []);
-
-    return result.stack.readAddress();
-  }
-
-  async getUserWalletAddress(provider: ContractProvider): Promise<Address> {
-    const result = await provider.get("get_user_wallet_address", []);
 
     return result.stack.readAddress();
   }
@@ -106,18 +52,14 @@ export class UserJetton implements Contract {
     const res = await provider.get("get_user_data", []);
 
     const metaWalletAddress = res.stack.readAddress();
-    const userId = res.stack.readBigNumber();
-    const userWalletAddress = res.stack.readAddress();
+    const userWallet = res.stack.readAddress();
     const lastWithdrawnNonce = res.stack.readBigNumber();
-    const prevWithdrawnNonce = res.stack.readBigNumber();
     const userJettonCode = res.stack.readCell();
 
     return {
       metaWalletAddress,
-      userId,
-      userWalletAddress,
+      userWallet,
       lastWithdrawnNonce,
-      prevWithdrawnNonce,
       userJettonCode,
     };
   }

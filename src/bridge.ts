@@ -4,15 +4,16 @@ import { Action } from "near-api-js/lib/transaction";
 import { Connection } from "@solana/web3.js";
 import { rpc } from "@stellar/stellar-sdk";
 import { TonApiClient } from "@ton-api/client";
-import ethers from "ethers";
+import * as ethers from "ethers";
 
 import { Logger, TGAS, OMNI_HOT_V2, toOmniIntent, encodeReceiver, encodeTokenAddress, decodeTokenAddress, decodeReceiver, wait, toOmni, functionCall, isTon } from "./utils";
-import { BuildedWithdraw, Network, PendingDepositWithIntent, PendingWithdraw, TonVersion } from "./types";
+import { BuildedWithdraw, Network, PendingDepositWithIntent, PendingWithdraw } from "./types";
 import OmniApi from "./api";
 
 import SolanaOmniService from "./bridge-solana";
 import StellarService from "./bridge-stellar";
 import EvmOmniService from "./bridge-evm";
+import TonLegacyOmniService from "./bridge-ton-v1";
 import TonOmniService from "./bridge-ton";
 import NearBridge from "./bridge-near";
 
@@ -59,6 +60,7 @@ class HotBridge {
 
   stellar: StellarService;
   solana: SolanaOmniService;
+  legacyTon: TonLegacyOmniService;
   ton: TonOmniService;
   evm: EvmOmniService;
   near: NearBridge;
@@ -69,11 +71,12 @@ class HotBridge {
     this.logger = options.logger;
 
     this.api = new OmniApi(options.api, options.mpcApi);
-    this.solverBusRpc = options.solverBusRpc ?? "https://api.herewallet.app/api/v1/evm/intent-solver";
+    this.evm = new EvmOmniService(this, options.evmRpc, { enableApproveMax: options.enableApproveMax });
+    this.solverBusRpc = options.solverBusRpc ?? "https://api0.herewallet.app/api/v1/evm/intent-solver";
     this.solana = new SolanaOmniService(this, options.solanaRpc);
     this.stellar = new StellarService(this, options.stellarRpc);
+    this.legacyTon = new TonLegacyOmniService(this, options.tonRpc);
     this.ton = new TonOmniService(this, options.tonRpc);
-    this.evm = new EvmOmniService(this, options.evmRpc, { enableApproveMax: options.enableApproveMax });
     this.near = new NearBridge(this, options.nearRpc);
   }
 
@@ -119,9 +122,10 @@ class HotBridge {
   getContractReceiver(chain: number) {
     if (chain === Network.Tron) return "";
     if (chain === Network.Near) return OMNI_HOT_V2;
-    if (chain === Network.Stellar) return "CDP4UWXJAGZRZNNDRTQRG23N56SM5BU6AFTKQLNAUUXSEHU5XYFYPP4I";
     if (chain === Network.Solana) return "5bG1Kru6ifRmkWMigYaGRKbBKp3WrgcmB6ARNKsV2y2v";
-    if (isTon(chain)) return this.ton.getMetaWallet(chain).metaWallet.address.toString({ bounceable: false });
+    if (chain === Network.Stellar) return "CDP4UWXJAGZRZNNDRTQRG23N56SM5BU6AFTKQLNAUUXSEHU5XYFYPP4I";
+    if (chain === Network.LegacyTon) return this.legacyTon.getMetaWalletV1().metaWallet.address.toString({ bounceable: false });
+    if (chain === Network.Ton) return this.ton.getMetaWallet().metaWallet.address.toString({ bounceable: false });
     return "0x42351e68420D16613BBE5A7d8cB337A9969980b4";
   }
 
@@ -165,10 +169,11 @@ class HotBridge {
   }
 
   async getTokenBalance(chain: Network, token: string, address: string) {
-    if (isTon(chain)) return await this.ton.getTokenBalance(chain, token, address);
     if (chain === Network.Near) return await this.near.getTokenBalance(token, address);
     if (chain === Network.Solana) return await this.solana.getTokenBalance(token, address);
     if (chain === Network.Stellar) return await this.stellar.getTokenBalance(token, address);
+    if (chain === Network.LegacyTon) return await this.legacyTon.getTokenBalance(token, address);
+    if (chain === Network.Ton) return await this.ton.getTokenBalance(token, address);
     return await this.evm.getTokenBalance(token, chain, address);
   }
 
@@ -227,7 +232,8 @@ class HotBridge {
   }
 
   async isWithdrawUsed(chain: number, nonce: string, receiver: string) {
-    if (isTon(chain)) return await this.ton.isWithdrawUsed(chain, nonce, receiver);
+    if (chain === Network.LegacyTon) return await this.legacyTon.isWithdrawUsed(nonce, receiver);
+    if (chain === Network.Ton) return await this.ton.isWithdrawUsed(nonce, receiver);
     if (chain === Network.Solana) return await this.solana.isWithdrawUsed(nonce, receiver);
     if (chain === Network.Stellar) return await this.stellar.isWithdrawUsed(nonce);
     return await this.evm.isWithdrawUsed(chain, nonce);
@@ -305,11 +311,6 @@ class HotBridge {
     }
   }
 
-  async canWithdrawOnTon(version: TonVersion, address: string) {
-    const receiver = decodeReceiver(version, encodeReceiver(version, address));
-    return await this.ton.isUserExists(version, receiver);
-  }
-
   async getGaslessWithdrawFee(chain: Network, token: string): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
     return await this.api.getWithdrawFee(chain, token);
   }
@@ -375,7 +376,7 @@ class HotBridge {
   }
 
   async buildGaslessWithdrawIntent(args: { feeToken: string; feeAmount: bigint; chain: Network; token: string; amount: bigint; receiver: string; intentAccount: string }) {
-    const blockNumber = await this.evm.getProvider(args.chain).getBlockNumber();
+    const blockNumber = args.chain !== Network.Ton ? await this.evm.getProvider(args.chain).getBlockNumber() : 0;
     const tokenAddress = toOmni(args.chain, args.token);
     const feeTokenAddress = toOmni(args.chain, args.feeToken);
     const receiver = encodeReceiver(args.chain, args.receiver);
@@ -477,6 +478,12 @@ class HotBridge {
   }): Promise<{ intents: any[]; quoteHashes: string[]; gasless: boolean }> {
     this.logger?.log(`Withdrawing ${args.amount} ${args.chain} ${args.token}`);
 
+    if (args.chain === Network.LegacyTon) {
+      const receiver = decodeReceiver(Network.LegacyTon, encodeReceiver(Network.LegacyTon, args.receiver));
+      const isUserExists = await this.legacyTon.isUserExists(receiver);
+      if (!isUserExists) throw "User jetton not created, call bridge.createUserIfNeeded({ address, sendTransaction }) before withdraw";
+    }
+
     if (args.gasless !== false) {
       try {
         return await this.buildGaslessWithdrawToken(args);
@@ -484,11 +491,6 @@ class HotBridge {
         if (!(e instanceof GaslessNotAvailable)) throw e;
         this.logger?.log(`Gasless withdraw not available for chain ${args.chain}, using regular withdraw`);
       }
-    }
-
-    if (isTon(args.chain)) {
-      const isUserExists = await this.canWithdrawOnTon(args.chain, args.receiver);
-      if (!isUserExists) throw "User jetton not created, call bridge.createUserIfNeeded({ address, sendTransaction }) before withdraw";
     }
 
     await this.checkLocker(args.chain, args.receiver);

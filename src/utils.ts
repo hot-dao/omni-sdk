@@ -5,7 +5,8 @@ import { transactions } from "near-api-js";
 import { Address } from "@ton/core";
 import crypto from "crypto";
 
-import { bigintToBuffer, createAddressRlp, generateUserId, parseAddressRlp } from "./bridge-ton/constants";
+import { bigintToBuffer, createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
+import { generateUserId } from "./bridge-ton-v1/constants";
 import { Network, TonVersion } from "./types";
 
 export const OMNI_HOT_V2 = "v2_1.omni.hot.tg";
@@ -62,7 +63,6 @@ export const toOmni = (id: string | number, addr?: string) => {
 
   if (+chain === Network.Hot) return address.replace(INTENT_PREFIX, "");
   if (+chain === Network.Near) return address;
-
   return `${chain}_${encodeTokenAddress(+chain, address)}`;
 };
 
@@ -83,7 +83,6 @@ export const toOmniIntent = (id: string | number, addr?: string): string => {
   if (+chain === Network.Tron && address === "native") return `nep141:tron.omft.near`;
   if (+chain === Network.Zcash && address === "native") return `nep141:zec.omft.near`;
   if (+chain === Network.Btc && address === "native") return `nep141:btc.omft.near`;
-
   return `${INTENT_PREFIX}${chain}_${encodeTokenAddress(+chain, address)}`;
 };
 
@@ -151,7 +150,9 @@ export const encodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Solana) return address;
   if (chain === Network.Stellar) return baseEncode(StellarAddress.fromString(address).toScVal().toXDR());
 
-  if (isTon(+chain)) {
+  if (chain === Network.Ton) return baseEncode(createAddressRlp(Address.parse(address)));
+
+  if (chain === Network.LegacyTon) {
     const id = Address.isFriendly(address) ? generateUserId(Address.parse(address), 0n) : BigInt(address);
     return baseEncode(bigintToBuffer(id, 32));
   }
@@ -163,7 +164,10 @@ export const decodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Near) return address;
   if (chain === Network.Solana) return address;
   if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(address)))).toString();
-  if (isTon(chain)) return BigInt("0x" + Buffer.from(baseDecode(address)).toString("hex")).toString();
+
+  if (chain === Network.LegacyTon) return BigInt("0x" + Buffer.from(baseDecode(address)).toString("hex")).toString();
+  if (chain === Network.Ton) return parseAddressRlp(address);
+
   return hexlify(baseDecode(address));
 };
 

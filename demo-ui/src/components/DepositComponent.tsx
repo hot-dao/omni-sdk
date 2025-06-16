@@ -52,6 +52,7 @@ const DepositComponent = () => {
       if (network === Network.Ton) {
         const deposit = await bridge.ton.deposit({
           sender: tonSigner.address!,
+          refundAddress: tonSigner.address!,
           intentAccount: nearSigner.intentAccount!,
           sendTransaction: tonSigner.sendTransaction,
           amount: BigInt(amount),

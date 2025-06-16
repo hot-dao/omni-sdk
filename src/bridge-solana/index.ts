@@ -4,12 +4,13 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, getAccount } from "@solana/spl-token";
 
 import OmniService from "../bridge";
-import { Network, PendingDeposit, PendingDepositWithIntent, ReviewFee } from "../types";
+import { Network, PendingDeposit, PendingDepositWithIntent } from "../types";
 import { omniEphemeralReceiver, parseAmount, wait } from "../utils";
 
 import AdvancedConnection from "./provider";
 import { findDepositAddress, PROGRAM_ID } from "./helpers";
 import IDL from "./idl.json";
+import { ReviewFee } from "../fee";
 
 class SolanaOmniService {
   public connection: sol.Connection;
@@ -22,13 +23,13 @@ class SolanaOmniService {
   async getWithdrawFee(): Promise<ReviewFee> {
     const needNative = BigInt(parseAmount(0.005, 9));
     const realGas = BigInt(parseAmount(0.0002, 9));
-    return { reserve: needNative, gasPrice: realGas, gasLimit: 1n, chain: Network.Solana };
+    return new ReviewFee({ reserve: needNative, baseFee: realGas, chain: Network.Solana });
   }
 
   // TODO: Compute gas dinamically
   async getDepositFee(): Promise<ReviewFee> {
     const needNative = BigInt(parseAmount(0.005, 9));
-    return { reserve: needNative, chain: Network.Solana, gasLimit: 1n, gasPrice: needNative / 10n };
+    return new ReviewFee({ reserve: needNative, chain: Network.Solana, baseFee: needNative / 10n });
   }
 
   async isWithdrawUsed(nonce: string, receiver: string) {

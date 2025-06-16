@@ -96,6 +96,11 @@ export function createUserMsgHash(user_wallet: Address) {
   return createHash("sha256").update(RLP.encode(addressCell)).digest();
 }
 
+export function generateUserId(address: Address, bump: bigint): bigint {
+  const hash = bufferToBigInt(createUserMsgHash(address));
+  return (hash % 2n ** 63n) + bump;
+}
+
 export const OpCode = {
   storageDeposit: crc32("storage_deposit"),
   createUser: crc32("create_user"),
