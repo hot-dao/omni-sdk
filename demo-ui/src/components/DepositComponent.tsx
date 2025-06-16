@@ -64,7 +64,7 @@ const DepositComponent = () => {
 
       // Near
       else if (network === Network.Near) {
-        await bridge.near.depositToken({
+        await bridge.near.deposit({
           sender: nearSigner.accountId!,
           intentAccount: nearSigner.intentAccount!,
           sendTransaction: nearSigner.sendTransaction,

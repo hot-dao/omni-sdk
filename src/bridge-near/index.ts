@@ -30,7 +30,7 @@ class NearBridge {
     return JSON.parse(Buffer.from(data.result).toString("utf8"));
   }
 
-  async depositToken(args: {
+  async deposit(args: {
     token: string;
     amount: bigint;
     sender: string;

@@ -25,7 +25,7 @@ Deploy: https://hot-bridge-demo.surge.sh
 const omni = new OmniBridge({
   logger: console, // optional
 
-  tonApiKey: env.TON_API_KEY, // only if use TON
+  tonRpc: env.TON_API_KEY, // only if use TON
   evmRpc: { 56: ["rpc"] }, // only if use EVM
   solanaRpc: ["rpc"], // only if use SOLANA
 
@@ -42,18 +42,18 @@ const omni = new OmniBridge({
 
 ```ts
 const signer = {
-  getIntentAccount: async () => "account", // intent account to deposit
   sendTransaction: async (tx) => "hash", // execute by payer
-  getAddress: async () => "address", // payer account
+  intentAccount: "account", // intent account to deposit
+  sender: "address", // payer account
 };
 
-await omni.near.depositToken({ token, amount, ...signer });
+await omni.near.deposit({ token, amount, ...signer });
 
 const deposits = [
-  await omni.ton.depositToken({ token, amount, ...signer }),
-  await omni.solana.depositToken({ token, amount, ...signer }),
-  await omni.stellar.depositToken({ token, amount, ...signer }),
-  await omni.evm.depositToken({ chain, token, amount, ...signer }),
+  await omni.ton.deposit({ token, amount, ...signer }),
+  await omni.solana.deposit({ token, amount, ...signer }),
+  await omni.stellar.deposit({ token, amount, ...signer }),
+  await omni.evm.deposit({ chain, token, amount, ...signer }),
 ];
 
 // Processed by near relayer without signers
@@ -66,18 +66,10 @@ for (const deposit of deposits) {
 
 ```ts
 const signer = {
-  signIntents: async (intent) => signedIntent, // sign by intent account with omni balance
+  signIntents: async (intents) => signedIntent, // sign by intent account with omni balance
   sendTransaction: async () => "hash", // any tx executor for claim tokens for receiver
-  getAddress: async () => "address", // any tx executor address
+  sender: "address", // any tx executor address
 };
-
-// Create TON user jetton for withdrawals (created once for user)
-if (chain === Network.Ton) {
-  await omni.ton.createUserIfNeeded({
-    sendTransaction: signer.sendTransaction,
-    address: receiver,
-  });
-}
 
 // Only intent signer need for withdraw
 const withdraw = await omni.withdrawToken({
@@ -89,7 +81,7 @@ const withdraw = await omni.withdrawToken({
   ...signer,
 });
 
-// Empty for withdraw to NEAR
+// gasless withdraw
 if (withdraw == null) return;
 
 // For claim onchain need any chain tx executor
@@ -98,7 +90,8 @@ switch (withdraw.chain) {
     await omni.solana.withdraw({ ...withdraw, ...signer });
 
   case Network.Ton:
-    await omni.ton.withdraw({ ...withdraw, ...signer });
+    // refundAddress: the address where the rest of the unused gas will go
+    await omni.ton.withdraw({ ...withdraw, ...signer, refundAddress: sender.sender });
 
   case Netwok.Stellar:
     await omni.stellar.withdraw({ ...withdraw, ...signer });
