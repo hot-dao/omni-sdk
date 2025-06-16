@@ -27,7 +27,7 @@ class TonLegacyOmniService {
   }
 
   getMetaWallet() {
-    if (!this.metaWallet) this.metaWallet = this.client.open(TonMetaWalletV2.createFromAddress(Address.parse("EQDJ1i5VKRWYJKDDcu0EEKqSllCOoLluXWDksHqy6mix2jQJ")));
+    if (!this.metaWallet) this.metaWallet = this.client.open(TonMetaWalletV2.createFromAddress(Address.parse("EQANEViM3AKQzi6Aj3sEeyqFu8pXqhy9Q9xGoId_0qp3CNVJ")));
     return { metaWallet: this.metaWallet, DepositJetton: DepositJettonV2, UserJetton: UserJettonV2, JettonMinter: JettonMinterV2, JettonWallet: JettonWalletV2 };
   }
 
@@ -70,14 +70,22 @@ class TonLegacyOmniService {
     return BigInt(nonce) <= BigInt(lastNonce.toString());
   }
 
-  async withdraw(args: { refundAddress: string; amount: bigint; token: string; signature: string; nonce: string; receiver: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
+  async withdraw(args: {
+    sender: string;
+    refundAddress: string;
+    amount: bigint;
+    token: string;
+    signature: string;
+    nonce: string;
+    receiver: string;
+    sendTransaction: (tx: SenderArguments) => Promise<string>;
+  }) {
     const { metaWallet } = this.getMetaWallet();
     const executor = this.executor(args.sendTransaction);
 
     if (args.token === "native") {
       await metaWallet.sendUserNativeWithdraw(executor, {
-        userWallet: Address.parse(args.receiver),
-        receiver: Address.parse(args.receiver),
+        userWallet: Address.parse(args.sender),
         signature: Buffer.from(baseDecode(args.signature)),
         excessAcc: Address.parse(args.refundAddress),
         nonce: BigInt(args.nonce),
@@ -90,8 +98,7 @@ class TonLegacyOmniService {
     else {
       console.log("withdraw token", args);
       await metaWallet.sendUserTokenWithdraw(executor, {
-        userWallet: Address.parse(args.receiver),
-        receiver: Address.parse(args.receiver),
+        userWallet: Address.parse(args.sender),
         signature: Buffer.from(baseDecode(args.signature)),
         excessAcc: Address.parse(args.refundAddress),
         token: Address.parse(args.token),
@@ -102,7 +109,7 @@ class TonLegacyOmniService {
     }
   }
 
-  async deposit(args: { refundAddress: string; token: string; amount: bigint; intentAccount: string; sender: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
+  async deposit(args: { refundAddress?: string; token: string; amount: bigint; intentAccount: string; sender: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
     const { metaWallet, JettonMinter, JettonWallet } = this.getMetaWallet();
     const receiver = omniEphemeralReceiver(args.intentAccount);
     const executor = this.executor(args.sendTransaction);
@@ -111,7 +118,7 @@ class TonLegacyOmniService {
       this.omni.logger?.log(`Depositing ${args.amount} TON to ${args.intentAccount}`);
       await metaWallet.sendNativeDeposit(executor, {
         value: args.amount + toNano(0.07),
-        excessAcc: Address.parse(args.refundAddress),
+        excessAcc: Address.parse(args.refundAddress ?? args.sender),
         receiver: receiver,
         amount: args.amount,
         queryId: 0,
@@ -128,7 +135,7 @@ class TonLegacyOmniService {
 
       this.omni.logger?.log(`Sending transfer`);
       const userJetton = this.client.open(JettonWallet.createFromAddress(userJettonWalletAddress));
-      const refundAddress = Address.parse(args.refundAddress);
+      const refundAddress = Address.parse(args.refundAddress ?? args.sender);
 
       await userJetton.sendTransfer(
         executor,
@@ -208,6 +215,7 @@ class TonLegacyOmniService {
 
     for (const hash of deployTxHashes) {
       const nonce = await parseDeployTx(hash).catch(() => null);
+      if (nonce && BigInt(nonce) > 10n ** 30n) continue; // incorrect uint cell
       if (nonce) return { ...deposit, nonce };
     }
 

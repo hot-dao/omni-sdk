@@ -502,7 +502,7 @@ class HotBridge {
     let attempts = 0;
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      if (attempts > 30) throw new GaslessWithdrawTxNotFound(nonce, chain, receiver);
+      if (attempts > 50) throw new GaslessWithdrawTxNotFound(nonce, chain, receiver);
       await wait(2000);
 
       const status = await this.getGaslessWithdrawStatus(nonce);

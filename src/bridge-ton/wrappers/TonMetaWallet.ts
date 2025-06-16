@@ -77,14 +77,13 @@ export class TonMetaWallet implements Contract {
       nonce: bigint;
       amount: bigint;
       userWallet: Address;
-      receiver: Address;
       signature: Buffer;
       excessAcc: Address;
       value: bigint;
     }
   ) {
     const signatureCell = beginCell().storeBuffer(opts.signature).endCell();
-    const addrCell = beginCell().storeAddress(opts.userWallet).storeAddress(opts.receiver).storeAddress(opts.excessAcc).endCell();
+    const addrCell = beginCell().storeAddress(opts.userWallet).storeAddress(opts.excessAcc).endCell();
 
     await provider.internal(via, {
       value: opts.value,
@@ -100,7 +99,6 @@ export class TonMetaWallet implements Contract {
       nonce: bigint;
       token: Address;
       amount: bigint;
-      receiver: Address;
       userWallet: Address;
       signature: Buffer;
       excessAcc: Address;
@@ -108,7 +106,7 @@ export class TonMetaWallet implements Contract {
     }
   ) {
     const signatureCell = beginCell().storeBuffer(opts.signature).endCell();
-    const addrCell = beginCell().storeAddress(opts.userWallet).storeAddress(opts.receiver).storeAddress(opts.excessAcc).endCell();
+    const addrCell = beginCell().storeAddress(opts.userWallet).storeAddress(opts.excessAcc).endCell();
 
     await provider.internal(via, {
       value: opts.value,
