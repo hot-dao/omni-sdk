@@ -60,18 +60,26 @@ class NearBridge {
   }
 
   async parseWithdrawalNonce(tx: string, sender: string) {
+    const nonces = await this.parseWithdrawalNonces(tx, sender);
+    const firstNonce = nonces[0];
+    if (firstNonce == null) throw `Nonce not found`;
+    return firstNonce.toString();
+  }
+
+  async parseWithdrawalNonces(tx: string, sender: string): Promise<bigint[]> {
     const receipt = await this.rpc.txStatusReceipts(tx, sender, "EXECUTED_OPTIMISTIC");
-    const transfer = (() => {
-      for (const item of receipt.receipts_outcome) {
-        for (const log of item.outcome.logs) {
-          const nonce = `${log}`.match(/"memo":"(\d+)"/)?.[1];
-          if (nonce) return { nonce };
+    const nonces: bigint[] = [];
+
+    for (const item of receipt.receipts_outcome) {
+      for (const log of item.outcome.logs) {
+        const nonce = `${log}`.match(/"memo":"(\d+)"/)?.[1];
+        if (nonce) {
+          nonces.push(BigInt(nonce));
         }
       }
-    })();
+    }
 
-    if (transfer == null) throw `Nonce not found`;
-    return transfer.nonce;
+    return nonces;
   }
 
   async getTokenBalance(token: string, address: string) {
