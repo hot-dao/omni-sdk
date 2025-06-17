@@ -61,9 +61,8 @@ class NearBridge {
 
   async parseWithdrawalNonce(tx: string, sender: string) {
     const nonces = await this.parseWithdrawalNonces(tx, sender);
-    const firstNonce = nonces[0];
-    if (firstNonce == null) throw `Nonce not found`;
-    return firstNonce.toString();
+    if (nonces.length === 0) throw `Nonce not found`;
+    return nonces[0].toString();
   }
 
   async parseWithdrawalNonces(tx: string, sender: string): Promise<bigint[]> {
@@ -73,9 +72,7 @@ class NearBridge {
     for (const item of receipt.receipts_outcome) {
       for (const log of item.outcome.logs) {
         const nonce = `${log}`.match(/"memo":"(\d+)"/)?.[1];
-        if (nonce) {
-          nonces.push(BigInt(nonce));
-        }
+        if (nonce) nonces.push(BigInt(nonce));
       }
     }
 
