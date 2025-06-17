@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Network, PendingWithdraw } from "../../../src";
+import { Network, PendingWithdraw } from "@hot-labs/omni-sdk";
 
 import {
   Card,
@@ -71,6 +71,7 @@ const PendingWithdrawalsComponent = () => {
 
       if (withdrawData.chain === Network.Ton) {
         await bridge.ton.withdraw({
+          sender: tonWallet.address!,
           sendTransaction: tonWallet.sendTransaction,
           refundAddress: tonWallet.address!,
           ...withdrawData,

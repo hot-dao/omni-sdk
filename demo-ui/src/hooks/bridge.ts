@@ -1,10 +1,11 @@
 import { useEffect } from "react";
 import { mainnet, base, arbitrum, optimism, polygon, bsc, avalanche, kava } from "viem/chains";
-import { HotBridge } from "../../../src";
+import { HotBridge } from "@hot-labs/omni-sdk";
 import { useNearWallet } from "./near";
 
 export const bridge = new HotBridge({
   logger: console,
+  api: "https://dev.herewallet.app",
   tonRpc: "",
   evmRpc: {
     8453: base.rpcUrls.default.http as any,

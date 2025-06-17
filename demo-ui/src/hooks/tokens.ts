@@ -1,19 +1,20 @@
 import { useState, useEffect } from "react";
+import { makeObservable, observable, runInAction } from "mobx";
+import { TokenAsset, utils } from "@hot-labs/omni-sdk";
 import { uniq } from "lodash";
 
-import { utils } from "../../../src";
 import { bridge } from "./bridge";
 
-let tokens: { chain: number; address: string }[] = [];
+let _tokens: { chain: number; address: string }[] = [];
 const getBridgableTokens = async () => {
-  if (tokens.length > 0) return tokens;
+  if (_tokens.length > 0) return _tokens;
 
   const { groups } = await bridge.api.getBridgeTokens();
-  tokens = Object.values(groups)
+  _tokens = Object.values(groups)
     .flatMap((list) => list.map(utils.fromOmni))
     .map((t) => ({ chain: +t.split(":")[0], address: t.split(":")[1] }));
 
-  return tokens;
+  return _tokens;
 };
 
 export const useAvailableTokens = (chain: number) => {
@@ -29,3 +30,26 @@ export const useAvailableTokens = (chain: number) => {
 
   return { tokens, loading };
 };
+
+class Tokens {
+  assets: TokenAsset[] = [];
+
+  constructor() {
+    makeObservable(this, {
+      assets: observable,
+    });
+
+    bridge.api.getTokenAssets().then((assets) => {
+      runInAction(() => {
+        this.assets = assets;
+      });
+    });
+  }
+
+  get(id: string) {
+    const [chain, address] = id.split(":");
+    return this.assets.find((t) => t.chain_id === +chain && t.contract_id === address);
+  }
+}
+
+export const tokens = new Tokens();

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { utils } from "../../../src";
+import { utils } from "@hot-labs/omni-sdk";
 import { useBridge } from "./bridge";
 
 export const useIntentBalances = (accountId?: string) => {
@@ -21,12 +21,14 @@ export const useIntentBalances = (accountId?: string) => {
 
       try {
         const intentBalances = await bridge.getAllIntentBalances(accountId);
-        const balances = Object.entries(intentBalances).map(([intent, amount]) => ({
-          chain: +utils.fromOmni(intent).split(":")[0],
-          address: utils.fromOmni(intent).split(":")[1],
-          intent,
-          amount,
-        }));
+        const balances = Object.entries(intentBalances)
+          .filter(([intent]) => !intent.startsWith("nep171:"))
+          .map(([intent, amount]) => ({
+            chain: +utils.fromOmni(intent).split(":")[0],
+            address: utils.fromOmni(intent).split(":")[1],
+            intent,
+            amount,
+          }));
 
         setBalances(balances.filter((balance) => balance.amount > 0n));
       } catch (err) {

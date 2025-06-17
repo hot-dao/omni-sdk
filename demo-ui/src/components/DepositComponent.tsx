@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Network } from "../../../src";
+import { Network } from "@hot-labs/omni-sdk";
 
 import {
   Card,

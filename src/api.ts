@@ -1,7 +1,7 @@
 import RLP from "rlp";
 import crypto from "crypto";
 import { baseEncode } from "@near-js/utils";
-import { Network } from "./types";
+import { Network, TokenAsset } from "./types";
 
 class OmniApi {
   constructor(readonly api: string = "https://api0.herewallet.app", readonly mpcApi: string[] = ["https://rpc1.hotdao.ai", "https://rpc2.hotdao.ai"]) {}
@@ -28,6 +28,12 @@ class OmniApi {
     }
 
     throw error;
+  }
+
+  async getTokenAssets(): Promise<TokenAsset[]> {
+    const res = await this.request("/api/v1/exchange/intent_tokens", { method: "GET", endpoint: this.api });
+    const { tokens } = await res.json();
+    return tokens;
   }
 
   async getTime() {

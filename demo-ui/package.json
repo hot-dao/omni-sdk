@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@hot-labs/omni-sdk": "^2.7.1",
+    "@hot-labs/omni-sdk": "2.8.2",
     "@near-wallet-selector/core": "^8.10.2",
     "@near-wallet-selector/hot-wallet": "^8.10.2",
     "@near-wallet-selector/ledger": "^8.10.2",
@@ -20,6 +20,8 @@
     "@tanstack/react-query": "^5.74.4",
     "@tonconnect/sdk": "^3.1.0",
     "@tonconnect/ui-react": "^2.1.0",
+    "mobx": "6.13.7",
+    "mobx-react-lite": "4.1.0",
     "near-api-js": "^5.1.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

@@ -7,41 +7,18 @@ export enum Network {
   Ton = 1117,
   LegacyTon = 1111,
 
-  Eth = 1,
   Tron = 999,
   Solana = 1001,
   Stellar = 1100,
   Near = 1010,
+
+  Eth = 1,
   Polygon = 137,
   Arbitrum = 42161,
-  Aurora = 1313161554,
   Avalanche = 43114,
-  Linea = 59144,
-  Xlayer = 196,
   Base = 8453,
   Bnb = 56,
-  OpBnb = 204,
-  BnbTestnet = 97,
   Optimism = 10,
-  Scroll = 534352,
-  EbiChain = 98881,
-  Sei = 1329,
-  Blast = 81457,
-  Taiko = 167000,
-  Mantle = 5000,
-  Manta = 169,
-  Kava = 2222,
-  ZkSync = 324,
-  Monad = 10143,
-  Metis = 1088,
-  Gnosis = 100,
-  Fantom = 250,
-  Cronos = 25,
-  Chiliz = 88888,
-  Moonbeam = 1284,
-  Ronin = 2020,
-  Lisk = 1135,
-  Sonic = 146,
 }
 
 export interface ContractTransferType {
@@ -89,4 +66,15 @@ export interface PendingWithdrawWithStatus extends PendingWithdraw {
 
 export interface PendingDepositWithIntent extends PendingDeposit {
   intentAccount: string;
+}
+
+export interface TokenAsset {
+  intents_id: string;
+  chain_id: number;
+  contract_id: string;
+  usd_rate: number;
+  decimal: number;
+  icon: string;
+  symbol: string;
+  name: string;
 }

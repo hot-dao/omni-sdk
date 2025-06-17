@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Network } from "../../../src";
+import { Network } from "@hot-labs/omni-sdk";
 
 import { useAvailableTokens } from "../hooks/tokens";
 import { useBridge } from "../hooks/bridge";
@@ -69,6 +69,7 @@ const WithdrawComponent = () => {
       if (result) {
         if (result.chain === Network.Ton) {
           await bridge.ton.withdraw({
+            sender: tonSigner.address!,
             sendTransaction: tonSigner.sendTransaction,
             refundAddress: tonSigner.address!,
             ...result,

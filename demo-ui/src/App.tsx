@@ -28,6 +28,7 @@ import BalancesComponent from "./components/BalancesComponent";
 import DepositComponent from "./components/DepositComponent";
 import WithdrawComponent from "./components/WithdrawComponent";
 import PendingWithdrawalsComponent from "./components/PendingWithdrawals";
+import FindDeposits from "./components/FindDeposits";
 
 // Theme toggle icon component
 const ThemeIcon = ({ isDark }: { isDark: boolean }) => (
@@ -95,6 +96,7 @@ function AppContent() {
             </LeftColumn>
             <RightColumn>
               <BalancesComponent />
+              <FindDeposits />
             </RightColumn>
           </MainContent>
         ) : (

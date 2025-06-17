@@ -1,7 +1,10 @@
 import React from "react";
+import { formatUnits } from "ethers";
+import { observer } from "mobx-react-lite";
+
 import { useNearWallet } from "../hooks/near";
 import { useIntentBalances } from "../hooks/balances";
-
+import { tokens } from "../hooks/tokens";
 import {
   BalancesContainer,
   TokenCard,
@@ -32,19 +35,23 @@ const BalancesComponent = () => {
   return (
     <BalancesContainer>
       <BalanceSectionTitle>Bridge Balances</BalanceSectionTitle>
-      {balances.map((balance) => (
-        <TokenCard key={balance.address}>
-          <TokenImage src={`https://storage.herewallet.app/ft/${balance.chain}:${balance.address}.png`} />
-          <div>
-            <TokenName>
-              {balance.chain}:{balance.address}
-            </TokenName>
-            <TokenAmount>{balance.amount}</TokenAmount>
-          </div>
-        </TokenCard>
-      ))}
+      {balances.map((balance) => {
+        const id = `${balance.chain}:${balance.address}`;
+        const token = tokens.get(id);
+        return (
+          <TokenCard key={balance.address}>
+            <TokenImage src={token?.icon} />
+            <div>
+              <TokenName>{token?.name || id}</TokenName>
+              <TokenAmount>
+                {formatUnits(balance.amount, token?.decimal)} {token?.symbol}
+              </TokenAmount>
+            </div>
+          </TokenCard>
+        );
+      })}
     </BalancesContainer>
   );
 };
 
-export default BalancesComponent;
+export default observer(BalancesComponent);
