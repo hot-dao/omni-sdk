@@ -59,13 +59,17 @@ class NearBridge {
     return await args.sendTransaction({ actions, receiverId: token });
   }
 
-  async parseWithdrawalNonce(tx: string, sender: string) {
+  async parseWithdrawalNonce(tx: string, sender: string, index: number = 0) {
     const receipt = await this.rpc.txStatusReceipts(tx, sender, "EXECUTED_OPTIMISTIC");
     const transfer = (() => {
+      let currIndex = 0;
       for (const item of receipt.receipts_outcome) {
         for (const log of item.outcome.logs) {
           const nonce = `${log}`.match(/"memo":"(\d+)"/)?.[1];
-          if (nonce) return { nonce };
+          if (nonce) {
+            if (index === currIndex) return { nonce };
+            currIndex++;
+          }
         }
       }
     })();
