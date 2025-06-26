@@ -41,40 +41,27 @@ const omni = new OmniBridge({
 ### Deposit to HotBridge
 
 ```ts
-const signer = {
+const intentAccount = "account";
+const hash = await omni.ton.deposit({
+  token: "native",
+  amount: 100000000n,
   sendTransaction: async (tx) => "hash", // execute by payer
-  intentAccount: "account", // intent account to deposit
   sender: "address", // payer account
-};
+  intentAccount, // intent account to deposit
+});
 
-await omni.near.deposit({ token, amount, ...signer });
-
-const deposits = [
-  await omni.ton.deposit({ token, amount, ...signer }),
-  await omni.solana.deposit({ token, amount, ...signer }),
-  await omni.stellar.deposit({ token, amount, ...signer }),
-  await omni.evm.deposit({ chain, token, amount, ...signer }),
-];
-
-// Processed by near relayer without signers
-for (const deposit of deposits) {
-  await omni.finishDeposit(deposit);
-}
+const pending = await omni.waitPendingDeposit(Network.Ton, hash, intentAccount);
+await omni.finishDeposit(pending);
 ```
 
 ### Withdraw from HotBridge
 
 ```ts
-const signer = {
-  signIntents: async (intents) => signedIntent, // sign by intent account with omni balance
-  sendTransaction: async () => "hash", // any tx executor for claim tokens for receiver
-  sender: "address", // any tx executor address
-};
-
 // Only intent signer need for withdraw
 const withdraw = await omni.withdrawToken({
+  signIntents: async (intents) => signedIntent, // sign by intent account with omni balance
   intentAccount: "account",
-  chain, // chain to withdraw
+  chain: Network.Base,
   receiver: "0x...", // any onchain receiver
   token, // onchain address of token to withdraw
   amount: 10n,
@@ -83,22 +70,11 @@ const withdraw = await omni.withdrawToken({
 
 // gasless withdraw
 if (withdraw == null) return;
-
-// For claim onchain need any chain tx executor
-switch (withdraw.chain) {
-  case Network.Solana:
-    await omni.solana.withdraw({ ...withdraw, ...signer });
-
-  case Network.Ton:
-    // refundAddress: the address where the rest of the unused gas will go
-    await omni.ton.withdraw({ ...withdraw, ...signer, refundAddress: sender.sender });
-
-  case Netwok.Stellar:
-    await omni.stellar.withdraw({ ...withdraw, ...signer });
-
-  default:
-    await omni.evm.withdraw({ ...withdraw, ...signer });
-}
+await omni.evm.withdraw({
+  sendTransaction: async () => "hash", // any tx executor for claim tokens for receiver
+  sender: "address", // any tx executor address
+  ...withdraw,
+});
 ```
 
 ## Finish pending withdraw

@@ -1,4 +1,4 @@
-import { Address, Asset, BASE_FEE, Contract, Networks, rpc, scValToBigInt, StrKey, TimeoutInfinite, TransactionBuilder, xdr, XdrLargeInt } from "@stellar/stellar-sdk";
+import { Address, Asset, Contract, Networks, rpc, scValToBigInt, StrKey, TimeoutInfinite, TransactionBuilder, xdr, XdrLargeInt } from "@stellar/stellar-sdk";
 import { Operation, Transaction } from "@stellar/stellar-sdk";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import BigNumber from "bignumber.js";
@@ -14,7 +14,7 @@ export const CONTRACT = "CCLWL5NYSV2WJQ3VBU44AMDHEVKEPA45N2QP2LL62O3JVKPGWWAQUVA
 class StellarService {
   readonly soroban: rpc.Server;
 
-  constructor(readonly omni: OmniService, rpcs?: string | rpc.Server) {
+  constructor(readonly omni: OmniService, rpcs?: string | rpc.Server, readonly baseFee = "100000") {
     this.soroban = typeof rpcs === "string" ? new rpc.Server(rpcs) : rpcs || new rpc.Server("https://mainnet.sorobanrpc.com");
   }
 
@@ -27,7 +27,7 @@ class StellarService {
 
   async getDepositFee(sender: string, token: string, amount: bigint, intentAccount: string): Promise<ReviewFee> {
     const receiver = omniEphemeralReceiver(intentAccount);
-    const { tx } = await this.buildDepositTx(sender, token, 1n, receiver);
+    const tx = await this.buildDepositTx(sender, token, 1n, receiver);
     const fee = BigInt(tx.fee);
     return new ReviewFee({ reserve: fee, baseFee: fee, chain: Network.Stellar });
   }
@@ -38,7 +38,7 @@ class StellarService {
     return !!result.result?.retval.value();
   }
 
-  async buildDepositTx(sender: string, token: string, amount: bigint, intentAccount: Buffer) {
+  async buildDepositTx(sender: string, token: string, amount: bigint, receiver: Buffer) {
     let ts = await this.omni.api.getTime();
     ts = String(BigInt(ts) - 20n * 10n ** 12n); // minus 20 second
 
@@ -48,34 +48,22 @@ class StellarService {
       Address.fromString(sender).toScVal(),
       new XdrLargeInt("u128", amount.toString()).toU128(),
       xdr.ScVal.scvAddress(Address.contract(StrKey.decodeContract(contractId)).toScAddress()),
-      xdr.ScVal.scvBytes(intentAccount),
+      xdr.ScVal.scvBytes(receiver),
       new XdrLargeInt("u128", ts.toString()).toU128()
     );
 
     const account = await this.soroban.getAccount(sender);
-    const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: Networks.PUBLIC }) //
+    const tx = new TransactionBuilder(account, { fee: this.baseFee, networkPassphrase: Networks.PUBLIC }) //
       .addOperation(call)
       .setTimeout(TimeoutInfinite);
 
-    return { nonce: String(ts), tx: await this.soroban.prepareTransaction(tx.build()) };
+    return await this.soroban.prepareTransaction(tx.build());
   }
 
-  async deposit(args: { token: string; amount: bigint; intentAccount: string; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }): Promise<PendingDepositWithIntent> {
+  async deposit(args: { token: string; amount: bigint; intentAccount: string; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }): Promise<string> {
     const receiver = omniEphemeralReceiver(args.intentAccount);
-    const { tx, nonce } = await this.buildDepositTx(args.sender, args.token, args.amount, receiver);
-    const hash = await args.sendTransaction(tx);
-
-    return {
-      intentAccount: args.intentAccount,
-      receiver: baseEncode(receiver),
-      timestamp: Date.now(),
-      amount: String(args.amount),
-      chain: Network.Stellar,
-      sender: args.sender,
-      token: args.token,
-      tx: hash,
-      nonce,
-    };
+    const tx = await this.buildDepositTx(args.sender, args.token, args.amount, receiver);
+    return await args.sendTransaction(tx);
   }
 
   async withdraw(args: { amount: bigint; token: string; signature: string; nonce: string; receiver: string; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }) {
@@ -95,7 +83,7 @@ class StellarService {
     );
 
     const account = await this.soroban.getAccount(args.sender);
-    const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: Networks.PUBLIC }) //
+    const tx = new TransactionBuilder(account, { fee: this.baseFee, networkPassphrase: Networks.PUBLIC }) //
       .addOperation(call)
       .setTimeout(TimeoutInfinite);
 
@@ -105,12 +93,31 @@ class StellarService {
 
   async clearDepositNonceIfNeeded(_: PendingDeposit) {}
 
-  async parseDeposit(deposit: PendingDeposit): Promise<PendingDeposit> {
-    if (deposit.nonce) return deposit;
-    const txResult = await this.soroban.getTransaction(deposit.tx);
+  async parseDeposit(hash: string): Promise<PendingDeposit> {
+    const txResult = await this.soroban.getTransaction(hash);
     if (txResult.status !== rpc.Api.GetTransactionStatus.SUCCESS) throw "";
+
+    const tx = new Transaction(txResult.envelopeXdr, Networks.PUBLIC);
+    if (tx.operations[0].type !== "invokeHostFunction") throw "Deposit tx not found";
+    const args = tx.operations[0].func.invokeContract().args();
+
+    const nativeToken = new Asset("XLM").contractId(Networks.PUBLIC);
+    const sender = Address.fromScAddress(args[0].address());
+    const amount = scValToBigInt(args[1]);
+    const token = Address.fromScAddress(args[2].address()).toString();
+    const receiver = baseEncode(args[3].bytes());
     const nonce = scValToBigInt(txResult.resultMetaXdr.v3().sorobanMeta()!.returnValue());
-    return { ...deposit, nonce: nonce.toString() };
+
+    return {
+      tx: hash,
+      receiver,
+      nonce: nonce.toString(),
+      amount: amount.toString(),
+      sender: sender.toString(),
+      token: token === nativeToken ? "native" : token,
+      chain: Network.Stellar,
+      timestamp: Date.now(),
+    };
   }
 
   async activateToken(args: { token: string | Asset; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }) {
@@ -118,7 +125,7 @@ class StellarService {
     const account = await this.soroban.getAccount(args.sender);
 
     const trustlineOp = Operation.changeTrust({ asset: asset, source: args.sender });
-    const trustlineTx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: Networks.PUBLIC }) //
+    const trustlineTx = new TransactionBuilder(account, { fee: this.baseFee, networkPassphrase: Networks.PUBLIC }) //
       .addOperation(trustlineOp)
       .setTimeout(TimeoutInfinite)
       .build();
@@ -129,7 +136,7 @@ class StellarService {
   async buildSmartContactTx(publicKey: string, contactId: string, method: string, ...args: any[]) {
     const account = await this.soroban.getAccount(publicKey);
     const contract = new Contract(contactId);
-    const builtTx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: Networks.PUBLIC });
+    const builtTx = new TransactionBuilder(account, { fee: this.baseFee, networkPassphrase: Networks.PUBLIC });
 
     if (args) builtTx.addOperation(contract.call(method, ...args));
     else builtTx.addOperation(contract.call(method));

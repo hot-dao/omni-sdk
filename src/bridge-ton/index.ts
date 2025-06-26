@@ -3,11 +3,11 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import { ContractAdapter } from "@ton-api/ton-adapter";
 import { TonApiClient } from "@ton-api/client";
 
-import { omniEphemeralReceiver, wait } from "../utils";
+import { omniEphemeralReceiver } from "../utils";
 import OmniService from "../bridge";
 
-import { Network, PendingDeposit, PendingDepositWithIntent } from "../types";
-import { MIN_COMMISSION } from "./constants";
+import { Network, PendingDeposit } from "../types";
+import { MIN_COMMISSION, OpCode } from "./constants";
 
 import { TonMetaWallet as TonMetaWalletV2 } from "./wrappers/TonMetaWallet";
 import { DepositJetton as DepositJettonV2 } from "./wrappers/DepositJetton";
@@ -148,40 +148,7 @@ class TonLegacyOmniService {
       );
     }
 
-    let token = args.token;
-    if (token !== "native") {
-      const minter = this.client.open(JettonMinter.createFromAddress(Address.parse(args.token)));
-      const metaJettonWalletAddress = await minter.getWalletAddressOf(metaWallet.address);
-      token = metaJettonWalletAddress.toString();
-    }
-
-    if (!executor.hash) throw "Failed to send transaction";
-    const deposit: PendingDepositWithIntent = {
-      chain: Network.Ton,
-      intentAccount: args.intentAccount,
-      receiver: baseEncode(receiver),
-      timestamp: Date.now(),
-      amount: String(args.amount),
-      sender: args.sender,
-      tx: executor.hash,
-      nonce: "",
-      token,
-    };
-
-    const waitParseDeposit = async (attemps = 0) => {
-      try {
-        return await this.parseDeposit(deposit);
-      } catch (e) {
-        if (attemps > 15) throw e;
-        await wait(5000);
-        this.omni.logger?.log(`Retrying parse deposit ${e}`);
-        return waitParseDeposit(attemps + 1);
-      }
-    };
-
-    this.omni.logger?.log(`Parsing deposit`);
-    const { nonce } = await waitParseDeposit();
-    return { ...deposit, nonce };
+    return executor.hash;
   }
 
   async clearDepositNonceIfNeeded(args: { nonce: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
@@ -194,11 +161,43 @@ class TonLegacyOmniService {
     await depositJetton.sendSelfDestruct(this.executor(args.sendTransaction), { value: MIN_COMMISSION });
   }
 
-  async parseDeposit(deposit: PendingDeposit): Promise<PendingDeposit> {
-    if (deposit.nonce) return deposit;
-
-    const events = await this.tonApi.events.getEvent(deposit.tx);
+  async parseDeposit(hash: string): Promise<PendingDeposit> {
+    const events = await this.tonApi.events.getEvent(hash);
     const deployTxHashes = events.actions.filter((t) => t.ContractDeploy != null).map((t) => t.baseTransactions[0]);
+
+    const tx = await this.tonApi.blockchain.getBlockchainTransaction(hash);
+    const body = tx.outMsgs[0]?.rawBody;
+    if (body == null) throw "Deposit tx not found";
+
+    const slice = body.beginParse();
+    const opCode = slice.loadUint(32);
+    const queryId = slice.loadUintBig(64); // load but not use
+    if (opCode !== 0x0f8a7ea5 && opCode !== OpCode.nativeDeposit) throw "Invalid op code";
+
+    const deposit: PendingDeposit = {
+      timestamp: Date.now(),
+      sender: tx.account.address.toString({ bounceable: false }),
+      chain: Network.Ton,
+      receiver: "",
+      nonce: "",
+      amount: "",
+      token: "",
+      tx: hash,
+    };
+
+    if (opCode === 0x0f8a7ea5) {
+      const event = events.actions.find((t) => t.JettonTransfer != null);
+      if (event?.JettonTransfer == null) throw "Jetton transfer not found";
+      deposit.token = event.JettonTransfer.jetton.address.toString({ bounceable: true });
+      deposit.amount = slice.loadCoins().toString();
+      deposit.receiver = baseEncode(slice.loadRef().beginParse().loadBuffer(32));
+    }
+
+    if (opCode === OpCode.nativeDeposit) {
+      deposit.receiver = baseEncode(slice.loadBuffer(32));
+      deposit.amount = slice.loadCoins().toString();
+      deposit.token = "native";
+    }
 
     const parseDeployTx = async (hash: string) => {
       const tx = await this.tonApi.blockchain.getBlockchainTransaction(hash);

@@ -5,7 +5,6 @@ export enum Network {
   Btc = -6,
 
   Ton = 1117,
-  LegacyTon = 1111,
 
   Tron = 999,
   Solana = 1001,
@@ -29,7 +28,7 @@ export interface ContractTransferType {
   amount: string;
 }
 
-export type TonVersion = Network.Ton | Network.LegacyTon;
+export type TonVersion = Network.Ton;
 
 export interface BuildedWithdraw {
   chain: number;

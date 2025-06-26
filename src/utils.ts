@@ -5,8 +5,7 @@ import { transactions } from "near-api-js";
 import { Address } from "@ton/core";
 import crypto from "crypto";
 
-import { bigintToBuffer, createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
-import { generateUserId } from "./bridge-ton-v1/constants";
+import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
 import { Network, TonVersion } from "./types";
 
 export const OMNI_HOT_V2 = "v2_1.omni.hot.tg";
@@ -19,7 +18,15 @@ export const functionCall = (args: { methodName: string; args: any; gas: string;
 };
 
 export const isTon = (id: number): id is TonVersion => {
-  return id === Network.Ton || id === Network.LegacyTon;
+  return id === Network.Ton;
+};
+
+export const TON_ENCODED_TOKENS_MAPPER: Record<string, string> = {
+  EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs: "EQBDaGKAyQ7A9zQ_zj78883KdSVTDAD73ieM-jINqVGC1J8L",
+};
+
+export const TON_DECODED_TOKENS_MAPPER: Record<string, string> = {
+  "EQBDaGKAyQ7A9zQ_zj78883KdSVTDAD73ieM-jINqVGC1J8L": "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs",
 };
 
 /**
@@ -30,6 +37,8 @@ export const isTon = (id: number): id is TonVersion => {
  */
 export const fromOmni = (id: string) => {
   id = id.split(":").pop() || id;
+
+  console.log(id);
 
   // TRON PoA bridge supported
   if (id === "tron.omft.near") return `${Network.Tron}:native`;
@@ -95,9 +104,10 @@ export const encodeTokenAddress = (chain: Network, addr: string) => {
     return addr;
   }
 
-  if (isTon(chain)) {
+  if (chain === Network.Ton) {
     if (addr === "native") return baseEncode(createAddressRlp());
-    return baseEncode(createAddressRlp(Address.parse(addr)));
+    if (!TON_ENCODED_TOKENS_MAPPER[addr]) throw "Unknown token address";
+    return baseEncode(createAddressRlp(Address.parse(TON_ENCODED_TOKENS_MAPPER[addr])));
   }
 
   if (chain === Network.Stellar) {
@@ -125,7 +135,12 @@ export const decodeTokenAddress = (chain: Network, addr: string) => {
     if (addr === baseEncode(createAddressRlp())) return "native";
     if (addr === "111bzQBB5v7AhLyPMDwS8uJgQV24KaAPXtwyVWu2KXbbfQU6NXRCz") return "native";
 
-    if (isTon(chain)) return parseAddressRlp(addr);
+    if (chain === Network.Ton) {
+      const token = parseAddressRlp(addr);
+      if (!TON_DECODED_TOKENS_MAPPER[token]) throw "Unknown token address";
+      return TON_DECODED_TOKENS_MAPPER[token];
+    }
+
     if (chain === Network.Near) return Buffer.from(baseDecode(addr)).toString("utf8");
     if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(addr)))).toString();
     if (chain === Network.Solana) return addr;
@@ -149,14 +164,7 @@ export const encodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Near) return address;
   if (chain === Network.Solana) return address;
   if (chain === Network.Stellar) return baseEncode(StellarAddress.fromString(address).toScVal().toXDR());
-
   if (chain === Network.Ton) return baseEncode(createAddressRlp(Address.parse(address)));
-
-  if (chain === Network.LegacyTon) {
-    const id = Address.isFriendly(address) ? generateUserId(Address.parse(address), 0n) : BigInt(address);
-    return baseEncode(bigintToBuffer(id, 32));
-  }
-
   return baseEncode(getBytes(address));
 };
 
@@ -164,10 +172,7 @@ export const decodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Near) return address;
   if (chain === Network.Solana) return address;
   if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(address)))).toString();
-
-  if (chain === Network.LegacyTon) return BigInt("0x" + Buffer.from(baseDecode(address)).toString("hex")).toString();
   if (chain === Network.Ton) return parseAddressRlp(address);
-
   return hexlify(baseDecode(address));
 };
 

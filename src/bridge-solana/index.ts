@@ -130,13 +130,7 @@ class SolanaOmniService {
     await sendTransaction([instruction]);
   }
 
-  async deposit(args: {
-    token: string;
-    amount: bigint;
-    sender: string;
-    intentAccount: string;
-    sendTransaction: (tx: sol.TransactionInstruction[]) => Promise<string>;
-  }): Promise<PendingDepositWithIntent> {
+  async deposit(args: { token: string; amount: bigint; sender: string; intentAccount: string; sendTransaction: (tx: sol.TransactionInstruction[]) => Promise<string> }): Promise<string> {
     const receiver = omniEphemeralReceiver(args.intentAccount);
     const lastDeposit = await this.getLastDepositNonce(args.sender);
     const env = this.env(args.sender);
@@ -174,19 +168,7 @@ class SolanaOmniService {
       });
 
       const instruction = await depositBuilder.instruction();
-      const hash = await args.sendTransaction([instruction]);
-
-      return {
-        sender: args.sender,
-        timestamp: Date.now(),
-        chain: Network.Solana,
-        amount: String(args.amount),
-        receiver: baseEncode(receiver),
-        intentAccount: args.intentAccount,
-        nonce: nonce.toString(),
-        token: args.token,
-        tx: hash,
-      };
+      return await args.sendTransaction([instruction]);
     }
 
     const mint = new sol.PublicKey(args.token);
@@ -215,19 +197,7 @@ class SolanaOmniService {
 
     const instruction = await depositBuilder.instruction();
     instructions.push(instruction);
-
-    const hash = await args.sendTransaction(instructions);
-    return {
-      sender: args.sender,
-      receiver: baseEncode(receiver),
-      intentAccount: args.intentAccount,
-      timestamp: Date.now(),
-      chain: Network.Solana,
-      nonce: nonce.toString(),
-      amount: String(args.amount),
-      token: args.token,
-      tx: hash,
-    };
+    return await args.sendTransaction(instructions);
   }
 
   async withdraw(args: { nonce: string; signature: string; amount: bigint; token: string; receiver: string; sender: string; sendTransaction: (tx: sol.TransactionInstruction[]) => Promise<string> }) {

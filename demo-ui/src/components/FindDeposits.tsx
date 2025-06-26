@@ -51,26 +51,8 @@ const FindDeposits = () => {
     setError(null);
 
     try {
-      switch (chain) {
-        case Network.Ton:
-          throw new Error("Ton deposits are not supported yet.");
-
-        case Network.Stellar:
-          throw new Error("Stellar deposits are not supported yet.");
-
-        case Network.Solana: {
-          const pending = await bridge.solana.parseDeposit(transactionHash);
-          setDeposit(pending);
-          break;
-        }
-
-        default: {
-          const pending = await bridge.evm.parseDeposit(chain, transactionHash);
-          setDeposit(pending);
-          break;
-        }
-      }
-
+      const pending = await bridge.waitPendingDeposit(chain, transactionHash, intentAccount);
+      setDeposit(pending);
       setIsLoading(false);
       setError(null);
     } catch (err) {

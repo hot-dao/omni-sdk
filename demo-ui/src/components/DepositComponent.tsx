@@ -21,7 +21,7 @@ import { useTonWallet } from "../hooks/ton";
 
 // Get available networks for the selector
 const availableNetworks = Object.entries(Network)
-  .filter(([key, value]) => value === 1010 || value === 1111 || !isNaN(Number(value)))
+  .filter(([key, value]) => value === 1010 || !isNaN(Number(value)))
   .map(([key, value]) => ({ label: key, value: Number(value) }));
 
 const DepositComponent = () => {
@@ -50,7 +50,7 @@ const DepositComponent = () => {
       setSuccess(null);
 
       if (network === Network.Ton) {
-        const deposit = await bridge.ton.deposit({
+        const hash = await bridge.ton.deposit({
           sender: tonSigner.address!,
           refundAddress: tonSigner.address!,
           intentAccount: nearSigner.intentAccount!,
@@ -59,6 +59,7 @@ const DepositComponent = () => {
           token: token,
         });
 
+        const deposit = await bridge.waitPendingDeposit(network, hash, nearSigner.intentAccount!);
         await bridge.finishDeposit(deposit);
       }
 
@@ -76,7 +77,7 @@ const DepositComponent = () => {
       // EVM
       else {
         if (evmSigner == null) throw "Connect EVM to deposit";
-        const deposit = await bridge.evm.deposit({
+        const tx = await bridge.evm.deposit({
           sender: evmSigner.address!,
           intentAccount: nearSigner.intentAccount!,
           sendTransaction: evmSigner.sendTransaction,
@@ -85,6 +86,7 @@ const DepositComponent = () => {
           token: token,
         });
 
+        const deposit = await bridge.waitPendingDeposit(network, tx, nearSigner.intentAccount!);
         await bridge.finishDeposit(deposit);
       }
 

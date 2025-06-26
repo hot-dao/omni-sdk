@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@hot-labs/omni-sdk": "2.8.2",
+    "@hot-labs/omni-sdk": "2.9.0",
     "@near-wallet-selector/core": "^8.10.2",
     "@near-wallet-selector/hot-wallet": "^8.10.2",
     "@near-wallet-selector/ledger": "^8.10.2",

@@ -110,16 +110,8 @@ class EvmOmniService {
     this.omni.logger?.log(`Withdraw tx: ${hash}`);
   }
 
-  async deposit(args: {
-    chain: number;
-    token: string;
-    amount: bigint;
-    sender: string;
-    intentAccount: string;
-    sendTransaction: (tx: ethers.TransactionRequest) => Promise<string>;
-  }): Promise<PendingDepositWithIntent> {
+  async deposit(args: { chain: number; token: string; amount: bigint; sender: string; intentAccount: string; sendTransaction: (tx: ethers.TransactionRequest) => Promise<string> }): Promise<string> {
     this.omni.logger?.log(`Call deposit ${args.amount} ${args.token} to ${args.intentAccount}`);
-
     const receiver = omniEphemeralReceiver(args.intentAccount);
 
     if (args.token === "native") {
@@ -127,21 +119,7 @@ class EvmOmniService {
       const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_NATIVE], this.getProvider(args.chain));
       const depositTx = await contract.deposit.populateTransaction(hexlify(receiver), { value: args.amount });
       const hash = await args.sendTransaction({ ...depositTx, chainId: args.chain });
-
-      this.omni.logger?.log(`Parsing receipt`);
-      const logs = await this.parseDeposit(args.chain, hash);
-
-      return {
-        intentAccount: args.intentAccount,
-        timestamp: Date.now(),
-        amount: String(args.amount),
-        receiver: baseEncode(receiver),
-        sender: args.sender,
-        token: args.token,
-        chain: args.chain,
-        nonce: logs.nonce,
-        tx: hash,
-      };
+      return hash;
     }
 
     this.omni.logger?.log(`Approving token if needed ${args.token} ${args.amount}`);
@@ -157,21 +135,7 @@ class EvmOmniService {
     this.omni.logger?.log(`Depositing token`);
     const contract = new Contract(OMNI_CONTRACT, [OMNI_DEPOSIT_FT], this.getProvider(args.chain));
     const depositTx = await contract.deposit.populateTransaction(hexlify(receiver), args.token, args.amount);
-    const hash = await args.sendTransaction({ ...depositTx, chainId: args.chain });
-
-    this.omni.logger?.log(`Parsing receipt`);
-    const logs = await this.parseDeposit(args.chain, hash);
-    return {
-      timestamp: Date.now(),
-      intentAccount: args.intentAccount,
-      receiver: baseEncode(receiver),
-      amount: String(args.amount),
-      sender: args.sender,
-      token: args.token,
-      chain: args.chain,
-      nonce: logs.nonce,
-      tx: hash,
-    };
+    return await args.sendTransaction({ ...depositTx, chainId: args.chain });
   }
 
   async parseDeposit(chain: number, hash: string): Promise<PendingDeposit> {

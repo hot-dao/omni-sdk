@@ -21,7 +21,7 @@ import {
 
 // Get available networks for the selector
 const availableNetworks = Object.entries(Network)
-  .filter(([key, value]) => value === 1010 || value === 1111 || !isNaN(Number(value)))
+  .filter(([key, value]) => value === 1010 || !isNaN(Number(value)))
   .map(([key, value]) => ({ label: key, value: Number(value) }));
 
 const WithdrawComponent = () => {
