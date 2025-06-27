@@ -86,7 +86,8 @@ const DepositComponent = () => {
           token: token,
         });
 
-        const deposit = await bridge.waitPendingDeposit(network, tx, nearSigner.intentAccount!);
+        const controller = new AbortController();
+        const deposit = await bridge.waitPendingDeposit(network, tx, nearSigner.intentAccount!, controller.signal);
         await bridge.finishDeposit(deposit);
       }
 

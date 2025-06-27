@@ -50,7 +50,9 @@ const hash = await omni.ton.deposit({
   intentAccount, // intent account to deposit
 });
 
-const pending = await omni.waitPendingDeposit(Network.Ton, hash, intentAccount);
+// usually from 30 seconds to 2 minutes, but can wait indefinitely
+const abortController = new AbortController(); // optional argument
+const pending = await omni.waitPendingDeposit(Network.Ton, hash, intentAccount, abortController.signal);
 await omni.finishDeposit(pending);
 ```
 
