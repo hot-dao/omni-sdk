@@ -67,20 +67,18 @@ const PendingWithdrawalsComponent = () => {
 
     try {
       // Get withdrawal data using buildWithdraw
-      const withdrawData = await bridge.buildWithdraw(withdraw.nonce);
+      switch (withdraw.chain) {
+        case Network.Ton: {
+          const sender = tonWallet.address!;
+          const refundAddress = tonWallet.address!;
+          const sendTransaction = tonWallet.sendTransaction;
+          await bridge.ton.withdraw({ sendTransaction, refundAddress, sender, ...withdraw });
+          break;
+        }
 
-      if (withdrawData.chain === Network.Ton) {
-        await bridge.ton.withdraw({
-          sender: tonWallet.address!,
-          sendTransaction: tonWallet.sendTransaction,
-          refundAddress: tonWallet.address!,
-          ...withdrawData,
-        });
-      } else {
-        await bridge.evm.withdraw({
-          sendTransaction: evmWallet.sendTransaction,
-          ...withdrawData,
-        });
+        default:
+          await bridge.evm.withdraw({ sendTransaction: evmWallet.sendTransaction, ...withdraw });
+          break;
       }
 
       setPendingWithdraw((prev) => prev.filter((item) => item.nonce !== withdraw.nonce));

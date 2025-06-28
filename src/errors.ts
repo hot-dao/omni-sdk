@@ -34,6 +34,12 @@ export class IntentBalanceIsLessThanAmount extends Error {
   }
 }
 
+export class IncorrectIntentDiff extends Error {
+  constructor(readonly reason: string) {
+    super(`Incorrect intent diff: ${reason}`);
+  }
+}
+
 export class SlippageError extends Error {
   constructor(readonly minAmountOut: bigint, readonly amountOut: bigint) {
     super(`Slippage error: minAmountOut: ${minAmountOut}, amountOut: ${amountOut}`);

@@ -60,18 +60,21 @@ await omni.finishDeposit(pending);
 
 ```ts
 // Only intent signer need for withdraw
-const withdraw = await omni.withdrawToken({
+const { nonce } = await omni.withdrawToken({
   signIntents: async (intents) => signedIntent, // sign by intent account with omni balance
   intentAccount: "account",
   chain: Network.Base,
   receiver: "0x...", // any onchain receiver
   token, // onchain address of token to withdraw
+  gasless: true,
   amount: 10n,
   ...signer,
 });
 
 // gasless withdraw
-if (withdraw == null) return;
+if (nonce == null) return;
+
+const withdraw = await omni.getPendingWithdraw(nonce);
 await omni.evm.withdraw({
   sendTransaction: async () => "hash", // any tx executor for claim tokens for receiver
   sender: "address", // any tx executor address
@@ -92,8 +95,7 @@ if (completed.length) await omni.clearPendingWithdrawals(completed);
 // Finish all
 const uncompleted = pendings.filter((t) => !t.completed);
 for (const pending of uncompleted) {
-  const withdraw = await omni.buildWithdraw(pending.nonce); // build with signature
-  await omni.evm.withdraw({ ...withdraw, ...signer }); // push tx
+  await omni.evm.withdraw({ ...pending, ...signer }); // push tx
 }
 ```
 

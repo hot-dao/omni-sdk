@@ -4,7 +4,7 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, getAccount } from "@solana/spl-token";
 
 import OmniService from "../bridge";
-import { Network, PendingDeposit, PendingDepositWithIntent } from "../types";
+import { Network, PendingDeposit } from "../types";
 import { omniEphemeralReceiver, parseAmount, wait } from "../utils";
 
 import AdvancedConnection from "./provider";
@@ -200,8 +200,9 @@ class SolanaOmniService {
     return await args.sendTransaction(instructions);
   }
 
-  async withdraw(args: { nonce: string; signature: string; amount: bigint; token: string; receiver: string; sender: string; sendTransaction: (tx: sol.TransactionInstruction[]) => Promise<string> }) {
-    const sign = Array.from(baseDecode(args.signature));
+  async withdraw(args: { nonce: string; amount: bigint; token: string; receiver: string; sender: string; sendTransaction: (tx: sol.TransactionInstruction[]) => Promise<string> }) {
+    const signature = await this.omni.api.withdrawSign(args.nonce);
+    const sign = Array.from(baseDecode(signature));
     const env = this.env(args.receiver);
 
     if (args.token === "native") {

@@ -1,9 +1,9 @@
+import { TonApiClient } from "@ton-api/client";
+import { JsonRpcProvider } from "@near-js/providers";
+import { Action } from "@near-js/transactions";
 import { Connection } from "@solana/web3.js";
 import { rpc } from "@stellar/stellar-sdk";
-import { TonApiClient } from "@ton-api/client";
-import { JsonRpcProvider } from "near-api-js/lib/providers";
-import { Action } from "near-api-js/lib/transaction";
-import * as ethers from "ethers";
+import { ethers } from "ethers";
 
 import { Logger } from "./utils";
 
@@ -13,41 +13,61 @@ export enum Network {
   Zcash = -5,
   Btc = -6,
 
-  Ton = 1117,
+  OmniTon = 1117,
+  Ton = 1111,
 
+  Eth = 1,
   Tron = 999,
   Solana = 1001,
   Stellar = 1100,
   Near = 1010,
-
-  Eth = 1,
   Polygon = 137,
   Arbitrum = 42161,
+  Aurora = 1313161554,
   Avalanche = 43114,
+  Linea = 59144,
+  Xlayer = 196,
   Base = 8453,
   Bnb = 56,
+  OpBnb = 204,
+  BnbTestnet = 97,
   Optimism = 10,
+  Scroll = 534352,
+  EbiChain = 98881,
+  Sei = 1329,
+  Blast = 81457,
+  Taiko = 167000,
+  Mantle = 5000,
+  Manta = 169,
+  Kava = 2222,
+  ZkSync = 324,
+  Monad = 10143,
+  Metis = 1088,
+  Gnosis = 100,
+  Fantom = 250,
+  Cronos = 25,
+  Chiliz = 88888,
+  Moonbeam = 1284,
+  Ronin = 2020,
+  Lisk = 1135,
+  Sonic = 146,
 }
 
 export interface BridgeOptions {
   logger?: Logger;
+  executeNearTransaction: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
 
   evmRpc?: Record<number, string[]> | ((chain: number) => ethers.AbstractProvider);
+  enableApproveMax?: boolean;
+
   solanaRpc?: Connection | string[];
   tonRpc?: TonApiClient | string;
-
   stellarRpc?: string | rpc.Server;
-  stellarBaseFee?: string;
-
   nearRpc?: JsonRpcProvider | string[];
-
-  enableApproveMax?: boolean;
 
   solverBusRpc?: string;
   mpcApi?: string[];
   api?: string;
-
-  executeNearTransaction: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
 }
 
 export interface ContractTransferType {
@@ -58,22 +78,11 @@ export interface ContractTransferType {
   amount: string;
 }
 
-export type TonVersion = Network.Ton;
-
-export interface BuildedWithdraw {
-  chain: number;
-  amount: bigint;
-  receiver: string;
-  signature: string;
-  token: string;
-  nonce: string;
-}
-
 export interface PendingWithdraw {
   timestamp: number;
   receiver: string;
   chain: number;
-  amount: string;
+  amount: bigint;
   nonce: string;
   token: string;
 }

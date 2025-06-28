@@ -55,10 +55,31 @@ class OmniApi {
   ): Promise<{
     amount_in: string;
     quote_hashes: string[];
+    signed_fee_quote: { payload: string; public_key: string; signature: string; standard: string };
     quote: { signer_id: string; deadline: string; intents: any[]; nonce: string; verifying_contract: string };
   }> {
     const res = await this.request(`/api/v1/exchange/intent_quote_with_exact_amount_out`, {
       body: JSON.stringify({ token_in: tokenIn, token_out: tokenOut, exact_amount_out: amount.toString() }),
+      endpoint: this.api,
+      method: "POST",
+    });
+
+    return await res.json();
+  }
+
+  async getSwapQuoteExectIn(
+    senderId: string,
+    tokenIn: string,
+    tokenOut: string,
+    amount: bigint
+  ): Promise<{
+    amount_out: string;
+    quote_hashes: string[];
+    signed_fee_quote: { payload: string; public_key: string; signature: string; standard: string };
+    quote: { signer_id: string; deadline: string; intents: any[]; nonce: string; verifying_contract: string };
+  }> {
+    const res = await this.request(`/api/v1/exchange/intent_exact_swap_quote`, {
+      body: JSON.stringify({ sender_id: senderId, token_in: tokenIn, token_out: tokenOut, exact_amount_in: amount.toString() }),
       endpoint: this.api,
       method: "POST",
     });
@@ -72,7 +93,7 @@ class OmniApi {
     return { groups, liquidityContract: stable_swap_contract };
   }
 
-  async estimateSwap(
+  async estimateSwapStableGroup(
     intentAccount: string,
     group: Record<string, string>,
     intentTo: string,
@@ -116,6 +137,7 @@ class OmniApi {
   }
 
   async depositSign(chain: number, nonce: string, sender_id: string, receiver_id: string, token_id: string, amount: string) {
+    if (chain === 1111) chain = 1117;
     const body = JSON.stringify({ nonce, chain_from: chain, sender_id, receiver_id, token_id, amount });
     const res = await this.request("/deposit/sign", { method: "POST", body });
     const { signature } = await res.json();

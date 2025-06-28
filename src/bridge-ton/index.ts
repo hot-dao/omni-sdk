@@ -9,6 +9,7 @@ import OmniService from "../bridge";
 import { Network, PendingDeposit } from "../types";
 import { MIN_COMMISSION, OpCode } from "./constants";
 
+import { TON_MINTER_TO_JETTON_MAPPER, TON_JETTON_TO_MINTER_MAPPER } from "./jettons";
 import { TonMetaWallet as TonMetaWalletV2 } from "./wrappers/TonMetaWallet";
 import { DepositJetton as DepositJettonV2 } from "./wrappers/DepositJetton";
 import { JettonMinter as JettonMinterV2 } from "./wrappers/JettonMinter";
@@ -16,14 +17,27 @@ import { JettonWallet as JettonWalletV2 } from "./wrappers/JettonWallet";
 import { UserJetton as UserJettonV2 } from "./wrappers/UserJetton";
 import { ReviewFee } from "../fee";
 
-class TonLegacyOmniService {
+class TonOmniService {
   readonly tonApi: TonApiClient;
   readonly client: ContractAdapter;
+
+  static TON_MINTER_TO_JETTON_MAPPER = TON_MINTER_TO_JETTON_MAPPER;
+  static TON_JETTON_TO_MINTER_MAPPER = TON_JETTON_TO_MINTER_MAPPER;
 
   private metaWallet?: OpenedContract<TonMetaWalletV2>;
   constructor(readonly omni: OmniService, rpc?: TonApiClient | string) {
     this.tonApi = rpc instanceof TonApiClient ? rpc : new TonApiClient({ apiKey: rpc });
     this.client = new ContractAdapter(this.tonApi);
+  }
+
+  async registerMinterJetton(minterAddress: string) {
+    const { metaWallet, JettonMinter } = this.getMetaWallet();
+    const minter = this.client.open(JettonMinter.createFromAddress(Address.parse(minterAddress)));
+    const tokenAddress = await minter.getWalletAddressOf(metaWallet.address);
+
+    const key = Address.parse(minterAddress).toString({ bounceable: true });
+    TonOmniService.TON_MINTER_TO_JETTON_MAPPER[key] = tokenAddress.toString({ bounceable: true });
+    TonOmniService.TON_JETTON_TO_MINTER_MAPPER[tokenAddress.toString({ bounceable: true })] = key;
   }
 
   getMetaWallet() {
@@ -32,17 +46,15 @@ class TonLegacyOmniService {
   }
 
   async getWithdrawFee(): Promise<ReviewFee> {
-    const additional = 0n;
     const realGas = toNano(0.025);
-    const needNative = toNano(0.05);
-    return new ReviewFee({ reserve: needNative, baseFee: realGas, priorityFee: 0n, gasLimit: 1n, chain: Network.Ton, additional });
+    const needNative = toNano(0.12);
+    return new ReviewFee({ reserve: needNative, baseFee: realGas, gasLimit: 1n, chain: Network.Ton });
   }
 
   async getDepositFee(token: string): Promise<ReviewFee> {
-    const need = token === "native" ? toNano(0.12) : toNano(0.12);
-    return new ReviewFee({ reserve: need, baseFee: need / 2n, priorityFee: 0n, chain: Network.Ton, gasLimit: 1n });
+    const need = token === "native" ? toNano(0.07) : toNano(0.13);
+    return new ReviewFee({ reserve: need, baseFee: toNano(0.025), chain: Network.Ton, gasLimit: 1n });
   }
-
   executor(sendTransaction: (tx: SenderArguments) => Promise<string>) {
     const executor = {
       hash: "",
@@ -70,23 +82,15 @@ class TonLegacyOmniService {
     return BigInt(nonce) <= BigInt(lastNonce.toString());
   }
 
-  async withdraw(args: {
-    sender: string;
-    refundAddress: string;
-    amount: bigint;
-    token: string;
-    signature: string;
-    nonce: string;
-    receiver: string;
-    sendTransaction: (tx: SenderArguments) => Promise<string>;
-  }) {
+  async withdraw(args: { sender: string; refundAddress: string; amount: bigint; token: string; nonce: string; receiver: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
     const { metaWallet } = this.getMetaWallet();
     const executor = this.executor(args.sendTransaction);
+    const signature = await this.omni.api.withdrawSign(args.nonce);
 
     if (args.token === "native") {
       await metaWallet.sendUserNativeWithdraw(executor, {
         userWallet: Address.parse(args.sender),
-        signature: Buffer.from(baseDecode(args.signature)),
+        signature: Buffer.from(baseDecode(signature)),
         excessAcc: Address.parse(args.refundAddress),
         nonce: BigInt(args.nonce),
         value: args.amount + toNano("0.12"),
@@ -97,11 +101,15 @@ class TonLegacyOmniService {
     // withdraw token
     else {
       console.log("withdraw token", args);
+      const { metaWallet, JettonMinter } = this.getMetaWallet();
+      const minter = this.client.open(JettonMinter.createFromAddress(Address.parse(args.token)));
+      const tokenAddress = await minter.getWalletAddressOf(metaWallet.address);
+
       await metaWallet.sendUserTokenWithdraw(executor, {
         userWallet: Address.parse(args.sender),
-        signature: Buffer.from(baseDecode(args.signature)),
+        signature: Buffer.from(baseDecode(signature)),
         excessAcc: Address.parse(args.refundAddress),
-        token: Address.parse(args.token),
+        token: tokenAddress,
         nonce: BigInt(args.nonce),
         amount: args.amount,
         value: toNano("0.12"),
@@ -177,7 +185,7 @@ class TonLegacyOmniService {
     const deposit: PendingDeposit = {
       timestamp: Date.now(),
       sender: tx.account.address.toString({ bounceable: false }),
-      chain: Network.Ton,
+      chain: Network.OmniTon,
       receiver: "",
       nonce: "",
       amount: "",
@@ -222,4 +230,4 @@ class TonLegacyOmniService {
   }
 }
 
-export default TonLegacyOmniService;
+export default TonOmniService;

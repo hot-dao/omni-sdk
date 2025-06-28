@@ -3,7 +3,7 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 
 import { ERC20_ABI, OMNI_ABI, OMNI_CONTRACT, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
 import { encodeTokenAddress, omniEphemeralReceiver, wait } from "../utils";
-import { Network, PendingDeposit, PendingDepositWithIntent } from "../types";
+import { Network, PendingDeposit } from "../types";
 import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
 
@@ -94,7 +94,8 @@ class EvmOmniService {
     return await contract.usedNonces(nonce);
   }
 
-  async withdraw(args: { chain: number; amount: bigint; token: string; signature: string; nonce: string; receiver: string; sendTransaction: (tx: ethers.TransactionRequest) => Promise<string> }) {
+  async withdraw(args: { chain: number; amount: bigint; token: string; nonce: string; receiver: string; sendTransaction: (tx: ethers.TransactionRequest) => Promise<string> }) {
+    const signature = await this.omni.api.withdrawSign(args.nonce);
     this.omni.logger?.log(`Withdrawing ${args.amount} ${args.token} from ${args.chain}`);
     const contract = new Contract(OMNI_CONTRACT, OMNI_ABI, this.getProvider(args.chain));
 
@@ -103,7 +104,7 @@ class EvmOmniService {
       hexlify(baseDecode(encodeTokenAddress(args.chain, args.token))),
       args.receiver,
       BigInt(args.amount),
-      hexlify(baseDecode(args.signature))
+      hexlify(baseDecode(signature))
     );
 
     const hash = await args.sendTransaction({ ...tx, chainId: args.chain });

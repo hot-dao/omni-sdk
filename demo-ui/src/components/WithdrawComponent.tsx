@@ -57,7 +57,7 @@ const WithdrawComponent = () => {
       setError(null);
       setSuccess(null);
 
-      const result = await bridge.withdrawToken({
+      const { nonce } = await bridge.withdrawToken({
         signIntents: nearSigner.signIntents,
         intentAccount: nearSigner.intentAccount!,
         receiver: receiver.trim(),
@@ -66,22 +66,20 @@ const WithdrawComponent = () => {
         token: token,
       });
 
-      if (result) {
-        if (result.chain === Network.Ton) {
-          await bridge.ton.withdraw({
-            sender: tonSigner.address!,
-            sendTransaction: tonSigner.sendTransaction,
-            refundAddress: tonSigner.address!,
-            ...result,
-          });
-        }
+      if (nonce) {
+        const pending = await bridge.getPendingWithdrawal(nonce);
+        switch (pending.chain) {
+          case Network.Ton: {
+            const sender = tonSigner.address!;
+            const refundAddress = tonSigner.address!;
+            const sendTransaction = tonSigner.sendTransaction;
+            await bridge.ton.withdraw({ sendTransaction, refundAddress, sender, ...pending });
+            break;
+          }
 
-        // EVM
-        else {
-          await bridge.evm.withdraw({
-            sendTransaction: evmSigner.sendTransaction,
-            ...result,
-          });
+          default:
+            await bridge.evm.withdraw({ sendTransaction: evmSigner.sendTransaction, ...pending });
+            break;
         }
       }
 

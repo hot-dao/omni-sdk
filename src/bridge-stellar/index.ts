@@ -4,7 +4,7 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import BigNumber from "bignumber.js";
 
 import { omniEphemeralReceiver, parseAmount } from "../utils";
-import { Network, PendingDeposit, PendingDepositWithIntent } from "../types";
+import { Network, PendingDeposit } from "../types";
 import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
 
@@ -66,9 +66,10 @@ class StellarService {
     return await args.sendTransaction(tx);
   }
 
-  async withdraw(args: { amount: bigint; token: string; signature: string; nonce: string; receiver: string; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }) {
+  async withdraw(args: { amount: bigint; token: string; nonce: string; receiver: string; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }) {
     const to = new Contract(CONTRACT);
-    const sign = Buffer.from(baseDecode(args.signature));
+    const signature = await this.omni.api.withdrawSign(args.nonce);
+    const sign = Buffer.from(baseDecode(signature));
 
     if (args.token !== "native") await this.activateToken(args);
     const contractId = args.token === "native" ? new Asset("XLM").contractId(Networks.PUBLIC) : args.token;
