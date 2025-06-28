@@ -1,42 +1,25 @@
 import { baseDecode, baseEncode } from "@near-js/utils";
-import { JsonRpcProvider } from "@near-js/providers";
 import { Action } from "near-api-js/lib/transaction";
-import { Connection } from "@solana/web3.js";
-import { rpc } from "@stellar/stellar-sdk";
-import { TonApiClient } from "@ton-api/client";
-import * as ethers from "ethers";
 
-import { GaslessNotAvailable, GaslessWithdrawCanceled, GaslessWithdrawTxNotFound, MismatchReceiverAndIntentAccount, ProcessAborted } from "./errors";
-import { Logger, TGAS, OMNI_HOT_V2, toOmniIntent, encodeReceiver, encodeTokenAddress, decodeTokenAddress, decodeReceiver, wait, toOmni, functionCall, isTon, omniEphemeralReceiver } from "./utils";
-import { BuildedWithdraw, Network, PendingDepositWithIntent, PendingWithdraw } from "./types";
+import { Logger, TGAS, OMNI_HOT_V2, toOmniIntent, encodeReceiver, encodeTokenAddress, decodeTokenAddress, decodeReceiver, wait, toOmni, functionCall, omniEphemeralReceiver } from "./utils";
+import { BridgeOptions, BuildedWithdraw, Network, PendingDepositWithIntent, PendingWithdraw } from "./types";
 import OmniApi from "./api";
+import {
+  GaslessNotAvailable,
+  GaslessWithdrawCanceled,
+  GaslessWithdrawTxNotFound,
+  IntentBalanceIsLessThanAmount,
+  MismatchReceiverAndIntentAccount,
+  NearTokenNotRegistered,
+  ProcessAborted,
+  SlippageError,
+} from "./errors";
 
 import SolanaOmniService from "./bridge-solana";
 import StellarService from "./bridge-stellar";
 import EvmOmniService from "./bridge-evm";
 import TonOmniService from "./bridge-ton";
 import NearBridge from "./bridge-near";
-
-interface BridgeOptions {
-  logger?: Logger;
-
-  evmRpc?: Record<number, string[]> | ((chain: number) => ethers.AbstractProvider);
-  solanaRpc?: Connection | string[];
-  tonRpc?: TonApiClient | string;
-
-  stellarRpc?: string | rpc.Server;
-  stellarBaseFee?: string;
-
-  nearRpc?: JsonRpcProvider | string[];
-
-  enableApproveMax?: boolean;
-
-  solverBusRpc?: string;
-  mpcApi?: string[];
-  api?: string;
-
-  executeNearTransaction: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
-}
 
 class HotBridge {
   logger?: Logger;
@@ -57,8 +40,8 @@ class HotBridge {
     this.api = new OmniApi(options.api, options.mpcApi);
     this.evm = new EvmOmniService(this, options.evmRpc, { enableApproveMax: options.enableApproveMax });
     this.solverBusRpc = options.solverBusRpc ?? "https://api0.herewallet.app/api/v1/evm/intent-solver";
-    this.stellar = new StellarService(this, options.stellarRpc, options.stellarBaseFee);
     this.solana = new SolanaOmniService(this, options.solanaRpc);
+    this.stellar = new StellarService(this, options.stellarRpc);
     this.ton = new TonOmniService(this, options.tonRpc);
     this.near = new NearBridge(this, options.nearRpc);
   }
@@ -266,7 +249,6 @@ class HotBridge {
 
       if (deposit) {
         const receiver = baseEncode(omniEphemeralReceiver(intentAccount));
-        console.log(deposit.receiver, receiver);
         if (deposit.receiver !== receiver) throw new MismatchReceiverAndIntentAccount(deposit.receiver, intentAccount);
         return { ...deposit, intentAccount };
       }
@@ -344,7 +326,7 @@ class HotBridge {
       return {
         intent: address === "wrap.near" ? "native_withdraw" : "ft_withdraw",
         memo: args.chain !== Network.Near ? `WITHDRAW_TO:${args.receiver}` : undefined,
-        receiver_id: args.chain !== Network.Near ? token : args.intentAccount,
+        receiver_id: args.chain !== Network.Near ? address : args.intentAccount,
         token: address === "wrap.near" ? undefined : address,
         amount: args.amount.toString(),
       };
@@ -366,16 +348,13 @@ class HotBridge {
     };
   }
 
-  async buildSwapExectOutIntent(args: { chainFrom: Network; tokenFrom: string; chainTo: Network; tokenTo: string; amount: bigint }) {
-    const from = toOmniIntent(args.chainFrom, args.tokenFrom);
-    const to = toOmniIntent(args.chainTo, args.tokenTo);
-    const quote = await this.api.getSwapQuoteExectOut(from, to, args.amount);
-
+  async buildSwapExectOutIntent(args: { intentFrom: string; intentTo: string; amount: bigint }) {
+    const quote = await this.api.getSwapQuoteExectOut(args.intentFrom, args.intentTo, args.amount);
     return {
       quote_hashes: quote.quote_hashes,
       amount_in: quote.amount_in,
       intent: {
-        diff: { [from]: `-${quote.amount_in}`, [to]: String(args.amount) },
+        diff: { [args.intentFrom]: `-${quote.amount_in}`, [args.intentTo]: String(args.amount) },
         referral: "intents.tg",
         intent: "token_diff",
       },
@@ -413,6 +392,10 @@ class HotBridge {
 
   async checkLocker(chain: number, receiver: string) {
     if (chain === Network.Near) return;
+
+    // No need for POA bridge
+    if (chain === Network.Tron || chain === Network.Btc || chain === Network.Zcash) return;
+
     const pendings = await this.getPendingWithdrawalsWithStatus(chain, receiver);
     const completed = pendings.filter((t) => t.completed);
     if (completed.length) await this.clearPendingWithdrawals(completed);
@@ -440,10 +423,8 @@ class HotBridge {
     let qoute;
     if (gasPrice > 0n && args.token !== "native") {
       qoute = await this.buildSwapExectOutIntent({
-        chainFrom: args.chain,
-        tokenFrom: args.token,
-        chainTo: args.chain,
-        tokenTo: "native",
+        intentFrom: toOmniIntent(args.chain, args.token),
+        intentTo: toOmniIntent(args.chain, "native"),
         amount: gasPrice,
       }).catch(() => null);
 
@@ -558,8 +539,18 @@ class HotBridge {
     receiver: string;
     intentAccount: string;
     signIntents: (intents: Record<string, any>[]) => Promise<any>;
+    adjustMax?: boolean;
     gasless?: boolean;
   }) {
+    if (args.chain === Network.Near && args.token !== "wrap.near") {
+      const isRegistered = await this.near.isTokenRegistered(args.token, args.intentAccount);
+      if (!isRegistered) throw new NearTokenNotRegistered(args.token, args.intentAccount);
+    }
+
+    const balance = await this.getIntentBalance(toOmniIntent(args.chain, args.token), args.intentAccount);
+    if (args.adjustMax && balance < args.amount) args.amount = balance;
+    if (balance < args.amount) throw new IntentBalanceIsLessThanAmount(args.token, args.intentAccount, args.amount);
+
     this.logger?.log(`Withdrawing ${args.amount} ${args.chain} ${args.token}`);
     const result = await this.buildWithdrawToken(args);
 
@@ -569,6 +560,7 @@ class HotBridge {
     this.logger?.log(`Push withdraw intent`);
     const tx = await this.executeIntents([signedIntents], result.quoteHashes);
 
+    // TODO: Add POA bridge
     if (args.chain === Network.Near) return;
     if (args.chain === Network.Btc || args.chain === Network.Zcash) return;
     if (args.chain === Network.Tron) return await this.waitPoaWithdraw(tx.hash);
@@ -587,15 +579,24 @@ class HotBridge {
     return await this.buildWithdraw(nonce); // TODO: return tx hash
   }
 
-  async swapTokens(args: { chainFrom: Network; chainTo: Network; tokenFrom: string; tokenTo: string; amount: number; intentAccount: string; signIntents: (intents: any[]) => Promise<any> }) {
-    const tokenFrom = toOmniIntent(args.chainFrom, args.tokenFrom);
-    const tokenTo = toOmniIntent(args.chainTo, args.tokenTo);
+  async swapTokens(args: {
+    intentFrom: string;
+    intentTo: string;
+    amountInFloat: number;
+    minAmountOut: bigint;
+    intentAccount: string;
+    signIntents: (intents: any[]) => Promise<any>;
+  }): Promise<{ amountOut: bigint }> {
+    const balance = await this.getIntentBalance(args.intentFrom, args.intentAccount);
+    const quote = await this.buildSwapExectInIntent(args.intentAccount, { [args.intentFrom]: String(balance) }, args.intentTo, args.amountInFloat);
 
-    const balance = await this.getIntentBalance(tokenFrom, args.intentAccount);
-    const quote = await this.buildSwapExectInIntent(args.intentAccount, { [tokenFrom]: String(balance) }, tokenTo, args.amount);
+    const amountOut = BigInt(quote.intents[0].diff[args.intentTo] || 0n);
+    if (amountOut < args.minAmountOut) throw new SlippageError(args.minAmountOut, amountOut);
+    quote.intents[0].diff[args.intentTo] = String(args.minAmountOut);
 
     const signedIntents = await args.signIntents(quote.intents);
-    return await this.executeIntents([quote.signed_fee_quote, signedIntents], quote.quote_hashes);
+    await this.executeIntents([signedIntents, quote.signed_fee_quote].filter(Boolean), quote.quote_hashes);
+    return { amountOut };
   }
 }
 

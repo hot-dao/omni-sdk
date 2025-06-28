@@ -1,3 +1,12 @@
+import { Connection } from "@solana/web3.js";
+import { rpc } from "@stellar/stellar-sdk";
+import { TonApiClient } from "@ton-api/client";
+import { JsonRpcProvider } from "near-api-js/lib/providers";
+import { Action } from "near-api-js/lib/transaction";
+import * as ethers from "ethers";
+
+import { Logger } from "./utils";
+
 export enum Network {
   Omni_v1 = 0,
   Hot = -4,
@@ -18,6 +27,27 @@ export enum Network {
   Base = 8453,
   Bnb = 56,
   Optimism = 10,
+}
+
+export interface BridgeOptions {
+  logger?: Logger;
+
+  evmRpc?: Record<number, string[]> | ((chain: number) => ethers.AbstractProvider);
+  solanaRpc?: Connection | string[];
+  tonRpc?: TonApiClient | string;
+
+  stellarRpc?: string | rpc.Server;
+  stellarBaseFee?: string;
+
+  nearRpc?: JsonRpcProvider | string[];
+
+  enableApproveMax?: boolean;
+
+  solverBusRpc?: string;
+  mpcApi?: string[];
+  api?: string;
+
+  executeNearTransaction: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
 }
 
 export interface ContractTransferType {

@@ -92,21 +92,9 @@ class NearBridge {
     });
   }
 
-  async getRegisterTokenTrx(token: string, address: string, deposit?: string) {
+  async isTokenRegistered(token: string, address: string) {
     const storage = await this.viewFunction({ args: { account_id: address }, methodName: "storage_balance_of", contractId: token });
-    if (storage != null) return null;
-
-    return {
-      receiverId: token,
-      actions: [
-        functionCall({
-          gas: String(10n * TGAS),
-          methodName: "storage_deposit",
-          deposit: deposit || "12500000000000000000000",
-          args: { account_id: address, registration_only: true },
-        }),
-      ],
-    };
+    return storage != null;
   }
 
   public async getWrapNearDepositAction(amount: string | bigint, address: string) {

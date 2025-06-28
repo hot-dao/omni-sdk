@@ -27,3 +27,21 @@ export class MismatchReceiverAndIntentAccount extends Error {
     super(`Mismatch receiver and intent account: ${receiver} and ${intentAccount}`);
   }
 }
+
+export class IntentBalanceIsLessThanAmount extends Error {
+  constructor(readonly token: string, readonly intentAccount: string, readonly amount: bigint) {
+    super(`Intent balance is less than amount for token ${token} on intent account ${intentAccount} (amount: ${amount})`);
+  }
+}
+
+export class SlippageError extends Error {
+  constructor(readonly minAmountOut: bigint, readonly amountOut: bigint) {
+    super(`Slippage error: minAmountOut: ${minAmountOut}, amountOut: ${amountOut}`);
+  }
+}
+
+export class NearTokenNotRegistered extends Error {
+  constructor(readonly token: string, readonly intentAccount: string) {
+    super(`Near token ${token} not registered on intent account ${intentAccount}`);
+  }
+}
