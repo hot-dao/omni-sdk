@@ -1,11 +1,15 @@
-import { Action } from "near-api-js/lib/transaction";
-import { JsonRpcProvider } from "near-api-js/lib/providers";
-import { ViewFunctionCallOptions } from "near-api-js/lib/account";
-import { transactions } from "near-api-js";
+import { Action } from "@near-js/transactions";
+import { JsonRpcProvider } from "@near-js/providers";
 
 import OmniService from "../bridge";
 import { functionCall, TGAS } from "../utils";
 import NearRpcProvider from "./provider";
+
+interface ViewFunctionCallOptions {
+  contractId: string;
+  methodName: string;
+  args?: object;
+}
 
 class NearBridge {
   rpc: JsonRpcProvider;
@@ -38,7 +42,7 @@ class NearBridge {
     sendTransaction: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<string>;
   }) {
     const token = args.token === "native" ? "wrap.near" : args.token;
-    let depositWnear: transactions.Action[] = [];
+    let depositWnear: Action[] = [];
 
     if (token === "wrap.near") {
       this.logger?.log(`Wrapping native NEAR`);

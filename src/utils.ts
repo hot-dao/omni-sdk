@@ -1,7 +1,7 @@
 import { getBytes, hexlify } from "ethers";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import { Address as StellarAddress, xdr } from "@stellar/stellar-sdk";
-import { transactions } from "near-api-js";
+import { actionCreators } from "@near-js/transactions";
 import { Address } from "@ton/core";
 import crypto from "crypto";
 
@@ -15,7 +15,7 @@ export const INTENT_PREFIX = "nep245:v2_1.omni.hot.tg:";
 export const TGAS = 1000000000000n;
 
 export const functionCall = (args: { methodName: string; args: any; gas: string; deposit: string }) => {
-  return transactions.functionCall(args.methodName, JSON.parse(JSON.stringify(args.args, (_, v) => (typeof v === "bigint" ? v.toString() : v))), BigInt(args.gas), BigInt(args.deposit));
+  return actionCreators.functionCall(args.methodName, JSON.parse(JSON.stringify(args.args, (_, v) => (typeof v === "bigint" ? v.toString() : v))), BigInt(args.gas), BigInt(args.deposit));
 };
 
 export const isTon = (id: number): id is Network.OmniTon | Network.Ton => {

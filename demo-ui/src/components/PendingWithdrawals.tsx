@@ -66,6 +66,8 @@ const PendingWithdrawalsComponent = () => {
     setError(null);
 
     try {
+      await bridge.checkWithdrawNonce(withdraw.chain, withdraw.receiver, withdraw.nonce);
+
       // Get withdrawal data using buildWithdraw
       switch (withdraw.chain) {
         case Network.Ton: {
@@ -73,11 +75,13 @@ const PendingWithdrawalsComponent = () => {
           const refundAddress = tonWallet.address!;
           const sendTransaction = tonWallet.sendTransaction;
           await bridge.ton.withdraw({ sendTransaction, refundAddress, sender, ...withdraw });
+          await bridge.checkLocker(withdraw.chain, withdraw.receiver);
           break;
         }
 
         default:
           await bridge.evm.withdraw({ sendTransaction: evmWallet.sendTransaction, ...withdraw });
+          await bridge.checkLocker(withdraw.chain, withdraw.receiver);
           break;
       }
 

@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { makeObservable, observable, runInAction } from "mobx";
 import { TokenAsset, utils } from "@hot-labs/omni-sdk";
-import { uniq } from "lodash";
 
 import { bridge } from "./bridge";
 
@@ -24,7 +23,9 @@ export const useAvailableTokens = (chain: number) => {
   useEffect(() => {
     setLoading(true);
     getBridgableTokens()
-      .then((tokens) => setTokens(uniq(["native", ...tokens.filter((t) => t.chain === chain).map((t) => t.address)])))
+      .then((tokens) =>
+        setTokens(Array.from(new Set(["native", ...tokens.filter((t) => t.chain === chain).map((t) => t.address)])))
+      )
       .finally(() => setLoading(false));
   }, [chain]);
 

@@ -1,7 +1,6 @@
+import type { Action } from "@near-js/transactions";
 import { baseDecode, baseEncode } from "@near-js/utils";
-import { Action } from "near-api-js/lib/transaction";
 
-import { Logger, TGAS, OMNI_HOT_V2, toOmniIntent, encodeReceiver, encodeTokenAddress, decodeTokenAddress, decodeReceiver, wait, toOmni, functionCall, omniEphemeralReceiver, isTon } from "./utils";
 import {
   GaslessNotAvailable,
   GaslessWithdrawCanceled,
@@ -12,6 +11,7 @@ import {
   ProcessAborted,
   SlippageError,
 } from "./errors";
+import { Logger, TGAS, OMNI_HOT_V2, toOmniIntent, encodeReceiver, encodeTokenAddress, decodeTokenAddress, decodeReceiver, wait, toOmni, functionCall, omniEphemeralReceiver, isTon } from "./utils";
 import { BridgeOptions, Network, PendingDepositWithIntent, PendingWithdraw } from "./types";
 import OmniApi from "./api";
 
@@ -25,25 +25,26 @@ class HotBridge {
   logger?: Logger;
   solverBusRpc: string;
   executeNearTransaction: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
+  near: NearBridge;
+  api: OmniApi;
 
   stellar: StellarService;
   solana: SolanaOmniService;
   ton: TonOmniService;
   evm: EvmOmniService;
-  near: NearBridge;
-  api: OmniApi;
 
   constructor(options: BridgeOptions) {
     this.executeNearTransaction = options.executeNearTransaction;
     this.logger = options.logger;
 
     this.api = new OmniApi(options.api, options.mpcApi);
-    this.evm = new EvmOmniService(this, options.evmRpc, { enableApproveMax: options.enableApproveMax });
     this.solverBusRpc = options.solverBusRpc ?? "https://api0.herewallet.app/api/v1/evm/intent-solver";
+    this.near = new NearBridge(this, options.nearRpc);
+
+    this.evm = new EvmOmniService(this, options.evmRpc, { enableApproveMax: options.enableApproveMax });
     this.solana = new SolanaOmniService(this, options.solanaRpc);
     this.stellar = new StellarService(this, options.stellarRpc);
     this.ton = new TonOmniService(this, options.tonRpc);
-    this.near = new NearBridge(this, options.nearRpc);
   }
 
   async executeIntents(signedDatas: any[], quoteHashes: string[]) {
@@ -385,6 +386,16 @@ class HotBridge {
       methodName: "get_withdrawal_hash",
       args: { nonce },
     });
+  }
+
+  async checkWithdrawNonce(chain: number, receiver: string, nonce: string) {
+    const pendings = await this.getPendingWithdrawalsWithStatus(chain, receiver);
+    const completed = pendings.filter((t) => t.completed);
+    if (completed.length) await this.clearPendingWithdrawals(completed);
+
+    const uncompleted = pendings.filter((t) => !t.completed);
+    const earliest = uncompleted.find((t) => BigInt(t.nonce) < BigInt(nonce));
+    if (earliest) throw `Withdrawal previous pending withdrawal`;
   }
 
   async checkLocker(chain: number, receiver: string) {

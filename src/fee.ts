@@ -1,4 +1,4 @@
-import { FeeData } from "ethers";
+import type { FeeData } from "ethers";
 import { Network } from "./types";
 
 export interface FeeOption {

@@ -1,7 +1,6 @@
 import { getErrorTypeFromErrorMessage, parseRpcError } from "@near-js/utils";
-import { JsonRpcProvider } from "near-api-js/lib/providers";
+import { JsonRpcProvider } from "@near-js/providers";
 import { TypedError } from "@near-js/types";
-import isObject from "lodash/isObject";
 
 import { wait } from "../utils";
 
@@ -16,7 +15,7 @@ export class NetworkError extends Error {
   }
 
   toString() {
-    return isObject(this.body) ? JSON.stringify(this.body) : this.body;
+    return typeof this.body === "object" ? JSON.stringify(this.body) : this.body;
   }
 }
 

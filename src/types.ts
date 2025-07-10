@@ -1,9 +1,9 @@
-import { TonApiClient } from "@ton-api/client";
-import { JsonRpcProvider } from "@near-js/providers";
-import { Action } from "@near-js/transactions";
-import { Connection } from "@solana/web3.js";
-import { rpc } from "@stellar/stellar-sdk";
-import { ethers } from "ethers";
+import type { TonApiClient } from "@ton-api/client";
+import type { JsonRpcProvider } from "@near-js/providers";
+import type { Action } from "@near-js/transactions";
+import type { Connection } from "@solana/web3.js";
+import type { rpc } from "@stellar/stellar-sdk";
+import type { AbstractProvider } from "ethers";
 
 import { Logger } from "./utils";
 
@@ -57,7 +57,7 @@ export interface BridgeOptions {
   logger?: Logger;
   executeNearTransaction: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
 
-  evmRpc?: Record<number, string[]> | ((chain: number) => ethers.AbstractProvider);
+  evmRpc?: Record<number, string[]> | ((chain: number) => AbstractProvider);
   enableApproveMax?: boolean;
 
   solanaRpc?: Connection | string[];

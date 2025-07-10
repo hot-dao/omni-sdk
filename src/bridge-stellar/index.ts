@@ -1,4 +1,4 @@
-import { Address, Asset, Contract, Networks, rpc, scValToBigInt, StrKey, TimeoutInfinite, TransactionBuilder, xdr, XdrLargeInt } from "@stellar/stellar-sdk";
+import { Address, Asset, Contract, FeeBumpTransaction, Networks, rpc, scValToBigInt, StrKey, TimeoutInfinite, TransactionBuilder, xdr, XdrLargeInt } from "@stellar/stellar-sdk";
 import { Operation, Transaction } from "@stellar/stellar-sdk";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import BigNumber from "bignumber.js";
@@ -98,10 +98,19 @@ class StellarService {
     const txResult = await this.soroban.getTransaction(hash);
     if (txResult.status !== rpc.Api.GetTransactionStatus.SUCCESS) throw "";
 
-    const tx = new Transaction(txResult.envelopeXdr, Networks.PUBLIC);
-    if (tx.operations[0].type !== "invokeHostFunction") throw "Deposit tx not found";
-    const args = tx.operations[0].func.invokeContract().args();
+    let tx;
+    try {
+      // Try parsing as fee bump transaction first
+      const feeBumpTx = new FeeBumpTransaction(txResult.envelopeXdr, Networks.PUBLIC);
+      tx = feeBumpTx.innerTransaction;
+      if (!tx.operations.length || tx.operations[0].type !== "invokeHostFunction") throw "Deposit tx not found";
+    } catch {
+      // If not a fee bump tx, parse as regular transaction
+      tx = new Transaction(txResult.envelopeXdr, Networks.PUBLIC);
+      if (!tx.operations.length || tx.operations[0].type !== "invokeHostFunction") throw "Deposit tx not found";
+    }
 
+    const args = tx.operations[0].func.invokeContract().args();
     const nativeToken = new Asset("XLM").contractId(Networks.PUBLIC);
     const sender = Address.fromScAddress(args[0].address());
     const amount = scValToBigInt(args[1]);
