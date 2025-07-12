@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Network, PendingWithdraw } from "@hot-labs/omni-sdk";
+import { Network, PendingWithdraw, utils } from "@hot-labs/omni-sdk";
 
 import {
   Card,
@@ -50,8 +50,15 @@ const PendingWithdrawalsComponent = () => {
     setError(null);
 
     try {
-      const pending = await bridge.getPendingWithdrawalsWithStatus(selectedNetwork, receiver);
-      setPendingWithdraw(pending.filter((t) => !t.completed));
+      try {
+        const address = utils.decodeReceiver(selectedNetwork, receiver);
+        const pending = await bridge.getPendingWithdrawalsWithStatus(selectedNetwork, address);
+        if (pending.length === 0) throw new Error("No pending withdrawals found");
+        setPendingWithdraw(pending.filter((t) => !t.completed));
+      } catch {
+        const pending = await bridge.getPendingWithdrawalsWithStatus(selectedNetwork, receiver);
+        setPendingWithdraw(pending.filter((t) => !t.completed));
+      }
     } catch (err) {
       console.error("Error fetching pending withdrawals:", err);
       setError("Failed to load pending withdrawals. Please try refreshing.");
@@ -70,7 +77,7 @@ const PendingWithdrawalsComponent = () => {
 
       // Get withdrawal data using buildWithdraw
       switch (withdraw.chain) {
-        case Network.Ton: {
+        case Network.OmniTon: {
           const sender = tonWallet.address!;
           const refundAddress = tonWallet.address!;
           const sendTransaction = tonWallet.sendTransaction;

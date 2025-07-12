@@ -17,6 +17,7 @@ export const bridge = new HotBridge({
     43114: avalanche.rpcUrls.default.http as any,
     1: mainnet.rpcUrls.default.http as any,
     2222: kava.rpcUrls.default.http as any,
+    10143: ["https://testnet-rpc.monad.xyz"],
   },
 
   executeNearTransaction: async () => {
