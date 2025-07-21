@@ -78,11 +78,14 @@ const PendingWithdrawalsComponent = () => {
       // Get withdrawal data using buildWithdraw
       switch (withdraw.chain) {
         case Network.OmniTon: {
-          const sender = tonWallet.address!;
-          const refundAddress = tonWallet.address!;
+          if (!tonWallet.address) throw new Error("Ton wallet not connected");
+          const sender = tonWallet.address;
+          const refundAddress = tonWallet.address;
           const sendTransaction = tonWallet.sendTransaction;
+
+          await bridge.checkWithdrawNonce(withdraw.chain, withdraw.receiver, withdraw.nonce);
           await bridge.ton.withdraw({ sendTransaction, refundAddress, sender, ...withdraw });
-          await bridge.checkLocker(withdraw.chain, withdraw.receiver);
+          await bridge.clearPendingWithdrawals([withdraw]);
           break;
         }
 

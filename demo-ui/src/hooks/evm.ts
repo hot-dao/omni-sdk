@@ -1,7 +1,7 @@
 import { type Config, http, createConfig, useConnectorClient, useDisconnect, useSwitchChain, useAccount } from "wagmi";
 import { base, mainnet, polygon, arbitrum, optimism, avalanche, aurora, linea, kava, bsc } from "wagmi/chains";
 import { BrowserProvider, JsonRpcSigner, toNumber, TransactionRequest } from "ethers";
-import type { Account, Chain, Client, Transport } from "viem";
+import { defineChain, type Account, type Chain, type Client, type Transport } from "viem";
 import { injected, metaMask, safe } from "wagmi/connectors";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useMemo } from "react";
@@ -9,9 +9,29 @@ import { useMemo } from "react";
 import "@rainbow-me/rainbowkit/styles.css";
 
 export const config = createConfig({
-  chains: [mainnet, bsc, base, polygon, arbitrum, optimism, avalanche, aurora, linea, kava],
+  chains: [
+    mainnet,
+    bsc,
+    base,
+    polygon,
+    arbitrum,
+    optimism,
+    avalanche,
+    aurora,
+    linea,
+    kava,
+    defineChain({
+      id: 10143,
+      name: "Monad",
+      network: "monad-testnet",
+      nativeCurrency: { name: "Monad", symbol: "MONAD", decimals: 18 },
+      rpcUrls: { default: { http: ["https://testnet-rpc.monad.xyz"] } },
+      testnet: true,
+    }),
+  ],
   connectors: [injected(), metaMask(), safe()],
   transports: {
+    10143: http("https://testnet-rpc.monad.xyz"),
     [polygon.id]: http(),
     [mainnet.id]: http(),
     [arbitrum.id]: http(),
