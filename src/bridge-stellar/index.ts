@@ -14,14 +14,14 @@ export const CONTRACT = "CCLWL5NYSV2WJQ3VBU44AMDHEVKEPA45N2QP2LL62O3JVKPGWWAQUVA
 class StellarService {
   readonly soroban: rpc.Server;
 
-  constructor(readonly omni: OmniService, rpcs?: string | rpc.Server, readonly baseFee = "100000") {
+  constructor(readonly omni: OmniService, rpcs?: string | rpc.Server, readonly baseFee = "500000") {
     this.soroban = typeof rpcs === "string" ? new rpc.Server(rpcs) : rpcs || new rpc.Server("https://mainnet.sorobanrpc.com");
   }
 
   // TODO: Compute gas dinamically
   async getWithdrawFee(): Promise<ReviewFee> {
-    const needNative = 0n; // BigInt(parseAmount(0.15, 7));
-    const realGas = 0n; // BigInt(parseAmount(0.1, 7));
+    const needNative = BigInt(parseAmount(0.15, 7));
+    const realGas = BigInt(parseAmount(0.1, 7));
     return new ReviewFee({ reserve: needNative, baseFee: realGas, chain: Network.Stellar });
   }
 
@@ -66,12 +66,23 @@ class StellarService {
     return await args.sendTransaction(tx);
   }
 
-  async withdraw(args: { amount: bigint; token: string; nonce: string; receiver: string; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }) {
+  async withdraw(args: {
+    amount: bigint;
+    token: string;
+    nonce: string;
+    receiver: string;
+    sender: string;
+    customActivationToken: (token: string, sender: string) => Promise<void>;
+    sendTransaction: (tx: Transaction) => Promise<string>;
+  }) {
+    if (args.token !== "native") {
+      if (args.customActivationToken) await args.customActivationToken(args.token, args.sender);
+      else await this.activateToken(args);
+    }
+
     const to = new Contract(CONTRACT);
     const signature = await this.omni.api.withdrawSign(args.nonce);
     const sign = Buffer.from(baseDecode(signature));
-
-    if (args.token !== "native") await this.activateToken(args);
     const contractId = args.token === "native" ? new Asset("XLM").contractId(Networks.PUBLIC) : args.token;
 
     const call = to.call(

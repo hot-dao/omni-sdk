@@ -22,6 +22,24 @@ export const isTon = (id: number): id is Network.OmniTon | Network.Ton => {
   return id === Network.OmniTon || id === Network.Ton;
 };
 
+export const PoA_BRIDGE_TOKENS: Record<string, string> = {
+  "tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near": `${Network.Tron}:TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`,
+  "tron.omft.near": `${Network.Tron}:native`,
+
+  "eth.omft.near": `${Network.Eth}:native`,
+  "eth-0xdac17f958d2ee523a2206206994597c13d831ec7.omft.near": `${Network.Eth}:0xdac17f958d2ee523a2206206994597c13d831ec7`,
+  "eth-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.omft.near": `${Network.Eth}:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48`,
+
+  // "sol.omft.near": `${Network.Solana}:native`,
+  // "sol-c800a4bd850783ccb82c2b2c7e84175443606352.omft.near": `${Network.Solana}:Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`, // USDT
+  // "sol-5ce3bf3a31af18be40ba30f721101b4341690186.omft.near": `${Network.Solana}:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, // USDC
+
+  "btc.omft.near": `${Network.Near}:btc.omft.near`,
+  "zec.omft.near": `${Network.Near}:zec.omft.near`,
+};
+
+export const PoA_BRIDGE_TOKENS_INVERTED: Record<string, string> = Object.fromEntries(Object.entries(PoA_BRIDGE_TOKENS).map(([k, v]) => [v, k]));
+
 /**
  * Convert omni id  or intent id to native chain token id, example:
  * 56_11111111111111111111 -> 56:native
@@ -31,11 +49,7 @@ export const isTon = (id: number): id is Network.OmniTon | Network.Ton => {
 export const fromOmni = (id: string) => {
   id = id.split(":").pop() || id;
 
-  // TRON PoA bridge supported
-  if (id === "tron.omft.near") return `${Network.Tron}:native`;
-  if (id === "tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near") return `${Network.Tron}:TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`;
-
-  // Other PoA tokens only to NEAR
+  if (PoA_BRIDGE_TOKENS[id.replace("nep141:", "")]) return PoA_BRIDGE_TOKENS[id.replace("nep141:", "")];
   if (id.startsWith("nep141:")) return `1010:${id.replace("nep141:", "")}`;
   if (!id.includes("_")) return `1010:${id}`;
 
@@ -64,10 +78,7 @@ export const toOmni = (id: string | number, addr?: string) => {
   if (+chain === 1111) chain = 1117;
 
   // PoA bridge tokens
-  if (+chain === Network.Tron && address === "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t") return `tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near`;
-  if (+chain === Network.Tron && address === "native") return `tron.omft.near`;
-  if (+chain === Network.Zcash && address === "native") return `zec.omft.near`;
-  if (+chain === Network.Btc && address === "native") return `btc.omft.near`;
+  if (PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]) return PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${address}`];
 
   if (+chain === Network.Hot) return address.replace(INTENT_PREFIX, "");
   if (+chain === Network.Near) return address;
@@ -90,10 +101,7 @@ export const toOmniIntent = (id: string | number, addr?: string): string => {
   if (+chain === 1111) chain = 1117;
 
   // PoA bridge tokens
-  if (+chain === Network.Tron && address === "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t") return `nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near`;
-  if (+chain === Network.Tron && address === "native") return `nep141:tron.omft.near`;
-  if (+chain === Network.Zcash && address === "native") return `nep141:zec.omft.near`;
-  if (+chain === Network.Btc && address === "native") return `nep141:btc.omft.near`;
+  if (PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]) return `nep141:${PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]}`;
 
   return `${INTENT_PREFIX}${chain}_${encodeTokenAddress(+chain, address)}`;
 };
@@ -132,10 +140,10 @@ export const encodeTokenAddress = (chain: Network, addr: string) => {
  * Convert unified omni address format (base58 encoded) to native chain address format
  */
 export const decodeTokenAddress = (chain: Network, addr: string) => {
+  if (addr === "") return "native";
   if (addr === "1") return "native";
   if (addr === "11111111111111111111") return "native";
   if (addr === "11111111111111111111111111111111") return "native";
-  if (addr === baseEncode(createAddressRlp())) return "native";
   if (addr === "111bzQBB5v7AhLyPMDwS8uJgQV24KaAPXtwyVWu2KXbbfQU6NXRCz") return "native";
 
   if (isTon(chain)) {
@@ -146,8 +154,10 @@ export const decodeTokenAddress = (chain: Network, addr: string) => {
 
     const token = parseAddressRlp(addr);
     const decoded = TonOmniService.TON_JETTON_TO_MINTER_MAPPER[Address.parse(token).toString({ bounceable: true })];
-    if (!decoded) throw "Unknown token address, use TonOmniService.registerMinterJetton";
-    return decoded;
+    if (decoded) return decoded;
+
+    console.error("Unknown token address, use TonOmniService.registerMinterJetton", addr);
+    return "";
   }
 
   if (chain === Network.Near) return Buffer.from(baseDecode(addr)).toString("utf8");

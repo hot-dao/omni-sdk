@@ -3,9 +3,8 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import { ContractAdapter } from "@ton-api/ton-adapter";
 import { TonApiClient } from "@ton-api/client";
 
-import { omniEphemeralReceiver } from "../utils";
 import OmniService from "../bridge";
-
+import { omniEphemeralReceiver } from "../utils";
 import { Network, PendingDeposit } from "../types";
 import { MIN_COMMISSION, OpCode } from "./constants";
 
@@ -46,16 +45,13 @@ class TonOmniService {
   }
 
   async getWithdrawFee(): Promise<ReviewFee> {
-    const realGas = toNano(0.025);
-    const needNative = toNano(0.12);
-    return new ReviewFee({ reserve: needNative, baseFee: realGas, gasLimit: 1n, chain: Network.Ton });
+    return new ReviewFee({ baseFee: toNano(0.05), reserve: toNano(0.1), gasLimit: 1n, chain: Network.Ton });
   }
 
   async getDepositFee(token: string): Promise<ReviewFee> {
     const need = token === "native" ? toNano(0.07) : toNano(0.13);
     return new ReviewFee({ reserve: need, baseFee: toNano(0.025), chain: Network.Ton, gasLimit: 1n });
   }
-
   executor(sendTransaction: (tx: SenderArguments) => Promise<string>) {
     const executor = {
       hash: "",
@@ -94,14 +90,13 @@ class TonOmniService {
         signature: Buffer.from(baseDecode(signature)),
         excessAcc: Address.parse(args.refundAddress),
         nonce: BigInt(args.nonce),
-        value: args.amount + toNano("0.12"),
+        value: toNano("0.15"),
         amount: args.amount,
       });
     }
 
     // withdraw token
     else {
-      console.log("withdraw token", args);
       const { metaWallet, JettonMinter } = this.getMetaWallet();
       const minter = this.client.open(JettonMinter.createFromAddress(Address.parse(args.token)));
       const tokenAddress = await minter.getWalletAddressOf(metaWallet.address);
@@ -113,7 +108,7 @@ class TonOmniService {
         token: tokenAddress,
         nonce: BigInt(args.nonce),
         amount: args.amount,
-        value: toNano("0.12"),
+        value: toNano("0.15"),
       });
     }
   }

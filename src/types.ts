@@ -56,6 +56,7 @@ export enum Network {
 export interface BridgeOptions {
   logger?: Logger;
   executeNearTransaction: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
+  activateStellarTokenIfNeeded: (token: string) => Promise<void>;
 
   evmRpc?: Record<number, string[]> | ((chain: number) => AbstractProvider);
   enableApproveMax?: boolean;
@@ -67,7 +68,7 @@ export interface BridgeOptions {
 
   solverBusRpc?: string;
   mpcApi?: string[];
-  api?: string;
+  api?: string[];
 }
 
 export interface ContractTransferType {
@@ -104,15 +105,4 @@ export interface PendingWithdrawWithStatus extends PendingWithdraw {
 
 export interface PendingDepositWithIntent extends PendingDeposit {
   intentAccount: string;
-}
-
-export interface TokenAsset {
-  intents_id: string;
-  chain_id: number;
-  contract_id: string;
-  usd_rate: number;
-  decimal: number;
-  icon: string;
-  symbol: string;
-  name: string;
 }
