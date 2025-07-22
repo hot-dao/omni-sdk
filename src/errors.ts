@@ -51,3 +51,9 @@ export class NearTokenNotRegistered extends Error {
     super(`Near token ${token} not registered on intent account ${intentAccount}`);
   }
 }
+
+export class StellarTokenNotTrusted extends Error {
+  constructor(readonly token: string, readonly receiver: string) {
+    super(`Stellar token ${token} not trusted by receiver ${receiver}`);
+  }
+}

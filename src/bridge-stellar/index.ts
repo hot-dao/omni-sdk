@@ -1,6 +1,7 @@
 import { Address, Asset, Contract, FeeBumpTransaction, Networks, rpc, scValToBigInt, StrKey, TimeoutInfinite, TransactionBuilder, xdr, XdrLargeInt } from "@stellar/stellar-sdk";
 import { Operation, Transaction } from "@stellar/stellar-sdk";
 import { baseDecode, baseEncode } from "@near-js/utils";
+import { Horizon } from "@stellar/stellar-sdk";
 import BigNumber from "bignumber.js";
 
 import { omniEphemeralReceiver, parseAmount } from "../utils";
@@ -13,9 +14,11 @@ export const CONTRACT = "CCLWL5NYSV2WJQ3VBU44AMDHEVKEPA45N2QP2LL62O3JVKPGWWAQUVA
 
 class StellarService {
   readonly soroban: rpc.Server;
+  readonly horizon: Horizon.Server;
 
-  constructor(readonly omni: OmniService, rpcs?: string | rpc.Server, readonly baseFee = "500000") {
-    this.soroban = typeof rpcs === "string" ? new rpc.Server(rpcs) : rpcs || new rpc.Server("https://mainnet.sorobanrpc.com");
+  constructor(readonly omni: OmniService, sorobanRpc?: string | rpc.Server, horizonRpc?: string | Horizon.Server, readonly baseFee = "500000") {
+    this.soroban = typeof sorobanRpc === "string" ? new rpc.Server(sorobanRpc) : sorobanRpc || new rpc.Server("https://mainnet.sorobanrpc.com");
+    this.horizon = typeof horizonRpc === "string" ? new Horizon.Server(horizonRpc) : horizonRpc || new Horizon.Server("https://horizon.stellar.org");
   }
 
   // TODO: Compute gas dinamically
@@ -36,6 +39,13 @@ class StellarService {
     const tx = await this.buildSmartContactTx(ACCOUNT_FOR_SIMULATE, CONTRACT, "is_executed", new XdrLargeInt("u128", nonce).toU128());
     const result = (await this.soroban.simulateTransaction(tx)) as rpc.Api.SimulateTransactionSuccessResponse;
     return !!result.result?.retval.value();
+  }
+
+  async isTrustlineExists(sender: string, token: string) {
+    if (token === "native") return true;
+    const asset = await this.getAssetFromContractId(token);
+    const account = await this.horizon.accounts().accountId(sender).call();
+    return account.balances.some((b) => "asset_issuer" in b && b.asset_issuer === asset.issuer);
   }
 
   async buildDepositTx(sender: string, token: string, amount: bigint, receiver: Buffer) {
@@ -66,20 +76,7 @@ class StellarService {
     return await args.sendTransaction(tx);
   }
 
-  async withdraw(args: {
-    amount: bigint;
-    token: string;
-    nonce: string;
-    receiver: string;
-    sender: string;
-    customActivationToken: (token: string, sender: string) => Promise<void>;
-    sendTransaction: (tx: Transaction) => Promise<string>;
-  }) {
-    if (args.token !== "native") {
-      if (args.customActivationToken) await args.customActivationToken(args.token, args.sender);
-      else await this.activateToken(args);
-    }
-
+  async withdraw(args: { amount: bigint; token: string; nonce: string; receiver: string; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }) {
     const to = new Contract(CONTRACT);
     const signature = await this.omni.api.withdrawSign(args.nonce);
     const sign = Buffer.from(baseDecode(signature));

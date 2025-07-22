@@ -39,7 +39,6 @@ import NearBridge from "./bridge-near";
 class HotBridge {
   logger?: Logger;
   executeNearTransaction: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
-  activateStellarTokenIfNeeded: (token: string) => Promise<void>;
 
   stellar: StellarService;
   solana: SolanaOmniService;
@@ -50,13 +49,12 @@ class HotBridge {
 
   constructor(options: BridgeOptions) {
     this.executeNearTransaction = options.executeNearTransaction;
-    this.activateStellarTokenIfNeeded = options.activateStellarTokenIfNeeded;
     this.logger = options.logger;
 
     this.api = new OmniApi(options.api, options.mpcApi);
     this.evm = new EvmOmniService(this, options.evmRpc, { enableApproveMax: options.enableApproveMax });
+    this.stellar = new StellarService(this, options.stellarRpc, options.stellarHorizonRpc, options.stellarBaseFee);
     this.solana = new SolanaOmniService(this, options.solanaRpc);
-    this.stellar = new StellarService(this, options.stellarRpc);
     this.ton = new TonOmniService(this, options.tonRpc);
     this.near = new NearBridge(this, options.nearRpc);
   }
@@ -565,10 +563,6 @@ class HotBridge {
     adjustMax?: boolean;
     gasless?: boolean;
   }) {
-    if (args.chain === Network.Stellar && args.token !== "native") {
-      await this.activateStellarTokenIfNeeded(args.token);
-    }
-
     if (args.chain === Network.Near && args.token !== "wrap.near") {
       const isRegistered = await this.near.isTokenRegistered(args.token, args.intentAccount);
       if (!isRegistered) throw new NearTokenNotRegistered(args.token, args.intentAccount);
