@@ -20,15 +20,9 @@ import {
   Button,
 } from "../theme/styles";
 
-import { useNearWallet } from "../hooks/near";
 import { useBridge } from "../hooks/bridge";
-import { useEvmWallet } from "../hooks/evm";
-import { useTonWallet } from "../hooks/ton";
 
-const PendingWithdrawalsComponent = () => {
-  const nearWallet = useNearWallet();
-  const evmWallet = useEvmWallet();
-  const tonWallet = useTonWallet();
+const PendingWithdrawalsComponent = ({ near, evm, ton, stellar }: { near: any; evm: any; ton: any; stellar: any }) => {
   const { bridge } = useBridge();
 
   const [pendingWithdraw, setPendingWithdraw] = useState<PendingWithdraw[]>([]);
@@ -44,7 +38,7 @@ const PendingWithdrawalsComponent = () => {
     .map(([key, value]) => ({ label: key, value: Number(value) }));
 
   const fetchPendingWithdrawals = async () => {
-    if (!nearWallet.accountId) return setError("Wallet not connected. Please connect your wallet first.");
+    if (!near.accountId) return setError("Wallet not connected. Please connect your wallet first.");
     if (!receiver.trim()) return setError("Please enter a receiver address.");
     setIsLoading(true);
     setError(null);
@@ -68,7 +62,7 @@ const PendingWithdrawalsComponent = () => {
   };
 
   const finishWithdrawal = async (withdraw: PendingWithdraw) => {
-    if (!nearWallet.accountId) return setError("Wallet not connected. Please connect your wallet first.");
+    if (!near.accountId) return setError("Wallet not connected. Please connect your wallet first.");
     setProcessingWithdrawals((prev) => ({ ...prev, [withdraw.nonce]: true }));
     setError(null);
 
@@ -78,10 +72,10 @@ const PendingWithdrawalsComponent = () => {
       // Get withdrawal data using buildWithdraw
       switch (withdraw.chain) {
         case Network.OmniTon: {
-          if (!tonWallet.address) throw new Error("Ton wallet not connected");
-          const sender = tonWallet.address;
-          const refundAddress = tonWallet.address;
-          const sendTransaction = tonWallet.sendTransaction;
+          if (!ton.address) throw new Error("Ton wallet not connected");
+          const sender = ton.address;
+          const refundAddress = ton.address;
+          const sendTransaction = ton.sendTransaction;
 
           await bridge.checkWithdrawNonce(withdraw.chain, withdraw.receiver, withdraw.nonce);
           await bridge.ton.withdraw({ sendTransaction, refundAddress, sender, ...withdraw });
@@ -89,9 +83,18 @@ const PendingWithdrawalsComponent = () => {
           break;
         }
 
+        case Network.Stellar: {
+          if (!stellar.address) throw new Error("Stellar wallet not connected");
+          const sender = stellar.address;
+          const sendTransaction = stellar.sendTransaction;
+          await bridge.stellar.withdraw({ sendTransaction, sender, ...withdraw });
+          await bridge.clearPendingWithdrawals([withdraw]);
+          break;
+        }
+
         default:
-          await bridge.evm.withdraw({ sendTransaction: evmWallet.sendTransaction, ...withdraw });
-          await bridge.checkLocker(withdraw.chain, withdraw.receiver);
+          await bridge.evm.withdraw({ sendTransaction: evm.sendTransaction as any, ...withdraw });
+          await bridge.checkLocker(withdraw.chain, withdraw.receiver, withdraw.nonce);
           break;
       }
 

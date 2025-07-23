@@ -8,6 +8,7 @@ import { lightTheme, darkTheme } from "./theme/theme";
 import { useNearWallet } from "./hooks/near";
 import { useEvmWallet } from "./hooks/evm";
 import { useTonWallet } from "./hooks/ton";
+import { useStellarWallet } from "./hooks/stellar";
 
 import {
   AppContainer,
@@ -41,6 +42,7 @@ function AppContent() {
   const nearWallet = useNearWallet();
   const evmWallet = useEvmWallet();
   const tonWallet = useTonWallet();
+  const stellarWallet = useStellarWallet();
 
   const { theme, toggleTheme } = useTheme();
   const themeObj = theme === "light" ? lightTheme : darkTheme;
@@ -82,21 +84,32 @@ function AppContent() {
               </AccountInfo>
             )}
 
+            {stellarWallet.address && (
+              <AccountInfo>
+                <LogoutButton onClick={stellarWallet.signOut}>
+                  STELLAR: {stellarWallet.address.slice(0, 6)}...{stellarWallet.address.slice(-4)}
+                </LogoutButton>
+              </AccountInfo>
+            )}
+
             {!evmWallet.address && <LogoutButton onClick={() => evmWallet.signIn()}>Connect EVM</LogoutButton>}
             {!tonWallet.address && <LogoutButton onClick={() => tonWallet.signIn()}>Connect TON</LogoutButton>}
+            {!stellarWallet.address && (
+              <LogoutButton onClick={() => stellarWallet.signIn()}>Connect STELLAR</LogoutButton>
+            )}
           </div>
         </Header>
 
         {nearWallet.accountId ? (
           <MainContent>
             <LeftColumn>
-              <DepositComponent />
-              <WithdrawComponent />
-              <PendingWithdrawalsComponent />
+              <DepositComponent stellar={stellarWallet} evm={evmWallet} near={nearWallet} ton={tonWallet} />
+              <WithdrawComponent stellar={stellarWallet} evm={evmWallet} near={nearWallet} ton={tonWallet} />
+              <PendingWithdrawalsComponent evm={evmWallet} near={nearWallet} ton={tonWallet} stellar={stellarWallet} />
             </LeftColumn>
             <RightColumn>
-              <BalancesComponent />
-              <FindDeposits />
+              <BalancesComponent near={nearWallet} />
+              <FindDeposits near={nearWallet} />
             </RightColumn>
           </MainContent>
         ) : (

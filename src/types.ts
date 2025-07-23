@@ -108,3 +108,14 @@ export interface PendingWithdrawWithStatus extends PendingWithdraw {
 export interface PendingDepositWithIntent extends PendingDeposit {
   intentAccount: string;
 }
+
+export interface TokenAsset {
+  intents_id: string;
+  chain_id: number;
+  contract_id: string;
+  usd_rate: number;
+  decimal: number;
+  icon: string;
+  symbol: string;
+  name: string;
+}

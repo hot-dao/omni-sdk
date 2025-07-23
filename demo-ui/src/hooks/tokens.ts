@@ -10,7 +10,14 @@ const getBridgableTokens = async () => {
 
   const { groups } = await bridge.api.getBridgeTokens();
   _tokens = Object.values(groups)
-    .flatMap((list) => list.map(utils.fromOmni))
+    .flatMap((list) => {
+      try {
+        return list.map(utils.fromOmni);
+      } catch (e) {
+        console.error("getBridgableTokens", e);
+        return [];
+      }
+    })
     .map((t) => ({ chain: +t.split(":")[0], address: t.split(":")[1] }));
 
   return _tokens;
@@ -21,11 +28,16 @@ export const useAvailableTokens = (chain: number) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log("useAvailableTokens", chain);
     setLoading(true);
     getBridgableTokens()
-      .then((tokens) =>
-        setTokens(Array.from(new Set(["native", ...tokens.filter((t) => t.chain === chain).map((t) => t.address)])))
-      )
+      .then((tokens) => {
+        console.log("useAvailableTokens", tokens, chain);
+        setTokens(Array.from(new Set(["native", ...tokens.filter((t) => t.chain === chain).map((t) => t.address)])));
+      })
+      .catch((e) => {
+        console.error("useAvailableTokens", e);
+      })
       .finally(() => setLoading(false));
   }, [chain]);
 

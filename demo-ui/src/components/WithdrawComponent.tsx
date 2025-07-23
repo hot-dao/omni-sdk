@@ -3,9 +3,6 @@ import { Network } from "@hot-labs/omni-sdk";
 
 import { useAvailableTokens } from "../hooks/tokens";
 import { useBridge } from "../hooks/bridge";
-import { useNearWallet } from "../hooks/near";
-import { useEvmWallet } from "../hooks/evm";
-import { useTonWallet } from "../hooks/ton";
 
 import {
   Card,
@@ -24,10 +21,7 @@ const availableNetworks = Object.entries(Network)
   .filter(([key, value]) => value === 1010 || !isNaN(Number(value)))
   .map(([key, value]) => ({ label: key, value: Number(value) }));
 
-const WithdrawComponent = () => {
-  const nearSigner = useNearWallet();
-  const evmSigner = useEvmWallet();
-  const tonSigner = useTonWallet();
+const WithdrawComponent = ({ near, evm, ton, stellar }: { near: any; evm: any; ton: any; stellar: any }) => {
   const { bridge } = useBridge();
 
   const [amount, setAmount] = useState<string>("");
@@ -41,12 +35,12 @@ const WithdrawComponent = () => {
   const { tokens } = useAvailableTokens(network);
 
   useEffect(() => {
-    if (network === Network.Near) return setReceiver(nearSigner.accountId || "");
-    setReceiver(evmSigner.address || "");
+    if (network === Network.Near) return setReceiver(near.accountId || "");
+    setReceiver(evm.address || "");
   }, [network]);
 
   const handleWithdraw = async () => {
-    if (!nearSigner.accountId) return;
+    if (!near.accountId) return;
     if (!amount || !token || !receiver) {
       setError("Please enter both amount, token and receiver");
       return;
@@ -57,28 +51,40 @@ const WithdrawComponent = () => {
       setError(null);
       setSuccess(null);
 
-      const { nonce } = await bridge.withdrawToken({
-        signIntents: nearSigner.signIntents,
-        intentAccount: nearSigner.intentAccount!,
+      if (network === Network.Stellar && token !== "native") {
+        const isTrustline = await bridge.stellar.isTrustlineExists(receiver.trim(), token);
+        if (!isTrustline) throw "Trustline not found";
+      }
+
+      const result = await bridge.withdrawToken({
+        signIntents: near.signIntents,
+        intentAccount: near.intentAccount!,
         receiver: receiver.trim(),
         amount: BigInt(amount),
         chain: network,
         token: token,
       });
 
-      if (nonce) {
-        const pending = await bridge.getPendingWithdrawal(nonce);
+      if (result?.nonce) {
+        const pending = await bridge.getPendingWithdrawal(result.nonce);
         switch (pending.chain) {
           case Network.Ton: {
-            const sender = tonSigner.address!;
-            const refundAddress = tonSigner.address!;
-            const sendTransaction = tonSigner.sendTransaction;
+            const sender = ton.address!;
+            const refundAddress = ton.address!;
+            const sendTransaction = ton.sendTransaction;
             await bridge.ton.withdraw({ sendTransaction, refundAddress, sender, ...pending });
             break;
           }
 
+          case Network.Stellar: {
+            const sender = stellar.address!;
+            const sendTransaction = stellar.sendTransaction;
+            await bridge.stellar.withdraw({ sendTransaction, sender, ...pending });
+            break;
+          }
+
           default:
-            await bridge.evm.withdraw({ sendTransaction: evmSigner.sendTransaction, ...pending });
+            await bridge.evm.withdraw({ sendTransaction: evm.sendTransaction as any, ...pending });
             break;
         }
       }

@@ -30,6 +30,12 @@ class OmniApi {
     throw error;
   }
 
+  async getTokenAssets() {
+    const res = await this.requestApi(`/api/v1/exchange/intent_tokens`, { method: "GET" });
+    const { tokens } = await res.json();
+    return tokens;
+  }
+
   async requestApi(req: RequestInfo, init: any) {
     if (!init.endpoint) init.endpoint = this.api;
     const endpoints = Array.isArray(init.endpoint) ? init.endpoint : [init.endpoint];
@@ -52,8 +58,8 @@ class OmniApi {
     return ts;
   }
 
-  async getWithdrawFee(chain: Network, token?: string): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
-    const res = await this.requestApi(`/api/v1/evm/${chain}/bridge_gas_price`, { method: "GET" });
+  async getWithdrawFee(chain: Network, receiver: string): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
+    const res = await this.requestApi(`/api/v1/evm/${chain}/bridge_gas_price?receiver=${receiver}`, { method: "GET" });
     const { gas_price, block_number } = await res.json();
     return { gasPrice: BigInt(gas_price), blockNumber: BigInt(block_number) };
   }

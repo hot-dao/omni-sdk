@@ -1,22 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HOT Bridge</title>
     <style>
-        * {
-            box-sizing: border-box; 
-        }
-        html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-        }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
+    <script type="module">
+      import { Buffer } from "buffer";
+      globalThis.Buffer = Buffer;
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/index.tsx"></script>
-</body>
+  </body>
 </html>

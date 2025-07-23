@@ -2,7 +2,6 @@ import React from "react";
 import { formatUnits } from "ethers";
 import { observer } from "mobx-react-lite";
 
-import { useNearWallet } from "../hooks/near";
 import { useIntentBalances } from "../hooks/balances";
 import { tokens } from "../hooks/tokens";
 import {
@@ -16,9 +15,9 @@ import {
   TokenImage,
 } from "../theme/styles";
 
-const BalancesComponent = () => {
-  const nearSigner = useNearWallet();
-  const { balances, isLoading, error } = useIntentBalances(nearSigner?.intentAccount || undefined);
+const BalancesComponent = ({ near }: { near: any }) => {
+  const { balances, isLoading, error } = useIntentBalances(near.intentAccount || undefined);
+  console.log("BalancesComponent", balances);
 
   if (isLoading) {
     return (

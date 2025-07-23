@@ -14,20 +14,14 @@ import {
 } from "../theme/styles";
 
 import { useAvailableTokens } from "../hooks/tokens";
-import { useEvmWallet } from "../hooks/evm";
-import { useNearWallet } from "../hooks/near";
 import { useBridge } from "../hooks/bridge";
-import { useTonWallet } from "../hooks/ton";
 
 // Get available networks for the selector
 const availableNetworks = Object.entries(Network)
   .filter(([key, value]) => value === 1010 || !isNaN(Number(value)))
   .map(([key, value]) => ({ label: key, value: Number(value) }));
 
-const DepositComponent = () => {
-  const nearSigner = useNearWallet();
-  const tonSigner = useTonWallet();
-  const evmSigner = useEvmWallet();
+const DepositComponent = ({ stellar, evm, near, ton }: { stellar: any; evm: any; near: any; ton: any }) => {
   const { bridge } = useBridge();
 
   const [amount, setAmount] = useState<string>("");
@@ -41,7 +35,7 @@ const DepositComponent = () => {
 
   const handleDeposit = async (e: any) => {
     e.preventDefault();
-    if (!nearSigner.accountId) return;
+    if (!near.accountId) return;
     if (!amount || !token) return setError("Please enter both amount and token");
 
     try {
@@ -51,43 +45,58 @@ const DepositComponent = () => {
 
       if (network === Network.Ton) {
         const hash = await bridge.ton.deposit({
-          sender: tonSigner.address!,
-          refundAddress: tonSigner.address!,
-          intentAccount: nearSigner.intentAccount!,
-          sendTransaction: tonSigner.sendTransaction,
+          sender: ton.address!,
+          refundAddress: ton.address!,
+          intentAccount: near.intentAccount!,
+          sendTransaction: ton.sendTransaction,
           amount: BigInt(amount),
           token: token,
         });
 
-        const deposit = await bridge.waitPendingDeposit(network, hash, nearSigner.intentAccount!);
+        const deposit = await bridge.waitPendingDeposit(network, hash, near.intentAccount!);
         await bridge.finishDeposit(deposit);
       }
 
       // Near
       else if (network === Network.Near) {
         await bridge.near.deposit({
-          sender: nearSigner.accountId!,
-          intentAccount: nearSigner.intentAccount!,
-          sendTransaction: nearSigner.sendTransaction,
+          sender: near.accountId!,
+          intentAccount: near.intentAccount!,
+          sendTransaction: near.sendTransaction,
           amount: BigInt(amount),
           token: token,
         });
       }
 
+      // Stellar
+      else if (network === Network.Stellar) {
+        const tx = await bridge.stellar.deposit({
+          sender: stellar.address!,
+          intentAccount: near.intentAccount!,
+          sendTransaction: stellar.sendTransaction as any,
+          amount: BigInt(amount),
+          token: token,
+        });
+
+        const controller = new AbortController();
+        const deposit = await bridge.waitPendingDeposit(network, tx, near.intentAccount!, controller.signal);
+        await bridge.finishDeposit(deposit);
+      }
+
       // EVM
       else {
-        if (evmSigner == null) throw "Connect EVM to deposit";
+        if (evm == null) throw "Connect EVM to deposit";
         const tx = await bridge.evm.deposit({
-          sender: evmSigner.address!,
-          intentAccount: nearSigner.intentAccount!,
-          sendTransaction: evmSigner.sendTransaction,
+          sender: evm.address!,
+          intentAccount: near.intentAccount!,
+          sendTransaction: evm.sendTransaction as any,
           amount: BigInt(amount),
           chain: network,
           token: token,
         });
 
         const controller = new AbortController();
-        const deposit = await bridge.waitPendingDeposit(network, tx, nearSigner.intentAccount!, controller.signal);
+        const deposit = await bridge.waitPendingDeposit(network, tx, near.intentAccount!, controller.signal);
         await bridge.finishDeposit(deposit);
       }
 
@@ -111,7 +120,7 @@ const DepositComponent = () => {
       <FormContainer>
         <FormGroup>
           <InputLabel>Intent account</InputLabel>
-          <StyledInput type="text" placeholder="Receiver" value={nearSigner.accountId!} disabled />
+          <StyledInput type="text" placeholder="Receiver" value={near.accountId!} disabled />
         </FormGroup>
 
         <FormGroup>
@@ -120,6 +129,7 @@ const DepositComponent = () => {
             <option value="" disabled>
               Select Network
             </option>
+
             {availableNetworks.map((network) => (
               <option key={network.value} value={network.value}>
                 {network.label}
@@ -134,6 +144,7 @@ const DepositComponent = () => {
             <option value="" disabled>
               Select token
             </option>
+
             {tokens.map((token) => (
               <option key={token} value={token}>
                 {token}

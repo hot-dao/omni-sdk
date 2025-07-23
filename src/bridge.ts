@@ -305,9 +305,9 @@ class HotBridge {
     }
   }
 
-  async getGaslessWithdrawFee(chain: Network, token: string): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
+  async getGaslessWithdrawFee(chain: Network, receiver: string): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
     if (chain === 1111) chain = 1117; // TON_ID to OMNI_TON
-    return await this.api.getWithdrawFee(chain, token);
+    return await this.api.getWithdrawFee(chain, receiver);
   }
 
   async buildWithdrawIntent(args: { chain: Network; token: string; amount: bigint; receiver: string; intentAccount: string }) {
@@ -436,7 +436,7 @@ class HotBridge {
     if (args.chain === Network.Near) throw new GaslessNotAvailable(args.chain);
 
     // Get gas price
-    const { gasPrice } = await this.getGaslessWithdrawFee(args.chain, args.token).catch(() => ({ gasPrice: null }));
+    const { gasPrice } = await this.getGaslessWithdrawFee(args.chain, args.receiver).catch(() => ({ gasPrice: null }));
     if (gasPrice == null) throw new GaslessNotAvailable(args.chain);
     this.logger?.log(`Gasless withdraw gas price: ${gasPrice}`);
 

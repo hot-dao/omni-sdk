@@ -20,15 +20,9 @@ import {
   Button,
 } from "../theme/styles";
 
-import { useNearWallet } from "../hooks/near";
 import { useBridge } from "../hooks/bridge";
-import { useEvmWallet } from "../hooks/evm";
-import { useTonWallet } from "../hooks/ton";
 
-const FindDeposits = () => {
-  const nearWallet = useNearWallet();
-  const evmWallet = useEvmWallet();
-  const tonWallet = useTonWallet();
+const FindDeposits = ({ near }: { near: any }) => {
   const { bridge } = useBridge();
 
   const [chain, setChain] = useState<Network>(Network.Base);
@@ -44,7 +38,7 @@ const FindDeposits = () => {
     .map(([key, value]) => ({ label: key, value: Number(value) }));
 
   const fetchPendingWithdrawals = async () => {
-    if (!nearWallet.accountId) return setError("Wallet not connected. Please connect your wallet first.");
+    if (!near.accountId) return setError("Wallet not connected. Please connect your wallet first.");
     if (!intentAccount.trim()) return setError("Please enter a receiver intent account.");
     if (!transactionHash.trim()) return setError("Please enter a transaction hash.");
     setIsLoading(true);
@@ -64,7 +58,7 @@ const FindDeposits = () => {
   };
 
   const finishDeposit = async (deposit: PendingDeposit) => {
-    if (!nearWallet.accountId) return setError("Wallet not connected. Please connect your wallet first.");
+    if (!near.accountId) return setError("Wallet not connected. Please connect your wallet first.");
     setIsLoading(true);
     setError(null);
 

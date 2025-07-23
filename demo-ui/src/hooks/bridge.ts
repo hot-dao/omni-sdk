@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import { mainnet, base, arbitrum, optimism, polygon, bsc, avalanche, kava } from "viem/chains";
-import { HotBridge } from "../../../src/index";
+import { HotBridge } from "@hot-labs/omni-sdk";
 import { useNearWallet } from "./near";
 
 export const bridge = new HotBridge({
   logger: console,
-  api: "https://dev.herewallet.app",
+  api: ["https://api0.herewallet.app", "https://api2.herewallet.app"],
   solanaRpc: ["https://api0.herewallet.app/api/v1/evm/everstake-sol"],
 
   evmRpc: {
