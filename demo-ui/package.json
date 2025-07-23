@@ -2,14 +2,14 @@
   "name": "hot-bridge",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "start": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@esbuild-plugins/node-globals-polyfill": "0.2.3",
-    "@esbuild-plugins/node-modules-polyfill": "0.2.2",
+    "@creit.tech/stellar-wallets-kit": "1.7.6",
     "@hot-labs/omni-sdk": "2.14.0",
     "@near-wallet-selector/core": "^8.10.2",
     "@near-wallet-selector/hot-wallet": "^8.10.2",

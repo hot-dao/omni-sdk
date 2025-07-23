@@ -1,9 +1,8 @@
 import path from "path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
 import viteCompression from "vite-plugin-compression";
-import { NodeGlobalsPolyfillPlugin } from "@esbuild-plugins/node-globals-polyfill";
-import { NodeModulesPolyfillPlugin } from "@esbuild-plugins/node-modules-polyfill";
 import svgLoader from "vite-plugin-svgr";
 
 export default defineConfig({
@@ -13,6 +12,7 @@ export default defineConfig({
 
   build: {
     target: "es2020",
+    type: "module",
   },
 
   esbuild: {
@@ -21,15 +21,9 @@ export default defineConfig({
     ignoreAnnotations: true,
   },
 
-  optimizeDeps: {
-    esbuildOptions: {
-      define: { global: "globalThis" },
-      plugins: [NodeGlobalsPolyfillPlugin({ buffer: true }, NodeModulesPolyfillPlugin())],
-    },
-  },
-
   plugins: [
     svgLoader(),
+    nodePolyfills(),
     react(),
     viteCompression({ algorithm: "brotliCompress" }),
     viteCompression({ algorithm: "gzip" }),
