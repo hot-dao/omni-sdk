@@ -14,6 +14,7 @@ import { DepositJetton as DepositJettonV2 } from "./wrappers/DepositJetton";
 import { JettonMinter as JettonMinterV2 } from "./wrappers/JettonMinter";
 import { JettonWallet as JettonWalletV2 } from "./wrappers/JettonWallet";
 import { UserJetton as UserJettonV2 } from "./wrappers/UserJetton";
+import { DepositNotFound } from "../errors";
 import { ReviewFee } from "../fee";
 
 class TonOmniService {
@@ -171,12 +172,14 @@ class TonOmniService {
 
     const tx = await this.tonApi.blockchain.getBlockchainTransaction(hash);
     const body = tx.outMsgs[0]?.rawBody;
-    if (body == null) throw "Deposit tx not found";
+    if (body == null) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
 
     const slice = body.beginParse();
     const opCode = slice.loadUint(32);
-    const queryId = slice.loadUintBig(64); // load but not use
-    if (opCode !== 0x0f8a7ea5 && opCode !== OpCode.nativeDeposit) throw "Invalid op code";
+    slice.loadUintBig(64); // load but not use
+    if (opCode !== 0x0f8a7ea5 && opCode !== OpCode.nativeDeposit) {
+      throw new DepositNotFound(Network.Ton, hash, "Invalid op code");
+    }
 
     const deposit: PendingDeposit = {
       timestamp: Date.now(),
@@ -191,7 +194,7 @@ class TonOmniService {
 
     if (opCode === 0x0f8a7ea5) {
       const event = events.actions.find((t) => t.JettonTransfer != null);
-      if (event?.JettonTransfer == null) throw "Jetton transfer not found";
+      if (event?.JettonTransfer == null) throw new DepositNotFound(Network.Ton, hash, "Jetton transfer not found");
       deposit.token = event.JettonTransfer.jetton.address.toString({ bounceable: true });
       deposit.amount = slice.loadCoins().toString();
       deposit.receiver = baseEncode(slice.loadRef().beginParse().loadBuffer(32));
@@ -205,7 +208,7 @@ class TonOmniService {
 
     const parseDeployTx = async (hash: string) => {
       const tx = await this.tonApi.blockchain.getBlockchainTransaction(hash);
-      if (tx.inMsg?.init?.boc == null) throw "Deploy tx not found";
+      if (tx.inMsg?.init?.boc == null) throw new DepositNotFound(Network.Ton, hash, "Deploy tx not found");
 
       const slice = tx.inMsg.init.boc.beginParse();
       slice.loadRef();
@@ -222,7 +225,7 @@ class TonOmniService {
       if (nonce) return { ...deposit, nonce };
     }
 
-    throw "Deposit not found";
+    throw new DepositNotFound(Network.Ton, hash, "Deposit not found");
   }
 }
 

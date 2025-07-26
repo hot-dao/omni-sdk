@@ -18,6 +18,7 @@ export const bridge = new HotBridge({
     1: mainnet.rpcUrls.default.http as any,
     2222: kava.rpcUrls.default.http as any,
     10143: ["https://testnet-rpc.monad.xyz"],
+    1313161554: ["https://mainnet.aurora.dev", "https://1rpc.io/aurora", "https://aurora.drpc.org"],
   },
 
   executeNearTransaction: async () => {

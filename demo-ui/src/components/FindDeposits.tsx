@@ -51,7 +51,7 @@ const FindDeposits = ({ near }: { near: any }) => {
       setError(null);
     } catch (err) {
       console.error("Error fetching pending deposits:", err);
-      setError("Failed to load pending deposits. Please try refreshing.");
+      setError(err instanceof Error ? err.message : "Failed to load pending deposits. Please try refreshing.");
     } finally {
       setIsLoading(false);
     }

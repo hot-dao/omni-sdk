@@ -16,6 +16,7 @@ import {
   omniEphemeralReceiver,
   isTon,
   PoA_BRIDGE_TOKENS_INVERTED,
+  legacyUnsafeOmniEphemeralReceiver,
 } from "./utils";
 import {
   GaslessNotAvailable,
@@ -26,6 +27,7 @@ import {
   NearTokenNotRegistered,
   ProcessAborted,
   SlippageError,
+  DepositAlreadyClaimed,
 } from "./errors";
 import { BridgeOptions, Network, PendingDepositWithIntent, PendingWithdraw } from "./types";
 import OmniApi from "./api";
@@ -259,8 +261,15 @@ class HotBridge {
       const deposit = await waitPending().catch(() => null);
 
       if (deposit) {
+        const isUsed = await this.isDepositUsed(deposit.chain, deposit.nonce);
+        if (isUsed) throw new DepositAlreadyClaimed(deposit.chain, deposit.nonce);
+
         const receiver = baseEncode(omniEphemeralReceiver(intentAccount));
-        if (deposit.receiver !== receiver) throw new MismatchReceiverAndIntentAccount(deposit.receiver, intentAccount);
+        const unsafeReceiver = baseEncode(legacyUnsafeOmniEphemeralReceiver(intentAccount));
+        if (deposit.receiver !== receiver && deposit.receiver !== unsafeReceiver) {
+          throw new MismatchReceiverAndIntentAccount(deposit.receiver, intentAccount);
+        }
+
         return { ...deposit, intentAccount };
       }
 

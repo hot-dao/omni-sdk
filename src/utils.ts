@@ -170,6 +170,13 @@ export const decodeTokenAddress = (chain: Network, addr: string) => {
 export const omniEphemeralReceiver = (intentAccount: string) => {
   return crypto
     .createHash("sha256") //
+    .update(JSON.stringify({ account_id: "intents.near", msg: JSON.stringify({ receiver_id: intentAccount }) }))
+    .digest();
+};
+
+export const legacyUnsafeOmniEphemeralReceiver = (intentAccount: string) => {
+  return crypto
+    .createHash("sha256") //
     .update(Buffer.from("intents.near", "utf8"))
     .update(Buffer.from(JSON.stringify({ receiver_id: intentAccount }), "utf8"))
     .digest();
@@ -193,8 +200,8 @@ export const decodeReceiver = (chain: Network, address: string) => {
 };
 
 export class Logger {
-  log(msg: string) {
-    console.log(msg);
+  log(...args: any[]) {
+    console.log(args);
   }
 }
 

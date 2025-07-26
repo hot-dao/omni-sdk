@@ -11,6 +11,7 @@ import AdvancedConnection from "./provider";
 import { findDepositAddress, PROGRAM_ID } from "./helpers";
 import IDL from "./idl.json";
 import { ReviewFee } from "../fee";
+import { DepositAlreadyClaimed, DepositNotFound } from "../errors";
 
 class SolanaOmniService {
   public connection: sol.Connection;
@@ -86,16 +87,13 @@ class SolanaOmniService {
 
     const status = await waitReceipt();
     const logMessages = status?.meta?.logMessages;
-    if (status == null || logMessages == null) throw "no tx receipt yet";
+    if (status == null || logMessages == null) throw new DepositNotFound(Network.Solana, hash, "no tx receipt yet");
 
     const nonce = logMessages.map((t) => t.match(/nonce (\d+)/)?.[1]).find((t) => t != null);
     const amount = logMessages.map((t) => t.match(/amount: (\d+)/)?.[1]).find((t) => t != null);
     const receiverHex = logMessages.map((t) => t.match(/to ([0-9A-Fa-f]+)/)?.[1]).find((t) => t != null);
     const token = logMessages.find((t) => t.includes("NativeDeposit")) ? "native" : logMessages.map((t) => t.match(/mint: (.+),/)?.[1]).find((t) => t != null);
-    if (nonce == null || receiverHex == null || amount == null || token == null) throw "no tx receipt yet";
-
-    const isUsed = await this.omni.isDepositUsed(Network.Solana, nonce);
-    if (isUsed) throw "Deposit alredy claimed, check your omni balance";
+    if (nonce == null || receiverHex == null || amount == null || token == null) throw new DepositNotFound(Network.Solana, hash, "no tx receipt yet");
 
     const timestamp = (status.blockTime || 0) * 1000;
     const receiver = baseEncode(Buffer.from(receiverHex, "hex"));

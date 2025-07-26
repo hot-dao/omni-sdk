@@ -6,6 +6,7 @@ import BigNumber from "bignumber.js";
 
 import { omniEphemeralReceiver, parseAmount } from "../utils";
 import { Network, PendingDeposit } from "../types";
+import { DepositNotFound } from "../errors";
 import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
 
@@ -104,18 +105,24 @@ class StellarService {
 
   async parseDeposit(hash: string): Promise<PendingDeposit> {
     const txResult = await this.soroban.getTransaction(hash);
-    if (txResult.status !== rpc.Api.GetTransactionStatus.SUCCESS) throw "";
+    if (txResult.status !== rpc.Api.GetTransactionStatus.SUCCESS) {
+      throw new DepositNotFound(Network.Stellar, hash, "tx not found");
+    }
 
     let tx;
     try {
       // Try parsing as fee bump transaction first
       const feeBumpTx = new FeeBumpTransaction(txResult.envelopeXdr, Networks.PUBLIC);
       tx = feeBumpTx.innerTransaction;
-      if (!tx.operations.length || tx.operations[0].type !== "invokeHostFunction") throw "Deposit tx not found";
+      if (!tx.operations.length || tx.operations[0].type !== "invokeHostFunction") {
+        throw new DepositNotFound(Network.Stellar, hash, "Deposit tx not found");
+      }
     } catch {
       // If not a fee bump tx, parse as regular transaction
       tx = new Transaction(txResult.envelopeXdr, Networks.PUBLIC);
-      if (!tx.operations.length || tx.operations[0].type !== "invokeHostFunction") throw "Deposit tx not found";
+      if (!tx.operations.length || tx.operations[0].type !== "invokeHostFunction") {
+        throw new DepositNotFound(Network.Stellar, hash, "Deposit tx not found");
+      }
     }
 
     const args = tx.operations[0].func.invokeContract().args();

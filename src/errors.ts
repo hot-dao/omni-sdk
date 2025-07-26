@@ -57,3 +57,15 @@ export class StellarTokenNotTrusted extends Error {
     super(`Stellar token ${token} not trusted by receiver ${receiver}`);
   }
 }
+
+export class DepositNotFound extends Error {
+  constructor(readonly chain: number, readonly hash: string, readonly reason: string) {
+    super(`Deposit not found for hash ${hash} on chain ${chain}: ${reason}`);
+  }
+}
+
+export class DepositAlreadyClaimed extends Error {
+  constructor(readonly chain: number, readonly hash: string) {
+    super(`Deposit already claimed for hash ${hash} on chain ${chain}`);
+  }
+}

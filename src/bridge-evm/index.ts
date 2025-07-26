@@ -4,6 +4,7 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import { ERC20_ABI, OMNI_ABI, OMNI_CONTRACT, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
 import { encodeTokenAddress, omniEphemeralReceiver, wait } from "../utils";
 import { Network, PendingDeposit } from "../types";
+import { DepositNotFound } from "../errors";
 import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
 
@@ -142,20 +143,20 @@ class EvmOmniService {
   async parseDeposit(chain: number, hash: string): Promise<PendingDeposit> {
     const wallet = this.getProvider(chain);
     const waitReceipt = async (attemps = 0): Promise<null | TransactionReceipt> => {
-      const receipt = await wallet.provider!.getTransactionReceipt(hash);
+      const receipt = await wallet.provider!.getTransactionReceipt(hash).catch(() => null);
       if (receipt || attemps > 2) return receipt;
       await wait(3000);
       return await waitReceipt(attemps + 1);
     };
 
     const receipt = await waitReceipt();
-    if (receipt == null) throw "no tx receipt yet";
+    if (receipt == null) throw new DepositNotFound(chain, hash, "no tx receipt yet");
 
     const intrfc = new Interface([OMNI_DEPOSIT_LOG]);
-    if (receipt.logs[0] == null) throw "no deposit logs";
+    if (receipt.logs[0] == null) throw new DepositNotFound(chain, hash, "no deposit logs");
 
     const log = receipt.logs.map((t) => intrfc.parseLog(t)).find((t) => t?.args[0] != null);
-    if (log == null) throw "no deposit nonce yet";
+    if (log == null) throw new DepositNotFound(chain, hash, "no deposit nonce yet");
 
     const nonce = String(log.args[0]);
     const amount = String(log.args[1]);
@@ -164,9 +165,6 @@ class EvmOmniService {
 
     const timestamp = (await receipt.getBlock().then((t) => t.timestamp)) * 1000;
     const deposit = { amount, chain, receiver, timestamp, tx: hash, nonce, token: contractId, sender: receipt.from };
-
-    const isUsed = await this.omni.isDepositUsed(chain, nonce);
-    if (isUsed) throw "Deposit alredy claimed, check your omni balance";
     return deposit;
   }
 }

@@ -500,10 +500,10 @@
     "@emurgo/cardano-serialization-lib-browser" "^13.2.0"
     "@emurgo/cardano-serialization-lib-nodejs" "13.2.0"
 
-"@hot-labs/omni-sdk@2.14.0":
-  version "2.14.0"
-  resolved "https://registry.yarnpkg.com/@hot-labs/omni-sdk/-/omni-sdk-2.14.0.tgz#5dc6c534a2d84f74660fed71c0e00ae59cb88ac2"
-  integrity sha512-AjGol0QmACDN0ODXxkSRrSUKaA3oYOPtARiu/L6gcNL+NLJCl/tRWYiz0cQ1OEp6kP24u8R1VFbL0CkXbQTVFA==
+"@hot-labs/omni-sdk@2.15.0":
+  version "2.15.0"
+  resolved "https://registry.yarnpkg.com/@hot-labs/omni-sdk/-/omni-sdk-2.15.0.tgz#72d6657043e7f2742aabb9add84d18310d64bf1b"
+  integrity sha512-3vdX2mEQIt4QBjj1NhPlfthtnddetWvyVQtGcJb72OyVHxKJrPbxkGsOzapqA9JEaVWlu8hScJZf+d4WIZ8N9A==
   dependencies:
     "@coral-xyz/anchor" "0.29.0"
     "@near-js/crypto" "^2.0.0"
