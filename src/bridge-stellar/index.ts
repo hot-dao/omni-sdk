@@ -14,12 +14,40 @@ export const ACCOUNT_FOR_SIMULATE = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2E
 export const CONTRACT = "CCLWL5NYSV2WJQ3VBU44AMDHEVKEPA45N2QP2LL62O3JVKPGWWAQUVAG";
 
 class StellarService {
-  readonly soroban: rpc.Server;
-  readonly horizon: Horizon.Server;
+  readonly soroban: rpc.Server[];
+  readonly horizon: Horizon.Server[];
 
-  constructor(readonly omni: OmniService, sorobanRpc?: string | rpc.Server, horizonRpc?: string | Horizon.Server, readonly baseFee = "500000") {
-    this.soroban = typeof sorobanRpc === "string" ? new rpc.Server(sorobanRpc) : sorobanRpc || new rpc.Server("https://mainnet.sorobanrpc.com");
-    this.horizon = typeof horizonRpc === "string" ? new Horizon.Server(horizonRpc) : horizonRpc || new Horizon.Server("https://horizon.stellar.org");
+  constructor(readonly omni: OmniService, sorobanRpc?: string[], horizonRpc?: string[], readonly baseFee = "500000") {
+    this.soroban = sorobanRpc ? sorobanRpc.map((r) => new rpc.Server(r)) : [new rpc.Server("https://mainnet.sorobanrpc.com")];
+    this.horizon = horizonRpc ? horizonRpc.map((r) => new Horizon.Server(r)) : [new Horizon.Server("https://horizon.stellar.org")];
+  }
+
+  async callHorizon<T>(fn: (rpc: Horizon.Server) => Promise<T>) {
+    let error: any;
+    for (const rpc of this.horizon) {
+      try {
+        return await fn(rpc);
+      } catch (e) {
+        error = e;
+        continue;
+      }
+    }
+
+    throw error;
+  }
+
+  async callSoroban<T>(fn: (rpc: rpc.Server) => Promise<T>) {
+    let error: any;
+    for (const rpc of this.soroban) {
+      try {
+        return await fn(rpc);
+      } catch (e) {
+        error = e;
+        continue;
+      }
+    }
+
+    throw error;
   }
 
   // TODO: Compute gas dinamically
@@ -38,14 +66,14 @@ class StellarService {
 
   async isWithdrawUsed(nonce: string) {
     const tx = await this.buildSmartContactTx(ACCOUNT_FOR_SIMULATE, CONTRACT, "is_executed", new XdrLargeInt("u128", nonce).toU128());
-    const result = (await this.soroban.simulateTransaction(tx)) as rpc.Api.SimulateTransactionSuccessResponse;
+    const result = (await this.callSoroban((rpc) => rpc.simulateTransaction(tx))) as rpc.Api.SimulateTransactionSuccessResponse;
     return !!result.result?.retval.value();
   }
 
   async isTrustlineExists(sender: string, token: string) {
     if (token === "native") return true;
     const asset = await this.getAssetFromContractId(token);
-    const account = await this.horizon.accounts().accountId(sender).call();
+    const account = await this.callHorizon((rpc) => rpc.accounts().accountId(sender).call());
     return account.balances.some((b) => "asset_issuer" in b && b.asset_issuer === asset.issuer);
   }
 
@@ -63,12 +91,12 @@ class StellarService {
       new XdrLargeInt("u128", ts.toString()).toU128()
     );
 
-    const account = await this.soroban.getAccount(sender);
+    const account = await this.callSoroban((rpc) => rpc.getAccount(sender));
     const tx = new TransactionBuilder(account, { fee: this.baseFee, networkPassphrase: Networks.PUBLIC }) //
       .addOperation(call)
       .setTimeout(TimeoutInfinite);
 
-    return await this.soroban.prepareTransaction(tx.build());
+    return await this.callSoroban((rpc) => rpc.prepareTransaction(tx.build()));
   }
 
   async deposit(args: { token: string; amount: bigint; intentAccount: string; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }): Promise<string> {
@@ -92,19 +120,19 @@ class StellarService {
       xdr.ScVal.scvBytes(sign)
     );
 
-    const account = await this.soroban.getAccount(args.sender);
+    const account = await this.callSoroban((rpc) => rpc.getAccount(args.sender));
     const tx = new TransactionBuilder(account, { fee: this.baseFee, networkPassphrase: Networks.PUBLIC }) //
       .addOperation(call)
       .setTimeout(TimeoutInfinite);
 
-    const preparedTx = await this.soroban.prepareTransaction(tx.build());
+    const preparedTx = await this.callSoroban((rpc) => rpc.prepareTransaction(tx.build()));
     return await args.sendTransaction(preparedTx);
   }
 
   async clearDepositNonceIfNeeded(_: PendingDeposit) {}
 
   async parseDeposit(hash: string): Promise<PendingDeposit> {
-    const txResult = await this.soroban.getTransaction(hash);
+    const txResult = await this.callSoroban((rpc) => rpc.getTransaction(hash));
     if (txResult.status !== rpc.Api.GetTransactionStatus.SUCCESS) {
       throw new DepositNotFound(Network.Stellar, hash, "tx not found");
     }
@@ -147,7 +175,7 @@ class StellarService {
 
   async activateToken(args: { token: string | Asset; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }) {
     const asset = args.token instanceof Asset ? args.token : await this.getAssetFromContractId(args.token);
-    const account = await this.soroban.getAccount(args.sender);
+    const account = await this.callSoroban((rpc) => rpc.getAccount(args.sender));
 
     const trustlineOp = Operation.changeTrust({ asset: asset, source: args.sender });
     const trustlineTx = new TransactionBuilder(account, { fee: this.baseFee, networkPassphrase: Networks.PUBLIC }) //
@@ -159,7 +187,7 @@ class StellarService {
   }
 
   async buildSmartContactTx(publicKey: string, contactId: string, method: string, ...args: any[]) {
-    const account = await this.soroban.getAccount(publicKey);
+    const account = await this.callSoroban((rpc) => rpc.getAccount(publicKey));
     const contract = new Contract(contactId);
     const builtTx = new TransactionBuilder(account, { fee: this.baseFee, networkPassphrase: Networks.PUBLIC });
 
@@ -176,7 +204,7 @@ class StellarService {
     }
 
     const tx = await this.buildSmartContactTx(ACCOUNT_FOR_SIMULATE, id, "name");
-    const result = (await this.soroban.simulateTransaction(tx)) as rpc.Api.SimulateTransactionSuccessResponse;
+    const result = (await this.callSoroban((rpc) => rpc.simulateTransaction(tx))) as rpc.Api.SimulateTransactionSuccessResponse;
 
     const value = result?.result?.retval?.value();
     if (!value) throw "Asset not found";
@@ -195,7 +223,7 @@ class StellarService {
       Address.fromString(contract).toScVal()
     );
 
-    const result = (await this.soroban.simulateTransaction(tx)) as rpc.Api.SimulateTransactionSuccessResponse;
+    const result = (await this.callSoroban((rpc) => rpc.simulateTransaction(tx))) as rpc.Api.SimulateTransactionSuccessResponse;
     if (result) return BigInt(parseAmount(this.i128ToInt(result.result?.retval.value() as xdr.Int128Parts), 7));
     return 0n;
   }

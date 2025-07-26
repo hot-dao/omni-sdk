@@ -64,8 +64,8 @@ export interface BridgeOptions {
   solanaRpc?: Connection | string[];
   tonRpc?: TonApiClient | string;
 
-  stellarRpc?: string | rpc.Server;
-  stellarHorizonRpc?: string | Horizon.Server;
+  stellarRpc?: string[];
+  stellarHorizonRpc?: string[];
   stellarBaseFee?: string;
 
   solverBusRpc?: string;
