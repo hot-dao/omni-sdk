@@ -58,6 +58,13 @@ class OmniApi {
     return ts;
   }
 
+  async registerDeposit(intentAccount: string) {
+    await this.requestApi(`/api/v1/transactions/hot_bridges/auto_deposit_register`, {
+      body: JSON.stringify({ intent_id: intentAccount }),
+      method: "POST",
+    });
+  }
+
   async getWithdrawFee(chain: Network, receiver: string): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
     const res = await this.requestApi(`/api/v1/evm/${chain}/bridge_gas_price?receiver=${receiver}`, { method: "GET" });
     const { gas_price, block_number } = await res.json();

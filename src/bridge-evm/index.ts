@@ -113,6 +113,7 @@ class EvmOmniService {
   }
 
   async deposit(args: { chain: number; token: string; amount: bigint; sender: string; intentAccount: string; sendTransaction: (tx: ethers.TransactionRequest) => Promise<string> }): Promise<string> {
+    this.omni.api.registerDeposit(args.intentAccount);
     this.omni.logger?.log(`Call deposit ${args.amount} ${args.token} to ${args.intentAccount}`);
     const receiver = omniEphemeralReceiver(args.intentAccount);
 

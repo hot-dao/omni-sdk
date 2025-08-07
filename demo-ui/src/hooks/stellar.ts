@@ -43,8 +43,9 @@ export const useStellarWallet = () => {
       if (!wallet) throw new Error("Wallet not found");
 
       const result = await kit.signTransaction(tx.toXDR());
-      const hash = await bridge.stellar.horizon.submitTransaction(new Transaction(result.signedTxXdr, Networks.PUBLIC));
-      return hash.hash;
+      const txObject = new Transaction(result.signedTxXdr, Networks.PUBLIC);
+      const { hash } = await bridge.stellar.callHorizon((t) => t.submitTransaction(txObject));
+      return hash;
     },
 
     signIntent: () => {

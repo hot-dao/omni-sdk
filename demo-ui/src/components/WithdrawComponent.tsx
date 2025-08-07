@@ -69,10 +69,9 @@ const WithdrawComponent = ({ near, evm, ton, stellar }: { near: any; evm: any; t
         const pending = await bridge.getPendingWithdrawal(result.nonce);
         switch (pending.chain) {
           case Network.Ton: {
-            const sender = ton.address!;
             const refundAddress = ton.address!;
             const sendTransaction = ton.sendTransaction;
-            await bridge.ton.withdraw({ sendTransaction, refundAddress, sender, ...pending });
+            await bridge.ton.withdraw({ sendTransaction, refundAddress, ...pending });
             break;
           }
 

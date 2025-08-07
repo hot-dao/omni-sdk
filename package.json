@@ -16,6 +16,7 @@
   "license": "MIT",
   "dependencies": {
     "@coral-xyz/anchor": "0.29.0",
+    "@hot-labs/near-connect": "0.3.1",
     "@near-js/crypto": "^2.0.0",
     "@near-js/providers": "^2.0.0",
     "@near-js/transactions": "^2.0.0",

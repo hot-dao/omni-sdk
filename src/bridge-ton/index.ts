@@ -80,14 +80,14 @@ class TonOmniService {
     return BigInt(nonce) <= BigInt(lastNonce.toString());
   }
 
-  async withdraw(args: { sender: string; refundAddress: string; amount: bigint; token: string; nonce: string; receiver: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
+  async withdraw(args: { refundAddress: string; amount: bigint; token: string; nonce: string; receiver: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
     const { metaWallet } = this.getMetaWallet();
     const executor = this.executor(args.sendTransaction);
     const signature = await this.omni.api.withdrawSign(args.nonce);
 
     if (args.token === "native") {
       await metaWallet.sendUserNativeWithdraw(executor, {
-        userWallet: Address.parse(args.sender),
+        userWallet: Address.parse(args.receiver),
         signature: Buffer.from(baseDecode(signature)),
         excessAcc: Address.parse(args.refundAddress),
         nonce: BigInt(args.nonce),
@@ -103,7 +103,7 @@ class TonOmniService {
       const tokenAddress = await minter.getWalletAddressOf(metaWallet.address);
 
       await metaWallet.sendUserTokenWithdraw(executor, {
-        userWallet: Address.parse(args.sender),
+        userWallet: Address.parse(args.receiver),
         signature: Buffer.from(baseDecode(signature)),
         excessAcc: Address.parse(args.refundAddress),
         token: tokenAddress,
@@ -118,6 +118,7 @@ class TonOmniService {
     const { metaWallet, JettonMinter, JettonWallet } = this.getMetaWallet();
     const receiver = omniEphemeralReceiver(args.intentAccount);
     const executor = this.executor(args.sendTransaction);
+    this.omni.api.registerDeposit(args.intentAccount);
 
     if (args.token === "native") {
       this.omni.logger?.log(`Depositing ${args.amount} TON to ${args.intentAccount}`);

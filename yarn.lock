@@ -42,6 +42,11 @@
     bn.js "^5.1.2"
     buffer-layout "^1.2.0"
 
+"@hot-labs/near-connect@0.3.1":
+  version "0.3.1"
+  resolved "https://registry.yarnpkg.com/@hot-labs/near-connect/-/near-connect-0.3.1.tgz#c7aff6dc075e6057af38bc86310f0e0b60b5a214"
+  integrity sha512-6VCEluC3K1A9DF7eEx+R/AbIYC8cE89JppCXzUrAGpPErVn95ogAaR80bxZskoOOOyfD4EHflWDRaXAdwL+5bQ==
+
 "@near-js/crypto@2.2.2", "@near-js/crypto@^2.0.0":
   version "2.2.2"
   resolved "https://registry.yarnpkg.com/@near-js/crypto/-/crypto-2.2.2.tgz#944dacc26547cb8860620c251a27d697f70f2241"

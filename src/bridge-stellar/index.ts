@@ -100,6 +100,7 @@ class StellarService {
   }
 
   async deposit(args: { token: string; amount: bigint; intentAccount: string; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }): Promise<string> {
+    this.omni.api.registerDeposit(args.intentAccount);
     const receiver = omniEphemeralReceiver(args.intentAccount);
     const tx = await this.buildDepositTx(args.sender, args.token, args.amount, receiver);
     return await args.sendTransaction(tx);

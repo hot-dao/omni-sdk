@@ -129,6 +129,7 @@ class SolanaOmniService {
   }
 
   async deposit(args: { token: string; amount: bigint; sender: string; intentAccount: string; sendTransaction: (tx: sol.TransactionInstruction[]) => Promise<string> }): Promise<string> {
+    this.omni.api.registerDeposit(args.intentAccount);
     const receiver = omniEphemeralReceiver(args.intentAccount);
     const lastDeposit = await this.getLastDepositNonce(args.sender);
     const env = this.env(args.sender);
