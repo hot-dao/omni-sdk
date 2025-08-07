@@ -1,7 +1,6 @@
-import { Address, Asset, Contract, FeeBumpTransaction, Networks, rpc, scValToBigInt, StrKey, TimeoutInfinite, TransactionBuilder, xdr, XdrLargeInt } from "@stellar/stellar-sdk";
+import { Address, Asset, Contract, FeeBumpTransaction, Horizon, Networks, rpc, scValToBigInt, StrKey, TimeoutInfinite, TransactionBuilder, xdr, XdrLargeInt } from "@stellar/stellar-sdk";
 import { Operation, Transaction } from "@stellar/stellar-sdk";
 import { baseDecode, baseEncode } from "@near-js/utils";
-import { Horizon } from "@stellar/stellar-sdk";
 import BigNumber from "bignumber.js";
 
 import { omniEphemeralReceiver, parseAmount } from "../utils";

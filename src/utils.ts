@@ -12,10 +12,16 @@ import { Network } from "./types";
 export const OMNI_HOT_V2 = "v2_1.omni.hot.tg";
 export const INTENT_PREFIX = "nep245:v2_1.omni.hot.tg:";
 
-export const TGAS = 1000000000000n;
+const serializeBigIntInObject = (obj: Record<string, any>) => {
+  for (const key in obj) {
+    if (typeof obj[key] === "bigint") obj[key] = obj[key].toString();
+    if (typeof obj[key] === "object") serializeBigIntInObject(obj[key]);
+  }
+};
 
 export const functionCall = (args: { methodName: string; args: any; gas: string; deposit: string }) => {
-  return actionCreators.functionCall(args.methodName, JSON.parse(JSON.stringify(args.args, (_, v) => (typeof v === "bigint" ? v.toString() : v))), BigInt(args.gas), BigInt(args.deposit));
+  if (typeof args.args === "object") serializeBigIntInObject(args.args);
+  return actionCreators.functionCall(args.methodName, args.args, BigInt(args.gas), BigInt(args.deposit));
 };
 
 export const isTon = (id: number): id is Network.OmniTon | Network.Ton => {
@@ -30,9 +36,9 @@ export const PoA_BRIDGE_TOKENS: Record<string, string> = {
   "eth-0xdac17f958d2ee523a2206206994597c13d831ec7.omft.near": `${Network.Eth}:0xdac17f958d2ee523a2206206994597c13d831ec7`,
   "eth-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.omft.near": `${Network.Eth}:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48`,
 
-  // "sol.omft.near": `${Network.Solana}:native`,
-  // "sol-c800a4bd850783ccb82c2b2c7e84175443606352.omft.near": `${Network.Solana}:Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`, // USDT
-  // "sol-5ce3bf3a31af18be40ba30f721101b4341690186.omft.near": `${Network.Solana}:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, // USDC
+  "sol.omft.near": `${Network.Solana}:native`,
+  "sol-c800a4bd850783ccb82c2b2c7e84175443606352.omft.near": `${Network.Solana}:Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`, // USDT
+  "sol-5ce3bf3a31af18be40ba30f721101b4341690186.omft.near": `${Network.Solana}:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, // USDC
 
   "btc.omft.near": `${Network.Near}:btc.omft.near`,
   "zec.omft.near": `${Network.Near}:zec.omft.near`,
@@ -91,7 +97,6 @@ export const toOmni = (id: string | number, addr?: string) => {
  * 1010:native -> nep141:wrap.near
  */
 export const toOmniIntent = (id: string | number, addr?: string): string => {
-  // eslint-disable-next-line prefer-const
   let [chain, address] = addr ? [id, addr] : String(id).split(/:(.*)/s);
   if (+chain === Network.Hot) return address;
   if (+chain === 1010 && address === "native") address = "wrap.near";
@@ -169,14 +174,14 @@ export const decodeTokenAddress = (chain: Network, addr: string) => {
 /** Build ephemeral receiver for OMNI contract, its just a user 'proxy' address to send tokens directly to intents  */
 export const omniEphemeralReceiver = (intentAccount: string) => {
   return crypto
-    .createHash("sha256") //
+    .createHash("sha256")
     .update(JSON.stringify({ account_id: "intents.near", msg: JSON.stringify({ receiver_id: intentAccount }) }))
     .digest();
 };
 
 export const legacyUnsafeOmniEphemeralReceiver = (intentAccount: string) => {
   return crypto
-    .createHash("sha256") //
+    .createHash("sha256")
     .update(Buffer.from("intents.near", "utf8"))
     .update(Buffer.from(JSON.stringify({ receiver_id: intentAccount }), "utf8"))
     .digest();

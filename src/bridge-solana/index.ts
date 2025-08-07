@@ -6,12 +6,12 @@ import { ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountInstruction, g
 import OmniService from "../bridge";
 import { Network, PendingDeposit } from "../types";
 import { omniEphemeralReceiver, parseAmount, wait } from "../utils";
+import { DepositNotFound } from "../errors";
+import { ReviewFee } from "../fee";
 
 import AdvancedConnection from "./provider";
 import { findDepositAddress, PROGRAM_ID } from "./helpers";
 import IDL from "./idl.json";
-import { ReviewFee } from "../fee";
-import { DepositAlreadyClaimed, DepositNotFound } from "../errors";
 
 class SolanaOmniService {
   public connection: sol.Connection;
@@ -114,7 +114,7 @@ class SolanaOmniService {
     const [depositAddress] = findDepositAddress(BigInt(deposit.nonce), new sol.PublicKey(sender), receiver, mint, BigInt(deposit.amount));
 
     const isExist = await this.connection.getAccountInfo(depositAddress, { commitment: "confirmed" });
-    if (isExist == null) throw "Deposit nonce account not found";
+    if (isExist == null) throw new DepositNotFound(Network.Solana, deposit.tx, "Deposit nonce account not found");
 
     const env = this.env(deposit.receiver);
     const builder = env.program.methods.clearDepositInfo(Array.from(receiver), mint, bnAmount, bnNonce).accounts({

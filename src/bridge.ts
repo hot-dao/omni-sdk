@@ -3,7 +3,6 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 
 import {
   Logger,
-  TGAS,
   OMNI_HOT_V2,
   toOmniIntent,
   encodeReceiver,
@@ -32,16 +31,19 @@ import {
 import { BridgeOptions, Network, PendingDepositWithIntent, PendingWithdraw } from "./types";
 import OmniApi from "./api";
 
+import { NEAR_PER_TGAS, TGAS, ReviewFee } from "./fee";
 import SolanaOmniService from "./bridge-solana";
 import StellarService from "./bridge-stellar";
 import EvmOmniService from "./bridge-evm";
 import TonOmniService from "./bridge-ton";
 import NearBridge from "./bridge-near";
+import PoaBridge from "./poabridge";
 
 class HotBridge {
   logger?: Logger;
-  executeNearTransaction: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
+  executeNearTransaction?: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
 
+  poa: PoaBridge;
   stellar: StellarService;
   solana: SolanaOmniService;
   ton: TonOmniService;
@@ -59,6 +61,7 @@ class HotBridge {
     this.solana = new SolanaOmniService(this, options.solanaRpc);
     this.ton = new TonOmniService(this, options.tonRpc);
     this.near = new NearBridge(this, options.nearRpc);
+    this.poa = new PoaBridge(this.api);
   }
 
   async executeIntents(signedDatas: any[], quoteHashes: string[]) {
@@ -98,15 +101,6 @@ class HotBridge {
 
     const hash = await fetchResult();
     return { sender: "intents.near", hash };
-  }
-
-  getContractReceiver(chain: number) {
-    if (chain === Network.Tron) return "";
-    if (chain === Network.Near) return OMNI_HOT_V2;
-    if (chain === Network.Solana) return "5bG1Kru6ifRmkWMigYaGRKbBKp3WrgcmB6ARNKsV2y2v";
-    if (chain === Network.Stellar) return "CDP4UWXJAGZRZNNDRTQRG23N56SM5BU6AFTKQLNAUUXSEHU5XYFYPP4I";
-    if (isTon(chain)) return this.ton.getMetaWallet().metaWallet.address.toString({ bounceable: false });
-    return "0x42351e68420D16613BBE5A7d8cB337A9969980b4";
   }
 
   async getAllIntentBalances(intentAccount: string) {
@@ -188,9 +182,11 @@ class HotBridge {
   }
 
   async clearPendingWithdrawals(withdrawals: PendingWithdraw[]) {
-    const tasks = withdrawals.map(async (withdraw) => {
+    const tasks = withdrawals.map<Promise<Action | null>>(async (withdraw) => {
       const receiver = encodeReceiver(withdraw.chain, withdraw.receiver);
-      const signature = await this.api.clearWithdrawSign(withdraw.nonce, Buffer.from(baseDecode(receiver)));
+      const { signature, hash, sender_id } = await this.api.executeClearWithdraw(withdraw.nonce, Buffer.from(baseDecode(receiver)));
+      if (hash && sender_id) return null;
+
       return functionCall({
         methodName: "clear_completed_withdrawal",
         args: { nonce: withdraw.nonce, signature },
@@ -199,7 +195,10 @@ class HotBridge {
       });
     });
 
-    const actions = await Promise.all(tasks);
+    const actions: Action[] = (await Promise.all(tasks)).filter((t) => t != null);
+    if (actions.length === 0) return null;
+
+    if (!this.executeNearTransaction) throw "No executeNearTransaction";
     return await this.executeNearTransaction({ receiverId: OMNI_HOT_V2, actions });
   }
 
@@ -286,27 +285,38 @@ class HotBridge {
 
     this.logger?.log(`Signing deposit`);
     const token = encodeTokenAddress(chain, deposit.token);
-    const signature = await this.api.depositSign(chain, deposit.nonce, deposit.sender, deposit.receiver, token, deposit.amount);
+    const msg = JSON.stringify({ receiver_id: deposit.intentAccount });
+    const { signature, hash, sender_id, status } = await this.api.executeDeposit({
+      receiver_id: deposit.receiver,
+      sender_id: deposit.sender,
+      amount: deposit.amount,
+      nonce: deposit.nonce,
+      chain_id: chain,
+      token_id: token,
+      msg,
+    });
 
+    if (hash && sender_id) return { hash, sender: sender_id };
+    if (status === "ok") return null;
+
+    if (!signature) throw status || "Failed to execute deposit";
     const depositAction = functionCall({
       methodName: "mt_deposit_call",
       gas: String(80n * TGAS),
       deposit: "1",
       args: {
-        signature,
-        chain_id: chain,
-        contract_id: token,
-        nonce: deposit.nonce,
+        deposit_call_args: { account_id: "intents.near", msg },
         amount: deposit.amount,
-        deposit_call_args: {
-          account_id: "intents.near",
-          msg: JSON.stringify({ receiver_id: deposit.intentAccount }),
-        },
+        nonce: deposit.nonce,
+        contract_id: token,
+        chain_id: chain,
+        signature,
       },
     });
 
     try {
       this.logger?.log(`Calling deposit to omni and deposit to intents`);
+      if (!this.executeNearTransaction) throw "No executeNearTransaction";
       return await this.executeNearTransaction({ actions: [depositAction], receiverId: OMNI_HOT_V2 });
     } catch (e) {
       if (!e?.toString?.().includes("Nonce already used")) throw e;
@@ -314,9 +324,9 @@ class HotBridge {
     }
   }
 
-  async getGaslessWithdrawFee(chain: Network, receiver: string): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
+  async getGaslessWithdrawFee(chain: Network, type: "bridge" | "refuel" = "bridge"): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
     if (chain === 1111) chain = 1117; // TON_ID to OMNI_TON
-    return await this.api.getWithdrawFee(chain, receiver);
+    return await this.api.getWithdrawFee(chain, type);
   }
 
   async buildWithdrawIntent(args: { chain: Network; token: string; amount: bigint; receiver: string; intentAccount: string }) {
@@ -341,7 +351,7 @@ class HotBridge {
       return {
         intent: address === "wrap.near" ? "native_withdraw" : "ft_withdraw",
         memo: args.chain !== Network.Near ? `WITHDRAW_TO:${args.receiver}` : undefined,
-        receiver_id: args.chain !== Network.Near ? address : args.intentAccount,
+        receiver_id: args.chain !== Network.Near ? address : args.receiver,
         token: address === "wrap.near" ? undefined : address,
         amount: args.amount.toString(),
       };
@@ -440,12 +450,14 @@ class HotBridge {
     amount: bigint;
     receiver: string;
     intentAccount: string;
+    gasless?: "refuel" | true;
   }): Promise<{ gasless: boolean; intents: any[]; quoteHashes: string[] }> {
     if (PoA_BRIDGE_TOKENS_INVERTED[`${args.chain}:${args.token}`]) throw new GaslessNotAvailable(args.chain);
     if (args.chain === Network.Near) throw new GaslessNotAvailable(args.chain);
 
     // Get gas price
-    const { gasPrice } = await this.getGaslessWithdrawFee(args.chain, args.receiver).catch(() => ({ gasPrice: null }));
+    const type = args.gasless === "refuel" ? "refuel" : "bridge";
+    const { gasPrice } = await this.getGaslessWithdrawFee(args.chain, type).catch(() => ({ gasPrice: null }));
     if (gasPrice == null) throw new GaslessNotAvailable(args.chain);
     this.logger?.log(`Gasless withdraw gas price: ${gasPrice}`);
 
@@ -493,13 +505,14 @@ class HotBridge {
     amount: bigint;
     receiver: string;
     intentAccount: string;
-    gasless?: boolean;
+    gasless?: "refuel" | true | false;
   }): Promise<{ intents: any[]; quoteHashes: string[]; gasless: boolean }> {
     this.logger?.log(`Withdrawing ${args.amount} ${args.chain} ${args.token}`);
 
-    if (args.gasless !== false) {
+    if (args.gasless != null && args.gasless !== false) {
       try {
-        return await this.buildGaslessWithdrawToken(args);
+        const gasless = args.gasless === "refuel" ? "refuel" : true;
+        return await this.buildGaslessWithdrawToken({ ...args, gasless });
       } catch (e) {
         if (!(e instanceof GaslessNotAvailable)) throw e;
         this.logger?.log(`Gasless withdraw not available for chain ${args.chain}, using regular withdraw`);
@@ -512,7 +525,7 @@ class HotBridge {
 
   async waitGaslessWithdraw(nonce: string, chain: number, receiver: string) {
     let attempts = 0;
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
       if (attempts > 50) throw new GaslessWithdrawTxNotFound(nonce, chain, receiver);
       await wait(2000);
@@ -570,11 +583,11 @@ class HotBridge {
     intentAccount: string;
     signIntents: (intents: Record<string, any>[]) => Promise<any>;
     adjustMax?: boolean;
-    gasless?: boolean;
+    gasless?: "refuel" | true | false;
   }) {
     if (args.chain === Network.Near && args.token !== "wrap.near") {
-      const isRegistered = await this.near.isTokenRegistered(args.token, args.intentAccount);
-      if (!isRegistered) throw new NearTokenNotRegistered(args.token, args.intentAccount);
+      const isRegistered = await this.near.isTokenRegistered(args.token, args.receiver);
+      if (!isRegistered) throw new NearTokenNotRegistered(args.token, args.receiver);
     }
 
     const balance = await this.getIntentBalance(toOmniIntent(args.chain, args.token), args.intentAccount);
@@ -639,6 +652,43 @@ class HotBridge {
     await this.executeIntents([signedIntents, quote.signed_fee_quote].filter(Boolean), quote.quote_hashes);
     await this.waitUntilBalance(args.intentTo, args.minAmountOut, args.intentAccount);
     return { amountOut };
+  }
+
+  async getWithdrawFee(address: string, chain: number, token: string, gasless = true): Promise<ReviewFee> {
+    if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_TGAS, gasLimit: 300n * TGAS, chain });
+    if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
+
+    // POA bridge
+    if (PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${token}`]) {
+      const info = await this.poa.getTokenInfo(address, chain, token).catch(() => null);
+      const fee = BigInt(info?.withdrawal_fee || 0n);
+      return new ReviewFee({ gasless: true, token: `${chain}:${token}`, chain, baseFee: fee });
+    }
+
+    if (gasless) {
+      const fee = await this.getGaslessWithdrawFee(chain).catch(() => null);
+      if (fee) return new ReviewFee({ gasless: true, chain, baseFee: BigInt(fee.gasPrice) });
+    }
+
+    if (isTon(chain)) return (await this.ton.getWithdrawFee()) as ReviewFee;
+    if (chain === Network.Solana) return (await this.solana.getWithdrawFee()) as ReviewFee;
+    if (chain === Network.Stellar) return (await this.stellar.getWithdrawFee()) as ReviewFee;
+    return (await this.evm.getWithdrawFee(chain)) as ReviewFee;
+  }
+
+  async getDepositFee(options: { chain: number; token: string; amount: bigint; sender: string; intentAccount: string }): Promise<ReviewFee> {
+    const { chain, token, amount, sender, intentAccount } = options;
+    if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
+    if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_TGAS, gasLimit: 300n * TGAS, chain });
+
+    // POA bridge
+    if (PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${token}`]) return await this.poa.getDepositFee(chain, token, intentAccount);
+
+    // HOT Bridge
+    if (chain === Network.Stellar) return (await this.stellar.getDepositFee(sender, token, amount, intentAccount)) as ReviewFee;
+    if (chain === Network.Solana) return (await this.solana.getDepositFee()) as ReviewFee;
+    if (isTon(chain)) return (await this.ton.getDepositFee(token)) as ReviewFee;
+    return (await this.evm.getDepositFee(chain, token, amount, sender)) as ReviewFee;
   }
 }
 

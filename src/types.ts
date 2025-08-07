@@ -2,7 +2,6 @@ import type { TonApiClient } from "@ton-api/client";
 import type { JsonRpcProvider } from "@near-js/providers";
 import type { Action } from "@near-js/transactions";
 import type { Connection } from "@solana/web3.js";
-import type { rpc, Horizon } from "@stellar/stellar-sdk";
 import type { AbstractProvider } from "ethers";
 
 import { Logger } from "./utils";
@@ -17,7 +16,7 @@ export enum Network {
   Ton = 1111,
 
   Eth = 1,
-  Tron = 999,
+  Tron = 333,
   Solana = 1001,
   Stellar = 1100,
   Near = 1010,
@@ -55,18 +54,17 @@ export enum Network {
 
 export interface BridgeOptions {
   logger?: Logger;
-  executeNearTransaction: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
+  executeNearTransaction?: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
 
   evmRpc?: Record<number, string[]> | ((chain: number) => AbstractProvider);
   enableApproveMax?: boolean;
 
-  nearRpc?: JsonRpcProvider | string[];
   solanaRpc?: Connection | string[];
   tonRpc?: TonApiClient | string;
-
-  stellarRpc?: string[];
+  nearRpc?: JsonRpcProvider | string[];
   stellarHorizonRpc?: string[];
   stellarBaseFee?: string;
+  stellarRpc?: string[];
 
   solverBusRpc?: string;
   mpcApi?: string[];

@@ -7,6 +7,7 @@ import OmniService from "../bridge";
 import { omniEphemeralReceiver } from "../utils";
 import { Network, PendingDeposit } from "../types";
 import { MIN_COMMISSION, OpCode } from "./constants";
+import { DepositNotFound } from "../errors";
 
 import { TON_MINTER_TO_JETTON_MAPPER, TON_JETTON_TO_MINTER_MAPPER } from "./jettons";
 import { TonMetaWallet as TonMetaWalletV2 } from "./wrappers/TonMetaWallet";
@@ -14,7 +15,6 @@ import { DepositJetton as DepositJettonV2 } from "./wrappers/DepositJetton";
 import { JettonMinter as JettonMinterV2 } from "./wrappers/JettonMinter";
 import { JettonWallet as JettonWalletV2 } from "./wrappers/JettonWallet";
 import { UserJetton as UserJettonV2 } from "./wrappers/UserJetton";
-import { DepositNotFound } from "../errors";
 import { ReviewFee } from "../fee";
 
 class TonOmniService {

@@ -78,7 +78,7 @@ class NearRpcProvider extends JsonRpcProvider {
       headers: { "Content-Type": "application/json", Referer: "https://my.herewallet.app" },
       signal: controller.signal,
       method: "POST",
-    }).catch((e) => {
+    }).catch(() => {
       clearInterval(timer);
       if (controller.signal.aborted) throw new TimeoutNetworkError("RPC Network Error");
       if (!window.navigator.onLine) throw new NetworkError(0, "RPC Network Error", "No internet connection");

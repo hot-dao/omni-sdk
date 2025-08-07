@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Commitment, Connection, ConnectionConfig } from "@solana/web3.js";
 
 export class Sequential {
@@ -45,19 +46,15 @@ class AdvancedConnection extends Connection {
     const self = this;
 
     for (const property of Object.getOwnPropertyNames(Connection.prototype)) {
-      // @ts-expect-error: --
       if (typeof Connection.prototype[property] !== "function") {
         continue;
       }
 
       // Remap all functions with a proxy function that does the exact same thing,
       // except it adds a fallback for when something goes wrong
-      // @ts-expect-error: --
       if (this[property].constructor.name === "AsyncFunction") {
-        // @ts-expect-error: --
         this[property] = async function (...args) {
           return await self.executeWithCallback((con) => {
-            // @ts-expect-error: --
             return con[property](...args);
           }, property);
         };
@@ -65,7 +62,6 @@ class AdvancedConnection extends Connection {
         continue;
       }
 
-      // @ts-expect-error: Do the same for non async functions
       this[property] = function (...args) {
         let lastError;
 
@@ -74,7 +70,6 @@ class AdvancedConnection extends Connection {
           const override = self.overrides.get(property);
           if (override) {
             try {
-              // @ts-expect-error: --
               return override.connection[property](...args);
             } catch (e) {
               lastError = e;
@@ -91,7 +86,6 @@ class AdvancedConnection extends Connection {
         self.strategy.start();
         for (const conn of self.strategy.getConnection()) {
           try {
-            // @ts-expect-error: --
             return conn[property](...args);
           } catch (e) {
             lastError = e;

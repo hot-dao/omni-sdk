@@ -69,14 +69,14 @@ class EvmOmniService {
     return await contract.deposit.estimateGas(sender, address, amount);
   }
 
-  async approveToken(args: { chain: number; token: string; allowed: string; need: bigint; sender: string; sendTransaction: (tx: ethers.TransactionRequest) => Promise<string> }) {
+  async approveToken(args: { chain: number; token: string; allowed: string; need: bigint; amount: bigint; sender: string; sendTransaction: (tx: ethers.TransactionRequest) => Promise<string> }) {
     const provider = this.getProvider(args.chain);
     const erc20 = new ethers.Contract(args.token, ERC20_ABI, provider);
 
     const allowance = await erc20.allowance(args.sender, args.allowed);
     if (allowance >= args.need) return;
 
-    const tx = await erc20.approve.populateTransaction(args.allowed, args.need);
+    const tx = await erc20.approve.populateTransaction(args.allowed, args.amount);
     const hash = await args.sendTransaction({ ...tx, chainId: args.chain });
     this.omni.logger?.log(`Approve tx: ${hash}`);
   }
@@ -128,7 +128,8 @@ class EvmOmniService {
     this.omni.logger?.log(`Approving token if needed ${args.token} ${args.amount}`);
     await this.approveToken({
       sendTransaction: args.sendTransaction,
-      need: this.options?.enableApproveMax ? MaxUint256 : args.amount,
+      need: args.amount,
+      amount: this.options?.enableApproveMax ? MaxUint256 : args.amount,
       allowed: OMNI_CONTRACT,
       sender: args.sender,
       chain: args.chain,

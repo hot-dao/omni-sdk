@@ -1,8 +1,9 @@
 import { Action } from "@near-js/transactions";
 import { JsonRpcProvider } from "@near-js/providers";
 
+import { TGAS } from "../fee";
 import OmniService from "../bridge";
-import { functionCall, TGAS } from "../utils";
+import { functionCall } from "../utils";
 import NearRpcProvider from "./provider";
 
 interface ViewFunctionCallOptions {

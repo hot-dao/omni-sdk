@@ -58,15 +58,8 @@ class OmniApi {
     return ts;
   }
 
-  async registerDeposit(intentAccount: string) {
-    await this.requestApi(`/api/v1/transactions/hot_bridges/auto_deposit_register`, {
-      body: JSON.stringify({ intent_id: intentAccount }),
-      method: "POST",
-    });
-  }
-
-  async getWithdrawFee(chain: Network, receiver: string): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
-    const res = await this.requestApi(`/api/v1/evm/${chain}/bridge_gas_price?receiver=${receiver}`, { method: "GET" });
+  async getWithdrawFee(chain: Network, type: "bridge" | "refuel" = "bridge"): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
+    const res = await this.requestApi(`/api/v1/evm/${chain}/bridge_gas_price?type=${type}`, { method: "GET" });
     const { gas_price, block_number } = await res.json();
     return { gasPrice: BigInt(gas_price), blockNumber: BigInt(block_number) };
   }
@@ -106,6 +99,13 @@ class OmniApi {
     return await res.json();
   }
 
+  async registerDeposit(intentAccount: string) {
+    await this.requestApi(`/api/v1/transactions/hot_bridges/auto_deposit_register`, {
+      body: JSON.stringify({ intent_id: intentAccount }),
+      method: "POST",
+    });
+  }
+
   async getBridgeTokens(): Promise<{ groups: Record<string, string[]>; liquidityContract: string }> {
     const res = await this.requestApi("/api/v1/exchange/intent_swap/groups", { method: "GET" });
     const { groups, stable_swap_contract } = await res.json();
@@ -140,7 +140,13 @@ class OmniApi {
     };
   }
 
-  async clearWithdrawSign(nonce: string, receiverId: Buffer) {
+  async withdrawSign(nonce: string): Promise<string> {
+    const res = await this.requestRpc("/withdraw/sign", { body: JSON.stringify({ nonce }), method: "POST" });
+    const { signature } = await res.json();
+    return signature;
+  }
+
+  async clearWithdrawSign(nonce: string, receiverId: Buffer): Promise<string> {
     const data = RLP.encode([Buffer.from("clear"), BigInt(nonce), receiverId]);
     const proof = crypto.createHash("sha256").update(data).digest();
     const res = await this.requestRpc("/clear/sign", { body: JSON.stringify({ nonce, ownership_proof: baseEncode(proof) }), method: "POST" });
@@ -148,18 +154,40 @@ class OmniApi {
     return signature;
   }
 
-  async withdrawSign(nonce: string) {
-    const res = await this.requestRpc("/withdraw/sign", { body: JSON.stringify({ nonce }), method: "POST" });
-    const { signature } = await res.json();
-    return signature;
+  async executeClearWithdraw(nonce: string, receiverId: Buffer): Promise<{ signature: string; hash?: string; sender_id?: string }> {
+    try {
+      const body = JSON.stringify({ nonce });
+      const res = await this.requestApi("/api/v1/transactions/clear_completed_withdrawal", { method: "POST", body });
+      return await res.json();
+    } catch {
+      return { signature: await this.clearWithdrawSign(nonce, receiverId) };
+    }
   }
 
-  async depositSign(chain: number, nonce: string, sender_id: string, receiver_id: string, token_id: string, amount: string) {
+  async depositSign(chain: number, nonce: string, sender_id: string, receiver_id: string, token_id: string, amount: string): Promise<{ signature: string }> {
     if (chain === 1111) chain = 1117;
-    const body = JSON.stringify({ nonce, chain_from: chain, sender_id, receiver_id, token_id, amount });
+    const body = JSON.stringify({ nonce, chain_from: chain, sender_id, receiver_id, token_id, amount, autopilot: true });
     const res = await this.requestRpc("/deposit/sign", { method: "POST", body });
-    const { signature } = await res.json();
-    return signature;
+    return await res.json();
+  }
+
+  async executeDeposit(args: {
+    chain_id: number;
+    nonce: string;
+    sender_id: string;
+    receiver_id: string;
+    token_id: string;
+    amount: string;
+    msg: string;
+  }): Promise<{ signature: string; hash?: string; sender_id?: string; status?: "ok" }> {
+    try {
+      if (args.chain_id === 1111) args.chain_id = 1117;
+      const body = JSON.stringify(args);
+      const res = await this.requestApi("/api/v1/transactions/process_bridge_deposit", { method: "POST", body });
+      return await res.json();
+    } catch {
+      return this.depositSign(args.chain_id, args.nonce, args.sender_id, args.receiver_id, args.token_id, args.amount);
+    }
   }
 }
 
