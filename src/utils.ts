@@ -8,6 +8,7 @@ import crypto from "crypto";
 import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
 import TonOmniService from "./bridge-ton";
 import { Network } from "./types";
+import PoaBridge from "./poabridge";
 
 export const OMNI_HOT_V2 = "v2_1.omni.hot.tg";
 export const INTENT_PREFIX = "nep245:v2_1.omni.hot.tg:";
@@ -28,24 +29,6 @@ export const isTon = (id: number): id is Network.OmniTon | Network.Ton => {
   return id === Network.OmniTon || id === Network.Ton;
 };
 
-export const PoA_BRIDGE_TOKENS: Record<string, string> = {
-  "tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near": `${Network.Tron}:TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`,
-  "tron.omft.near": `${Network.Tron}:native`,
-
-  "eth.omft.near": `${Network.Eth}:native`,
-  "eth-0xdac17f958d2ee523a2206206994597c13d831ec7.omft.near": `${Network.Eth}:0xdac17f958d2ee523a2206206994597c13d831ec7`,
-  "eth-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.omft.near": `${Network.Eth}:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48`,
-
-  "sol.omft.near": `${Network.Solana}:native`,
-  "sol-c800a4bd850783ccb82c2b2c7e84175443606352.omft.near": `${Network.Solana}:Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`, // USDT
-  "sol-5ce3bf3a31af18be40ba30f721101b4341690186.omft.near": `${Network.Solana}:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, // USDC
-
-  "btc.omft.near": `${Network.Near}:btc.omft.near`,
-  "zec.omft.near": `${Network.Near}:zec.omft.near`,
-};
-
-export const PoA_BRIDGE_TOKENS_INVERTED: Record<string, string> = Object.fromEntries(Object.entries(PoA_BRIDGE_TOKENS).map(([k, v]) => [v, k]));
-
 /**
  * Convert omni id  or intent id to native chain token id, example:
  * 56_11111111111111111111 -> 56:native
@@ -55,7 +38,7 @@ export const PoA_BRIDGE_TOKENS_INVERTED: Record<string, string> = Object.fromEnt
 export const fromOmni = (id: string) => {
   id = id.split(":").pop() || id;
 
-  if (PoA_BRIDGE_TOKENS[id.replace("nep141:", "")]) return PoA_BRIDGE_TOKENS[id.replace("nep141:", "")];
+  if (PoaBridge.BRIDGE_TOKENS[id.replace("nep141:", "")]) return PoaBridge.BRIDGE_TOKENS[id.replace("nep141:", "")];
   if (id.startsWith("nep141:")) return `1010:${id.replace("nep141:", "")}`;
   if (!id.includes("_")) return `1010:${id}`;
 
@@ -84,7 +67,7 @@ export const toOmni = (id: string | number, addr?: string) => {
   if (+chain === 1111) chain = 1117;
 
   // PoA bridge tokens
-  if (PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]) return PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${address}`];
+  if (PoaBridge.BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]) return PoaBridge.BRIDGE_TOKENS_INVERTED[`${chain}:${address}`];
 
   if (+chain === Network.Hot) return address.replace(INTENT_PREFIX, "");
   if (+chain === Network.Near) return address;
@@ -106,7 +89,7 @@ export const toOmniIntent = (id: string | number, addr?: string): string => {
   if (+chain === 1111) chain = 1117;
 
   // PoA bridge tokens
-  if (PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]) return `nep141:${PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]}`;
+  if (PoaBridge.BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]) return `nep141:${PoaBridge.BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]}`;
 
   return `${INTENT_PREFIX}${chain}_${encodeTokenAddress(+chain, address)}`;
 };

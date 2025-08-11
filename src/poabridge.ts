@@ -1,11 +1,27 @@
 import { ReviewFee } from "./fee";
 
 import { Network } from "./types";
-import OmniApi from "./api";
 import { toOmni, wait } from "./utils";
+import HotBridge from "./bridge";
 
 class PoaBridge {
-  constructor(private readonly api: OmniApi) {}
+  static BRIDGE_TOKENS: Record<string, string> = {};
+  static BRIDGE_TOKENS_INVERTED: Record<string, string> = {};
+
+  static setupTokens(setup: Record<string, string>) {
+    PoaBridge.BRIDGE_TOKENS = setup;
+    PoaBridge.BRIDGE_TOKENS_INVERTED = Object.fromEntries(Object.entries(PoaBridge.BRIDGE_TOKENS).map(([k, v]) => [v, k]));
+  }
+
+  constructor(private readonly omni: HotBridge) {}
+
+  getPoaId(chain: number, address: string) {
+    return PoaBridge.BRIDGE_TOKENS_INVERTED[`${chain}:${address}`] || null;
+  }
+
+  getTokenId(poaId: string) {
+    return PoaBridge.BRIDGE_TOKENS[poaId] || null;
+  }
 
   chainIdToIntentsChainId(chain: number) {
     switch (chain) {
@@ -95,7 +111,7 @@ class PoaBridge {
 
   async waitDeposit(intentAccount: string, chain: number, amount: bigint, hash: string) {
     const receiver = await this.getDepositAddress(intentAccount, chain);
-    const minCreatedAt = await this.api.getTime();
+    const minCreatedAt = await this.omni.api.getTime();
 
     fetch("https://bridge.chaindefuser.com/rpc", {
       method: "POST",
@@ -121,5 +137,21 @@ class PoaBridge {
     return { hash, receiver };
   }
 }
+
+PoaBridge.setupTokens({
+  "tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near": `${Network.Tron}:TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`,
+  "tron.omft.near": `${Network.Tron}:native`,
+
+  "eth.omft.near": `${Network.Eth}:native`,
+  "eth-0xdac17f958d2ee523a2206206994597c13d831ec7.omft.near": `${Network.Eth}:0xdac17f958d2ee523a2206206994597c13d831ec7`,
+  "eth-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.omft.near": `${Network.Eth}:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48`,
+
+  "sol.omft.near": `${Network.Solana}:native`,
+  "sol-c800a4bd850783ccb82c2b2c7e84175443606352.omft.near": `${Network.Solana}:Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`, // USDT
+  "sol-5ce3bf3a31af18be40ba30f721101b4341690186.omft.near": `${Network.Solana}:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, // USDC
+
+  "btc.omft.near": `${Network.Near}:btc.omft.near`,
+  "zec.omft.near": `${Network.Near}:zec.omft.near`,
+});
 
 export default PoaBridge;

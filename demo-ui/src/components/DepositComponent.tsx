@@ -95,9 +95,11 @@ const DepositComponent = ({ stellar, evm, near, ton }: { stellar: any; evm: any;
           token: token,
         });
 
-        const controller = new AbortController();
-        const deposit = await bridge.waitPendingDeposit(network, tx, near.intentAccount!, controller.signal);
-        await bridge.finishDeposit(deposit);
+        if (tx) {
+          const controller = new AbortController();
+          const deposit = await bridge.waitPendingDeposit(network, tx, near.intentAccount!, controller.signal);
+          await bridge.finishDeposit(deposit);
+        }
       }
 
       setSuccess(`Successfully deposited ${amount} of ${token}`);

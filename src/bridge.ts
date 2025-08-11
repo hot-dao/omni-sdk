@@ -14,7 +14,6 @@ import {
   functionCall,
   omniEphemeralReceiver,
   isTon,
-  PoA_BRIDGE_TOKENS_INVERTED,
   legacyUnsafeOmniEphemeralReceiver,
 } from "./utils";
 import {
@@ -61,7 +60,7 @@ class HotBridge {
     this.solana = new SolanaOmniService(this, options.solanaRpc);
     this.ton = new TonOmniService(this, options.tonRpc);
     this.near = new NearBridge(this, options.nearRpc);
-    this.poa = new PoaBridge(this.api);
+    this.poa = new PoaBridge(this);
   }
 
   async executeIntents(signedDatas: any[], quoteHashes: string[]) {
@@ -434,7 +433,7 @@ class HotBridge {
   }
 
   async checkLocker(chain: number, address: string, receiver: string) {
-    if (PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]) return;
+    if (PoaBridge.BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]) return;
     if (chain === Network.Near) return;
 
     const pendings = await this.getPendingWithdrawalsWithStatus(chain, receiver);
@@ -452,7 +451,7 @@ class HotBridge {
     intentAccount: string;
     gasless?: "refuel" | true;
   }): Promise<{ gasless: boolean; intents: any[]; quoteHashes: string[] }> {
-    if (PoA_BRIDGE_TOKENS_INVERTED[`${args.chain}:${args.token}`]) throw new GaslessNotAvailable(args.chain);
+    if (this.poa.getPoaId(args.chain, args.token)) throw new GaslessNotAvailable(args.chain);
     if (args.chain === Network.Near) throw new GaslessNotAvailable(args.chain);
 
     // Get gas price
@@ -605,7 +604,7 @@ class HotBridge {
     this.logger?.log(`Push withdraw intent`);
     const tx = await this.executeIntents([signedIntents], result.quoteHashes);
 
-    if (PoA_BRIDGE_TOKENS_INVERTED[`${args.chain}:${args.token}`]) return await this.waitPoaWithdraw(tx.hash);
+    if (this.poa.getPoaId(args.chain, args.token)) return await this.waitPoaWithdraw(tx.hash);
     if (args.chain === Network.Near) return; // NEAR chain has native withdrawals
 
     this.logger?.log(`Parsing withdrawal nonce`);
@@ -659,7 +658,7 @@ class HotBridge {
     if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
 
     // POA bridge
-    if (PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${token}`]) {
+    if (this.poa.getPoaId(chain, token)) {
       const info = await this.poa.getTokenInfo(address, chain, token).catch(() => null);
       const fee = BigInt(info?.withdrawal_fee || 0n);
       return new ReviewFee({ gasless: true, token: `${chain}:${token}`, chain, baseFee: fee });
@@ -682,7 +681,7 @@ class HotBridge {
     if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_TGAS, gasLimit: 300n * TGAS, chain });
 
     // POA bridge
-    if (PoA_BRIDGE_TOKENS_INVERTED[`${chain}:${token}`]) return await this.poa.getDepositFee(chain, token, intentAccount);
+    if (this.poa.getPoaId(chain, token)) return await this.poa.getDepositFee(chain, token, intentAccount);
 
     // HOT Bridge
     if (chain === Network.Stellar) return (await this.stellar.getDepositFee(sender, token, amount, intentAccount)) as ReviewFee;
