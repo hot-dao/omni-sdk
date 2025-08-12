@@ -1,8 +1,7 @@
 import type { FeeData } from "ethers";
-import { parseAmount } from "./utils";
 import { Network } from "./types";
 
-export const NEAR_PER_TGAS = BigInt(parseAmount(0.00001, 24));
+export const NEAR_PER_TGAS = 19n ** 10n;
 export const TGAS = 1000000000000n;
 
 export interface FeeOption {
