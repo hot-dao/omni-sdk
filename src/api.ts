@@ -1,7 +1,8 @@
 import RLP from "rlp";
 import crypto from "crypto";
-import { baseEncode } from "@near-js/utils";
-import { Network } from "./types";
+import { baseDecode, baseEncode } from "@near-js/utils";
+import { encodeReceiver } from "./utils";
+import { Network, TokenAsset } from "./types";
 
 class OmniApi {
   constructor(readonly api: string[] = ["https://api0.herewallet.app", "https://api2.herewallet.app"], readonly mpcApi: string[] = ["https://rpc1.hotdao.ai", "https://rpc2.hotdao.ai"]) {}
@@ -30,12 +31,6 @@ class OmniApi {
     throw error;
   }
 
-  async getTokenAssets() {
-    const res = await this.requestApi(`/api/v1/exchange/intent_tokens`, { method: "GET" });
-    const { tokens } = await res.json();
-    return tokens;
-  }
-
   async requestApi(req: RequestInfo, init: any) {
     if (!init.endpoint) init.endpoint = this.api;
     const endpoints = Array.isArray(init.endpoint) ? init.endpoint : [init.endpoint];
@@ -50,6 +45,12 @@ class OmniApi {
     }
 
     throw "Failed to request API";
+  }
+
+  async getTokenAssets(): Promise<TokenAsset[]> {
+    const res = await this.requestApi(`/api/v1/exchange/intent_tokens`, { method: "GET" });
+    const { tokens } = await res.json();
+    return tokens;
   }
 
   async getTime() {
@@ -146,21 +147,21 @@ class OmniApi {
     return signature;
   }
 
-  async clearWithdrawSign(nonce: string, receiverId: Buffer): Promise<string> {
-    const data = RLP.encode([Buffer.from("clear"), BigInt(nonce), receiverId]);
+  async clearWithdrawSign(chain: number, nonce: string, receiverId: string): Promise<{ signature: string }> {
+    const rec = baseDecode(encodeReceiver(chain, receiverId));
+    const data = RLP.encode([Buffer.from("clear"), BigInt(nonce), rec]);
     const proof = crypto.createHash("sha256").update(data).digest();
     const res = await this.requestRpc("/clear/sign", { body: JSON.stringify({ nonce, ownership_proof: baseEncode(proof) }), method: "POST" });
-    const { signature } = await res.json();
-    return signature;
+    return await res.json();
   }
 
-  async executeClearWithdraw(nonce: string, receiverId: Buffer): Promise<{ signature: string; hash?: string; sender_id?: string }> {
+  async executeClearWithdraw(chain: number, nonce: string, receiverId: string): Promise<{ signature: string; hash?: string; sender_id?: string }> {
     try {
       const body = JSON.stringify({ nonce });
       const res = await this.requestApi("/api/v1/transactions/clear_completed_withdrawal", { method: "POST", body });
       return await res.json();
     } catch {
-      return { signature: await this.clearWithdrawSign(nonce, receiverId) };
+      return await this.clearWithdrawSign(chain, nonce, receiverId);
     }
   }
 

@@ -183,7 +183,7 @@ class HotBridge {
   async clearPendingWithdrawals(withdrawals: PendingWithdraw[]) {
     const tasks = withdrawals.map<Promise<Action | null>>(async (withdraw) => {
       const receiver = encodeReceiver(withdraw.chain, withdraw.receiver);
-      const { signature, hash, sender_id } = await this.api.executeClearWithdraw(withdraw.nonce, Buffer.from(baseDecode(receiver)));
+      const { signature, hash, sender_id } = await this.api.executeClearWithdraw(withdraw.chain, withdraw.nonce, receiver);
       if (hash && sender_id) return null;
 
       return functionCall({
