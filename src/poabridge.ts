@@ -109,9 +109,8 @@ class PoaBridge {
     });
   }
 
-  async waitDeposit(intentAccount: string, chain: number, amount: bigint, hash: string) {
+  async waitDeposit(intentAccount: string, chain: number, amount: bigint, hash: string, minCreatedMs: number) {
     const receiver = await this.getDepositAddress(intentAccount, chain);
-    const minCreatedAt = await this.omni.api.getTime();
 
     fetch("https://bridge.chaindefuser.com/rpc", {
       method: "POST",
@@ -125,7 +124,7 @@ class PoaBridge {
     });
 
     const waitComplete = async () => {
-      const deposit = await this.getLastDeposit(intentAccount, chain, amount, minCreatedAt * 1000).catch(() => null);
+      const deposit = await this.getLastDeposit(intentAccount, chain, amount, minCreatedMs).catch(() => null);
       if (deposit?.status === "FAILED") throw "Deposit failed";
       if (deposit?.status === "COMPLETED") return;
 

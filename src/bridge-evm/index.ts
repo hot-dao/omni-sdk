@@ -7,7 +7,6 @@ import { Network, PendingDeposit } from "../types";
 import { DepositNotFound } from "../errors";
 import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
-import PoaBridge from "../poabridge";
 
 const getProvider =
   (rpcs: Record<number, string[]>) =>
@@ -123,8 +122,9 @@ class EvmOmniService {
   }): Promise<string | null> {
     if (this.omni.poa.getPoaId(args.chain, args.token)) {
       const receiver = await this.omni.poa.getDepositAddress(args.intentAccount, args.chain);
+      const minCreatedMs = await this.omni.api.getTime();
       const { hash, amount } = await this.transfer({ ...args, receiver });
-      await this.omni.poa.waitDeposit(args.intentAccount, args.chain, amount, hash);
+      await this.omni.poa.waitDeposit(args.intentAccount, args.chain, amount, hash, minCreatedMs * 1000);
       return null;
     }
 
