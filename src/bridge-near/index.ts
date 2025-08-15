@@ -1,4 +1,4 @@
-import { Action } from "@near-js/transactions";
+import type { Action } from "@near-js/transactions";
 import { JsonRpcProvider } from "@near-js/providers";
 
 import { TGAS } from "../fee";
@@ -15,7 +15,7 @@ interface ViewFunctionCallOptions {
 class NearBridge {
   rpc: JsonRpcProvider;
   constructor(readonly omni: OmniService, rpc?: JsonRpcProvider | string[]) {
-    this.rpc = rpc instanceof JsonRpcProvider ? rpc : new NearRpcProvider(rpc);
+    this.rpc = Array.isArray(rpc) ? new NearRpcProvider(rpc) : rpc || new NearRpcProvider();
   }
 
   get logger() {

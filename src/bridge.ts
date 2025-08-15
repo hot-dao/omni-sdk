@@ -1,9 +1,8 @@
 import type { Action } from "@near-js/transactions";
-import { baseDecode, baseEncode } from "@near-js/utils";
+import { baseEncode } from "@near-js/utils";
 
 import {
   Logger,
-  OMNI_HOT_V2,
   toOmniIntent,
   encodeReceiver,
   encodeTokenAddress,
@@ -37,6 +36,7 @@ import EvmOmniService from "./bridge-evm";
 import TonOmniService from "./bridge-ton";
 import NearBridge from "./bridge-near";
 import PoaBridge from "./poabridge";
+import { INTENTS_CONTRACT, OMNI_HOT_V2 } from "./env";
 
 class HotBridge {
   logger?: Logger;
@@ -99,10 +99,10 @@ class HotBridge {
     };
 
     const hash = await fetchResult();
-    return { sender: "intents.near", hash };
+    return { sender: INTENTS_CONTRACT, hash };
   }
 
-  async getAllIntentBalances(intentAccount: string) {
+  async getAllIntentBalances(intentAccount: string, intentsContract = INTENTS_CONTRACT) {
     const accounts = new Set<string>();
     const limit = 250;
     let fromIndex = 0n;
@@ -111,7 +111,7 @@ class HotBridge {
       const batch = await this.near.viewFunction({
         args: { account_id: intentAccount, from_index: fromIndex.toString(), limit },
         methodName: "mt_tokens_for_owner",
-        contractId: "intents.near",
+        contractId: intentsContract,
       });
 
       batch.forEach((account: any) => accounts.add(account.token_id));
@@ -119,14 +119,14 @@ class HotBridge {
       fromIndex += BigInt(limit);
     }
 
-    return await this.getIntentBalances(Array.from(accounts), intentAccount);
+    return await this.getIntentBalances(Array.from(accounts), intentAccount, intentsContract);
   }
 
-  async getIntentBalances(intents: string[], intentAccount: string) {
+  async getIntentBalances(intents: string[], intentAccount: string, intentsContract = INTENTS_CONTRACT) {
     const balances = await this.near.viewFunction({
       args: { token_ids: intents, account_id: intentAccount },
       methodName: "mt_batch_balance_of",
-      contractId: "intents.near",
+      contractId: intentsContract,
     });
 
     return intents.reduce((acc, id, index) => {
@@ -135,8 +135,8 @@ class HotBridge {
     }, {} as Record<string, bigint>);
   }
 
-  async getIntentBalance(intentId: string, intentAccount: string) {
-    const balances = await this.getIntentBalances([intentId], intentAccount);
+  async getIntentBalance(intentId: string, intentAccount: string, intentsContract = INTENTS_CONTRACT) {
+    const balances = await this.getIntentBalances([intentId], intentAccount, intentsContract);
     return balances[intentId] || 0n;
   }
 
@@ -304,7 +304,7 @@ class HotBridge {
       gas: String(80n * TGAS),
       deposit: "1",
       args: {
-        deposit_call_args: { account_id: "intents.near", msg },
+        deposit_call_args: { account_id: INTENTS_CONTRACT, msg },
         amount: deposit.amount,
         nonce: deposit.nonce,
         contract_id: token,

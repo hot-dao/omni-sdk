@@ -11,3 +11,4 @@ export * as errors from "./errors";
 export * as utils from "./utils";
 export * from "./wallet";
 export * from "./types";
+export * from "./env";

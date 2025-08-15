@@ -9,9 +9,7 @@ import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
 import TonOmniService from "./bridge-ton";
 import { Network } from "./types";
 import PoaBridge from "./poabridge";
-
-export const OMNI_HOT_V2 = "v2_1.omni.hot.tg";
-export const INTENT_PREFIX = "nep245:v2_1.omni.hot.tg:";
+import { INTENT_PREFIX } from "./env";
 
 const serializeBigIntInObject = (obj: Record<string, any>) => {
   for (const key in obj) {
