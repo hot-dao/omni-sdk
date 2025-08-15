@@ -7,6 +7,7 @@ export { default as Api } from "./api";
 export { ReviewFee } from "./fee";
 
 export { default as HotBridge } from "./bridge";
+export * as errors from "./errors";
 export * as utils from "./utils";
 export * from "./wallet";
 export * from "./types";
