@@ -8,6 +8,7 @@
   "exports": {
     ".": "./build/index.js"
   },
+  "sideEffects": false,
   "scripts": {
     "build": "tsc",
     "cli": "npx tsx ./example/cli.ts"
