@@ -42,15 +42,14 @@ class NearBridge {
     intentAccount: string;
     sendTransaction: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<string>;
   }) {
-    const token = args.token === "native" ? "wrap.near" : args.token;
     let depositWnear: Action[] = [];
-
-    if (token === "wrap.near") {
+    if (args.token === "native") {
       this.logger?.log(`Wrapping native NEAR`);
       depositWnear = await this.getWrapNearDepositAction(args.amount, args.sender);
     }
 
     this.logger?.log(`Depositing token to HOT Bridge`);
+    const token = args.token === "native" ? "wrap.near" : args.token;
     const actions = [
       ...depositWnear,
       functionCall({

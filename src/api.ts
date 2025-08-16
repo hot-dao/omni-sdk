@@ -1,50 +1,46 @@
 import RLP from "rlp";
 import crypto from "crypto";
 import { baseDecode, baseEncode } from "@near-js/utils";
-import { encodeReceiver } from "./utils";
+import { encodeReceiver, wait } from "./utils";
 import { Network, TokenAsset } from "./types";
+
+type RequestOptions = RequestInit & { endpoint?: string | string[]; retry?: number; retryDelay?: number };
 
 class OmniApi {
   constructor(readonly api: string[] = ["https://api0.herewallet.app", "https://api2.herewallet.app"], readonly mpcApi: string[] = ["https://rpc1.hotdao.ai", "https://rpc2.hotdao.ai"]) {}
 
-  async requestRpc(req: RequestInfo, init: any) {
-    if (!init.endpoint) init.endpoint = this.mpcApi;
-    const endpoints = Array.isArray(init.endpoint) ? init.endpoint : [init.endpoint];
-    let error: Error | null = null;
+  async request(req: RequestInfo, init: RequestOptions): Promise<Response> {
+    try {
+      const endpoints = Array.isArray(init.endpoint) ? init.endpoint : [init.endpoint];
+      let error: Error | null = null;
 
-    for (const endpoint of endpoints) {
-      try {
-        const headers = Object.assign({}, init.headers, { "omni-version": `v2`, "Content-Type": "application/json" });
-        const res = await fetch(`${endpoint}${req}`, { ...init, headers });
-
-        if (!res.ok) {
-          const result = await res.text();
-          throw result;
+      for (const endpoint of endpoints) {
+        try {
+          const headers = Object.assign({ "omni-version": `v2`, "Content-Type": "application/json" }, init.headers);
+          const res = await fetch(`${endpoint}${req}`, { ...init, headers });
+          if (!res.ok) throw await res.text();
+          return res;
+        } catch (e) {
+          error = e as Error;
         }
-
-        return res;
-      } catch (e) {
-        error = e as Error;
       }
-    }
 
-    throw error;
+      throw error;
+    } catch (finalError) {
+      if (init.retry == null || init.retry <= 0) throw finalError;
+      await wait(init.retryDelay || 1000);
+      return this.request(req, { ...init, retry: init.retry - 1 });
+    }
   }
 
-  async requestApi(req: RequestInfo, init: any) {
+  async requestRpc(req: RequestInfo, init: RequestOptions): Promise<Response> {
+    if (!init.endpoint) init.endpoint = this.mpcApi;
+    return await this.request(req, init);
+  }
+
+  async requestApi(req: RequestInfo, init: RequestOptions): Promise<Response> {
     if (!init.endpoint) init.endpoint = this.api;
-    const endpoints = Array.isArray(init.endpoint) ? init.endpoint : [init.endpoint];
-    init.headers = { ...(init.headers || {}), "Content-Type": "application/json" };
-
-    for (const endpoint of endpoints) {
-      const res = await fetch(`${endpoint}${req}`, init);
-      if (res.status === 502 || res.status === 522) continue;
-      if (res.ok) return res;
-      const result = await res.text().catch(() => "Failed to request API");
-      throw result;
-    }
-
-    throw "Failed to request API";
+    return await this.request(req, init);
   }
 
   async getTokenAssets(): Promise<TokenAsset[]> {
@@ -142,7 +138,7 @@ class OmniApi {
   }
 
   async withdrawSign(nonce: string): Promise<string> {
-    const res = await this.requestRpc("/withdraw/sign", { body: JSON.stringify({ nonce }), method: "POST" });
+    const res = await this.requestRpc("/withdraw/sign", { body: JSON.stringify({ nonce }), method: "POST", retryDelay: 3000, retry: 3 });
     const { signature } = await res.json();
     return signature;
   }
@@ -151,14 +147,20 @@ class OmniApi {
     const rec = baseDecode(encodeReceiver(chain, receiverId));
     const data = RLP.encode([Buffer.from("clear"), BigInt(nonce), rec]);
     const proof = crypto.createHash("sha256").update(data).digest();
-    const res = await this.requestRpc("/clear/sign", { body: JSON.stringify({ nonce, ownership_proof: baseEncode(proof) }), method: "POST" });
+    const res = await this.requestRpc("/clear/sign", {
+      body: JSON.stringify({ nonce, ownership_proof: baseEncode(proof) }),
+      retryDelay: 3000,
+      method: "POST",
+      retry: 3,
+    });
+
     return await res.json();
   }
 
   async executeClearWithdraw(chain: number, nonce: string, receiverId: string): Promise<{ signature: string; hash?: string; sender_id?: string }> {
     try {
       const body = JSON.stringify({ nonce });
-      const res = await this.requestApi("/api/v1/transactions/clear_completed_withdrawal", { method: "POST", body });
+      const res = await this.requestApi("/api/v1/transactions/clear_completed_withdrawal", { method: "POST", retryDelay: 3000, retry: 3, body });
       return await res.json();
     } catch {
       return await this.clearWithdrawSign(chain, nonce, receiverId);
@@ -168,7 +170,7 @@ class OmniApi {
   async depositSign(chain: number, nonce: string, sender_id: string, receiver_id: string, token_id: string, amount: string): Promise<{ signature: string }> {
     if (chain === 1111) chain = 1117;
     const body = JSON.stringify({ nonce, chain_from: chain, sender_id, receiver_id, token_id, amount, autopilot: true });
-    const res = await this.requestRpc("/deposit/sign", { method: "POST", body });
+    const res = await this.requestRpc("/deposit/sign", { method: "POST", body, retry: 3, retryDelay: 10_000 });
     return await res.json();
   }
 
@@ -184,7 +186,7 @@ class OmniApi {
     try {
       if (args.chain_id === 1111) args.chain_id = 1117;
       const body = JSON.stringify(args);
-      const res = await this.requestApi("/api/v1/transactions/process_bridge_deposit", { method: "POST", body });
+      const res = await this.requestApi("/api/v1/transactions/process_bridge_deposit", { retry: 3, retryDelay: 10_000, method: "POST", body });
       return await res.json();
     } catch {
       return this.depositSign(args.chain_id, args.nonce, args.sender_id, args.receiver_id, args.token_id, args.amount);
