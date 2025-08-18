@@ -14,7 +14,7 @@ import {
 
 import OmniService from "../bridge";
 import { Network, PendingDeposit } from "../types";
-import { bigIntMax, bigIntMin, omniEphemeralReceiver, parseAmount, wait } from "../utils";
+import { bigIntMax, bigIntMin, omniEphemeralReceiver, parseAmount, toOmniIntent, wait } from "../utils";
 import { DepositNotFound } from "../errors";
 import { ReviewFee } from "../fee";
 
@@ -217,10 +217,12 @@ class SolanaOmniService {
 
   async deposit(args: { token: string; amount: bigint; sender: string; intentAccount: string; sendTransaction: (tx: sol.TransactionInstruction[]) => Promise<string> }): Promise<string | null> {
     if (this.omni.poa.getPoaId(Network.Solana, args.token)) {
+      const intent = toOmniIntent(Network.Solana, args.token);
       const receiver = await this.omni.poa.getDepositAddress(args.intentAccount, Network.Solana);
-      const minCreatedMs = await this.omni.api.getTime();
-      const { hash, amount } = await this.transfer({ ...args, receiver });
-      await this.omni.poa.waitDeposit(args.intentAccount, Network.Solana, amount, hash, minCreatedMs * 1000);
+      const balanceBefore = await this.omni.getIntentBalance(intent, args.intentAccount);
+
+      const { amount } = await this.transfer({ ...args, receiver });
+      await this.omni.waitUntilBalance(intent, balanceBefore + amount, args.intentAccount);
       return null;
     }
 

@@ -256,7 +256,10 @@ class HotBridge {
 
     while (true) {
       if (abort?.aborted) throw new ProcessAborted("waitPendingDeposit");
-      const deposit = await waitPending().catch(() => null);
+      const deposit = await waitPending().catch((e) => {
+        this.logger?.log(`Error waiting pending deposit: ${e}`);
+        return null;
+      });
 
       if (deposit) {
         const isUsed = await this.isDepositUsed(deposit.chain, deposit.nonce);

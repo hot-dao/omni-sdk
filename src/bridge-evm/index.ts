@@ -2,7 +2,7 @@ import { Contract, ethers, getBytes, hexlify, Interface, MaxUint256, Transaction
 import { baseDecode, baseEncode } from "@near-js/utils";
 
 import { ERC20_ABI, OMNI_ABI, OMNI_CONTRACT, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
-import { bigIntMin, encodeTokenAddress, omniEphemeralReceiver, wait } from "../utils";
+import { bigIntMin, encodeTokenAddress, omniEphemeralReceiver, toOmniIntent, wait } from "../utils";
 import { Network, PendingDeposit } from "../types";
 import { DepositNotFound } from "../errors";
 import OmniService from "../bridge";
@@ -121,10 +121,11 @@ class EvmOmniService {
     sendTransaction: (tx: ethers.TransactionRequest) => Promise<string>;
   }): Promise<string | null> {
     if (this.omni.poa.getPoaId(args.chain, args.token)) {
+      const intent = toOmniIntent(args.chain, args.token);
       const receiver = await this.omni.poa.getDepositAddress(args.intentAccount, args.chain);
-      const minCreatedMs = await this.omni.api.getTime();
-      const { hash, amount } = await this.transfer({ ...args, receiver });
-      await this.omni.poa.waitDeposit(args.intentAccount, args.chain, amount, hash, minCreatedMs * 1000);
+      const balanceBefore = await this.omni.getIntentBalance(intent, args.intentAccount);
+      const { amount } = await this.transfer({ ...args, receiver });
+      await this.omni.waitUntilBalance(intent, balanceBefore + amount, args.intentAccount);
       return null;
     }
 

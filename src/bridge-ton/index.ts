@@ -170,15 +170,22 @@ class TonOmniService {
   async parseDeposit(hash: string): Promise<PendingDeposit> {
     const events = await this.tonApi.events.getEvent(hash);
     const deployTxHashes = events.actions.filter((t) => t.ContractDeploy != null).map((t) => t.baseTransactions[0]);
+    if (!deployTxHashes.length) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
 
-    const tx = await this.tonApi.blockchain.getBlockchainTransaction(hash);
-    const body = tx.outMsgs[0]?.rawBody;
+    const OP_FT = 0x0f8a7ea5;
+    const OP_NATIVE = 0x205f209a;
+    const smartCallTx = events.actions.find((t) => t.SmartContractExec?.operation === "0x205f209a" || t.SmartContractExec?.operation === "0x0f8a7ea5");
+    if (!smartCallTx?.baseTransactions?.[0]) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
+
+    const tx = await this.tonApi.blockchain.getBlockchainTransaction(smartCallTx.baseTransactions[0]);
+    const body = tx.inMsg?.rawBody;
     if (body == null) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
 
     const slice = body.beginParse();
     const opCode = slice.loadUint(32);
     slice.loadUintBig(64); // load but not use
-    if (opCode !== 0x0f8a7ea5 && opCode !== OpCode.nativeDeposit) {
+
+    if (opCode !== OP_FT && opCode !== OP_NATIVE) {
       throw new DepositNotFound(Network.Ton, hash, "Invalid op code");
     }
 
@@ -193,7 +200,7 @@ class TonOmniService {
       tx: hash,
     };
 
-    if (opCode === 0x0f8a7ea5) {
+    if (opCode === OP_FT) {
       const event = events.actions.find((t) => t.JettonTransfer != null);
       if (event?.JettonTransfer == null) throw new DepositNotFound(Network.Ton, hash, "Jetton transfer not found");
       deposit.token = event.JettonTransfer.jetton.address.toString({ bounceable: true });
@@ -201,7 +208,7 @@ class TonOmniService {
       deposit.receiver = baseEncode(slice.loadRef().beginParse().loadBuffer(32));
     }
 
-    if (opCode === OpCode.nativeDeposit) {
+    if (opCode === OP_NATIVE) {
       deposit.receiver = baseEncode(slice.loadBuffer(32));
       deposit.amount = slice.loadCoins().toString();
       deposit.token = "native";
