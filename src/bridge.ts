@@ -55,12 +55,31 @@ class HotBridge {
     this.logger = options.logger;
 
     this.api = new OmniApi(options.api, options.mpcApi);
-    this.evm = new EvmOmniService(this, options.evmRpc, { enableApproveMax: options.enableApproveMax });
-    this.stellar = new StellarService(this, options.stellarRpc, options.stellarHorizonRpc, options.stellarBaseFee);
-    this.solana = new SolanaOmniService(this, options.solanaRpc);
-    this.ton = new TonOmniService(this, options.tonRpc);
     this.near = new NearBridge(this, options.nearRpc);
     this.poa = new PoaBridge(this);
+
+    this.evm = new EvmOmniService(this, {
+      enableApproveMax: options.enableApproveMax,
+      contract: options.evmContract,
+      rpcs: options.evmRpc,
+    });
+
+    this.stellar = new StellarService(this, {
+      contract: options.stellarContract,
+      sorobanRpc: options.stellarRpc,
+      horizonRpc: options.stellarHorizonRpc,
+      baseFee: options.stellarBaseFee,
+    });
+
+    this.solana = new SolanaOmniService(this, {
+      programId: options.solanaProgramId,
+      rpc: options.solanaRpc,
+    });
+
+    this.ton = new TonOmniService(this, {
+      contract: options.tonContract,
+      rpc: options.tonRpc,
+    });
   }
 
   async executeIntents(signedDatas: any[], quoteHashes: string[]) {

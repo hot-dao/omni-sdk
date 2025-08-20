@@ -10,15 +10,18 @@ import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
 
 export const ACCOUNT_FOR_SIMULATE = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";
-export const CONTRACT = "CCLWL5NYSV2WJQ3VBU44AMDHEVKEPA45N2QP2LL62O3JVKPGWWAQUVAG";
 
 class StellarService {
   readonly soroban: rpc.Server[];
   readonly horizon: Horizon.Server[];
+  readonly contract: string;
+  readonly baseFee: string;
 
-  constructor(readonly omni: OmniService, sorobanRpc?: string[], horizonRpc?: string[], readonly baseFee = "500000") {
-    this.soroban = sorobanRpc ? sorobanRpc.map((r) => new rpc.Server(r)) : [new rpc.Server("https://mainnet.sorobanrpc.com")];
-    this.horizon = horizonRpc ? horizonRpc.map((r) => new Horizon.Server(r)) : [new Horizon.Server("https://horizon.stellar.org")];
+  constructor(readonly omni: OmniService, readonly options: { contract?: string; sorobanRpc?: string[]; horizonRpc?: string[]; baseFee?: string }) {
+    this.soroban = options.sorobanRpc ? options.sorobanRpc.map((r) => new rpc.Server(r)) : [new rpc.Server("https://mainnet.sorobanrpc.com")];
+    this.horizon = options.horizonRpc ? options.horizonRpc.map((r) => new Horizon.Server(r)) : [new Horizon.Server("https://horizon.stellar.org")];
+    this.contract = options.contract || "CCLWL5NYSV2WJQ3VBU44AMDHEVKEPA45N2QP2LL62O3JVKPGWWAQUVAG";
+    this.baseFee = options.baseFee || "500000";
   }
 
   async callHorizon<T>(fn: (rpc: Horizon.Server) => Promise<T>) {
@@ -64,7 +67,7 @@ class StellarService {
   }
 
   async isWithdrawUsed(nonce: string) {
-    const tx = await this.buildSmartContactTx(ACCOUNT_FOR_SIMULATE, CONTRACT, "is_executed", new XdrLargeInt("u128", nonce).toU128());
+    const tx = await this.buildSmartContactTx(ACCOUNT_FOR_SIMULATE, this.contract, "is_executed", new XdrLargeInt("u128", nonce).toU128());
     const result = (await this.callSoroban((rpc) => rpc.simulateTransaction(tx))) as rpc.Api.SimulateTransactionSuccessResponse;
     return !!result.result?.retval.value();
   }
@@ -81,7 +84,7 @@ class StellarService {
     ts = String(BigInt(ts) - 20n * 10n ** 12n); // minus 20 second
 
     const contractId = token === "native" ? new Asset("XLM").contractId(Networks.PUBLIC) : token;
-    const call = new Contract(CONTRACT).call(
+    const call = new Contract(this.contract).call(
       "deposit",
       Address.fromString(sender).toScVal(),
       new XdrLargeInt("u128", amount.toString()).toU128(),
@@ -106,7 +109,7 @@ class StellarService {
   }
 
   async withdraw(args: { amount: bigint; token: string; nonce: string; receiver: string; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }) {
-    const to = new Contract(CONTRACT);
+    const to = new Contract(this.contract);
     const signature = await this.omni.api.withdrawSign(args.nonce);
     const sign = Buffer.from(baseDecode(signature));
     const contractId = args.token === "native" ? new Asset("XLM").contractId(Networks.PUBLIC) : args.token;
@@ -215,7 +218,7 @@ class StellarService {
     return asset;
   }
 
-  async getTokenBalance(token: Asset | string, contract = CONTRACT) {
+  async getTokenBalance(token: Asset | string, contract = this.contract) {
     const tx = await this.buildSmartContactTx(
       ACCOUNT_FOR_SIMULATE, //
       typeof token === "string" ? (token === "native" ? new Asset("XLM").contractId(Networks.PUBLIC) : token) : token.contractId(Networks.PUBLIC),

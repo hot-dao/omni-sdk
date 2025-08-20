@@ -56,12 +56,19 @@ export interface BridgeOptions {
   logger?: Logger;
   executeNearTransaction?: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
 
+  evmContract?: string;
   evmRpc?: Record<number, string[]> | ((chain: number) => AbstractProvider);
   enableApproveMax?: boolean;
 
+  solanaProgramId?: string;
   solanaRpc?: Connection | string[];
+
+  tonContract?: string;
   tonRpc?: TonApiClient | string;
+
   nearRpc?: JsonRpcProvider | string[];
+
+  stellarContract?: string;
   stellarHorizonRpc?: string[];
   stellarBaseFee?: string;
   stellarRpc?: string[];

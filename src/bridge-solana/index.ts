@@ -1,6 +1,7 @@
 import * as sol from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
 import { baseDecode, baseEncode } from "@near-js/utils";
+import { BN } from "@coral-xyz/anchor";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountInstruction,
@@ -19,14 +20,37 @@ import { DepositNotFound } from "../errors";
 import { ReviewFee } from "../fee";
 
 import AdvancedConnection from "./provider";
-import { findDepositAddress, PROGRAM_ID } from "./helpers";
 import IDL from "./idl.json";
 
 class SolanaOmniService {
   public connection: sol.Connection;
+  public programId: sol.PublicKey;
 
-  constructor(readonly omni: OmniService, rpc?: string[] | sol.Connection) {
-    this.connection = rpc instanceof sol.Connection ? rpc : new AdvancedConnection(rpc || ["https://api.mainnet-beta.solana.com"]);
+  constructor(readonly omni: OmniService, options: { rpc?: string[] | sol.Connection; programId?: string }) {
+    this.connection = options.rpc instanceof sol.Connection ? options.rpc : new AdvancedConnection(options.rpc || ["https://api.mainnet-beta.solana.com"]);
+    this.programId = new sol.PublicKey(options.programId || "8sXzdKW2jFj7V5heRwPMcygzNH3JZnmie5ZRuNoTuKQC");
+  }
+
+  findContractStateAddress(): [sol.PublicKey, number] {
+    return sol.PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], this.programId);
+  }
+
+  findDepositAddress(nonce: bigint, sender: sol.PublicKey, receiver: Buffer, mint: sol.PublicKey, amount: bigint): [sol.PublicKey, number] {
+    return sol.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("deposit", "utf8"), //
+        new BN(nonce.toString()).toBuffer("be", 16),
+        sender.toBytes(),
+        receiver,
+        mint.toBytes(),
+        new BN(amount.toString()).toBuffer("be", 8),
+      ],
+      this.programId
+    );
+  }
+
+  findUserAddress(receiver: sol.PublicKey): [sol.PublicKey, number] {
+    return sol.PublicKey.findProgramAddressSync([Buffer.from("user", "utf8"), receiver.toBytes()], this.programId);
   }
 
   // TODO: Compute gas dinamically
@@ -49,11 +73,11 @@ class SolanaOmniService {
   }
 
   env(receiver: string) {
-    const [userAccount, userBump] = sol.PublicKey.findProgramAddressSync([Buffer.from("user", "utf8"), new sol.PublicKey(receiver).toBytes()], PROGRAM_ID);
+    const [userAccount, userBump] = sol.PublicKey.findProgramAddressSync([Buffer.from("user", "utf8"), new sol.PublicKey(receiver).toBytes()], this.programId);
 
-    const [stateAccount, stateBump] = sol.PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], PROGRAM_ID);
-    const program = new anchor.Program(IDL as any, PROGRAM_ID, { connection: this.connection });
-    return { program, PROGRAM_ID, userAccount, userBump, stateAccount, stateBump };
+    const [stateAccount, stateBump] = sol.PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], this.programId);
+    const program = new anchor.Program(IDL as any, this.programId, { connection: this.connection });
+    return { program, programId: this.programId, userAccount, userBump, stateAccount, stateBump };
   }
 
   async transfer(args: { sender: string; token: string; amount: bigint; receiver: string; sendTransaction: (tx: sol.TransactionInstruction[]) => Promise<string> }) {
@@ -130,7 +154,7 @@ class SolanaOmniService {
   }
 
   async getLiquidity(token: string) {
-    const [trasary] = sol.PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], PROGRAM_ID);
+    const [trasary] = sol.PublicKey.findProgramAddressSync([Buffer.from("state", "utf8")], this.programId);
     return await this.getTokenBalance(token, trasary.toString());
   }
 
@@ -198,7 +222,7 @@ class SolanaOmniService {
     const bnNonce = new anchor.BN(deposit.nonce.toString());
 
     const mint = deposit.token === "native" ? sol.PublicKey.default : new sol.PublicKey(deposit.token);
-    const [depositAddress] = findDepositAddress(BigInt(deposit.nonce), new sol.PublicKey(sender), receiver, mint, BigInt(deposit.amount));
+    const [depositAddress] = this.findDepositAddress(BigInt(deposit.nonce), new sol.PublicKey(sender), receiver, mint, BigInt(deposit.amount));
 
     const isExist = await this.connection.getAccountInfo(depositAddress, { commitment: "confirmed" });
     if (isExist == null) throw new DepositNotFound(Network.Solana, deposit.tx, "Deposit nonce account not found");
@@ -252,7 +276,7 @@ class SolanaOmniService {
     const amt = new anchor.BN(args.amount.toString());
 
     if (args.token === "native") {
-      const [depositAddress, depositBump] = findDepositAddress(nonce, new sol.PublicKey(args.sender), receiver, sol.PublicKey.default, args.amount);
+      const [depositAddress, depositBump] = this.findDepositAddress(nonce, new sol.PublicKey(args.sender), receiver, sol.PublicKey.default, args.amount);
       const depositBuilder = env.program.methods.nativeDeposit(receiver, amt, depositBump);
       depositBuilder.accountsStrict({
         user: env.userAccount.toBase58(),
@@ -268,7 +292,7 @@ class SolanaOmniService {
     }
 
     const mint = new sol.PublicKey(args.token);
-    const [depositAddress, depositBump] = findDepositAddress(nonce, new sol.PublicKey(args.sender), receiver, mint, args.amount);
+    const [depositAddress, depositBump] = this.findDepositAddress(nonce, new sol.PublicKey(args.sender), receiver, mint, args.amount);
     const instructions: sol.TransactionInstruction[] = [];
 
     const contractATA = getAssociatedTokenAddressSync(mint, env.stateAccount, true);

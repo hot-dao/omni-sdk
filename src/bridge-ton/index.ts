@@ -23,10 +23,12 @@ class TonOmniService {
 
   static TON_MINTER_TO_JETTON_MAPPER = TON_MINTER_TO_JETTON_MAPPER;
   static TON_JETTON_TO_MINTER_MAPPER = TON_JETTON_TO_MINTER_MAPPER;
+  readonly contract: string;
 
   private metaWallet?: OpenedContract<TonMetaWalletV2>;
-  constructor(readonly omni: OmniService, rpc?: TonApiClient | string) {
-    this.tonApi = rpc instanceof TonApiClient ? rpc : new TonApiClient({ apiKey: rpc });
+  constructor(readonly omni: OmniService, options: { rpc?: TonApiClient | string; metaWallet?: string; contract?: string }) {
+    this.contract = options.contract || "EQANEViM3AKQzi6Aj3sEeyqFu8pXqhy9Q9xGoId_0qp3CNVJ";
+    this.tonApi = options.rpc instanceof TonApiClient ? options.rpc : new TonApiClient({ apiKey: options.rpc });
     this.client = new ContractAdapter(this.tonApi);
   }
 
@@ -41,7 +43,7 @@ class TonOmniService {
   }
 
   getMetaWallet() {
-    if (!this.metaWallet) this.metaWallet = this.client.open(TonMetaWalletV2.createFromAddress(Address.parse("EQANEViM3AKQzi6Aj3sEeyqFu8pXqhy9Q9xGoId_0qp3CNVJ")));
+    if (!this.metaWallet) this.metaWallet = this.client.open(TonMetaWalletV2.createFromAddress(Address.parse(this.contract)));
     return { metaWallet: this.metaWallet, DepositJetton: DepositJettonV2, UserJetton: UserJettonV2, JettonMinter: JettonMinterV2, JettonWallet: JettonWalletV2 };
   }
 
