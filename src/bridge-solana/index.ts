@@ -22,7 +22,7 @@ import { ReviewFee } from "../fee";
 import AdvancedConnection from "./provider";
 import IDL from "./idl.json";
 
-class SolanaOmniService {
+export class SolanaOmniService {
   public connection: sol.Connection;
   public programId: sol.PublicKey;
 
@@ -376,5 +376,3 @@ class SolanaOmniService {
     return hash;
   }
 }
-
-export default SolanaOmniService;

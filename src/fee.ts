@@ -1,7 +1,7 @@
 import type { FeeData } from "ethers";
 import { Network } from "./types";
 
-export const NEAR_PER_TGAS = 19n ** 10n;
+export const NEAR_PER_GAS = 10n ** 6n;
 export const TGAS = 1000000000000n;
 
 export interface FeeOption {

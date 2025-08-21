@@ -29,14 +29,15 @@ import {
 import { BridgeOptions, Network, PendingDepositWithIntent, PendingWithdraw } from "./types";
 import OmniApi from "./api";
 
-import { NEAR_PER_TGAS, TGAS, ReviewFee } from "./fee";
-import SolanaOmniService from "./bridge-solana";
+import { INTENTS_CONTRACT, OMNI_HOT_V2 } from "./env";
+import { NEAR_PER_GAS, TGAS, ReviewFee } from "./fee";
 import StellarService from "./bridge-stellar";
 import EvmOmniService from "./bridge-evm";
 import TonOmniService from "./bridge-ton";
 import NearBridge from "./bridge-near";
 import PoaBridge from "./poabridge";
-import { INTENTS_CONTRACT, OMNI_HOT_V2 } from "./env";
+
+import type { SolanaOmniService } from "./bridge-solana";
 
 class HotBridge {
   logger?: Logger;
@@ -44,13 +45,12 @@ class HotBridge {
 
   poa: PoaBridge;
   stellar: StellarService;
-  solana: SolanaOmniService;
   ton: TonOmniService;
   evm: EvmOmniService;
   near: NearBridge;
   api: OmniApi;
 
-  constructor(options: BridgeOptions) {
+  constructor(readonly options: BridgeOptions) {
     this.executeNearTransaction = options.executeNearTransaction;
     this.logger = options.logger;
 
@@ -71,15 +71,18 @@ class HotBridge {
       baseFee: options.stellarBaseFee,
     });
 
-    this.solana = new SolanaOmniService(this, {
-      programId: options.solanaProgramId,
-      rpc: options.solanaRpc,
-    });
-
     this.ton = new TonOmniService(this, {
       contract: options.tonContract,
       rpc: options.tonRpc,
     });
+  }
+
+  _solana: SolanaOmniService | null = null;
+  async solana() {
+    if (this._solana) return this._solana;
+    const pkg = await import("./bridge-solana");
+    this._solana = new pkg.SolanaOmniService(this, { rpc: this.options.solanaRpc, programId: this.options.solanaProgramId });
+    return this._solana;
   }
 
   async executeIntents(signedDatas: any[], quoteHashes: string[]) {
@@ -161,7 +164,7 @@ class HotBridge {
 
   async getTokenBalance(chain: Network, token: string, address: string) {
     if (chain === Network.Near) return await this.near.getTokenBalance(token, address);
-    if (chain === Network.Solana) return await this.solana.getTokenBalance(token, address);
+    if (chain === Network.Solana) return await this.solana().then((s) => s.getTokenBalance(token, address));
     if (chain === Network.Stellar) return await this.stellar.getTokenBalance(token, address);
     if (isTon(chain)) return await this.ton.getTokenBalance(token, address);
     return await this.evm.getTokenBalance(token, chain, address);
@@ -230,7 +233,7 @@ class HotBridge {
 
   async isWithdrawUsed(chain: number, nonce: string, receiver: string) {
     if (isTon(chain)) return await this.ton.isWithdrawUsed(nonce, receiver);
-    if (chain === Network.Solana) return await this.solana.isWithdrawUsed(nonce, receiver);
+    if (chain === Network.Solana) return await this.solana().then((s) => s.isWithdrawUsed(nonce, receiver));
     if (chain === Network.Stellar) return await this.stellar.isWithdrawUsed(nonce);
     return await this.evm.isWithdrawUsed(chain, nonce);
   }
@@ -268,7 +271,7 @@ class HotBridge {
   async waitPendingDeposit(chain: number, hash: string, intentAccount: string, abort?: AbortSignal): Promise<PendingDepositWithIntent> {
     const waitPending = async () => {
       if (isTon(chain)) return await this.ton.parseDeposit(hash);
-      if (chain === Network.Solana) return await this.solana.parseDeposit(hash);
+      if (chain === Network.Solana) return await this.solana().then((s) => s.parseDeposit(hash));
       if (chain === Network.Stellar) return await this.stellar.parseDeposit(hash);
       return await this.evm.parseDeposit(chain, hash);
     };
@@ -676,7 +679,7 @@ class HotBridge {
   }
 
   async getWithdrawFee(address: string, chain: number, token: string, gasless = true): Promise<ReviewFee> {
-    if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_TGAS, gasLimit: 300n * TGAS, chain });
+    if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_GAS, gasLimit: 300n * TGAS, chain });
     if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
 
     // POA bridge
@@ -692,7 +695,7 @@ class HotBridge {
     }
 
     if (isTon(chain)) return (await this.ton.getWithdrawFee()) as ReviewFee;
-    if (chain === Network.Solana) return (await this.solana.getWithdrawFee()) as ReviewFee;
+    if (chain === Network.Solana) return (await this.solana().then((s) => s.getWithdrawFee())) as ReviewFee;
     if (chain === Network.Stellar) return (await this.stellar.getWithdrawFee()) as ReviewFee;
     return (await this.evm.getWithdrawFee(chain)) as ReviewFee;
   }
@@ -700,14 +703,14 @@ class HotBridge {
   async getDepositFee(options: { chain: number; token: string; amount: bigint; sender: string; intentAccount: string }): Promise<ReviewFee> {
     const { chain, token, amount, sender, intentAccount } = options;
     if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
-    if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_TGAS, gasLimit: 300n * TGAS, chain });
+    if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_GAS, gasLimit: 300n * TGAS, chain });
 
     // POA bridge
     if (this.poa.getPoaId(chain, token)) return await this.poa.getDepositFee(chain, token, intentAccount);
 
     // HOT Bridge
     if (chain === Network.Stellar) return (await this.stellar.getDepositFee(sender, token, amount, intentAccount)) as ReviewFee;
-    if (chain === Network.Solana) return (await this.solana.getDepositFee()) as ReviewFee;
+    if (chain === Network.Solana) return (await this.solana().then((s) => s.getDepositFee())) as ReviewFee;
     if (isTon(chain)) return (await this.ton.getDepositFee(token)) as ReviewFee;
     return (await this.evm.getDepositFee(chain, token, amount, sender)) as ReviewFee;
   }
