@@ -41,6 +41,7 @@ class EvmOmniService {
 
   async getDepositFee(chain: number, address: string, amount: bigint, sender: string): Promise<ReviewFee> {
     const fee = await this.getGasPrice(chain);
+    if (this.omni.poa.getPoaId(chain, address)) return fee.changeGasLimit(address === "native" ? 21_000n : 100_000n);
     const gasLimit = await this.depositEstimateGas(chain, address, amount, sender);
     return fee.changeGasLimit(gasLimit);
   }

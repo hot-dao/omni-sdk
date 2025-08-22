@@ -38,6 +38,7 @@ import NearBridge from "./bridge-near";
 import PoaBridge from "./poabridge";
 
 import type { SolanaOmniService } from "./bridge-solana";
+import type { TronOmniService } from "./bridge-tron";
 
 class HotBridge {
   logger?: Logger;
@@ -83,6 +84,15 @@ class HotBridge {
     const pkg = await import("./bridge-solana");
     this._solana = new pkg.SolanaOmniService(this, { rpc: this.options.solanaRpc, programId: this.options.solanaProgramId });
     return this._solana;
+  }
+
+  _tron: TronOmniService | null = null;
+  async tron() {
+    if (this._tron) return this._tron;
+    const pkg = await import("./bridge-tron");
+    if (!this.options.tronClient) throw "Tron client is required";
+    this._tron = new pkg.TronOmniService(this, { client: this.options.tronClient });
+    return this._tron;
   }
 
   async executeIntents(signedDatas: any[], quoteHashes: string[]) {
@@ -166,6 +176,7 @@ class HotBridge {
     if (chain === Network.Near) return await this.near.getTokenBalance(token, address);
     if (chain === Network.Solana) return await this.solana().then((s) => s.getTokenBalance(token, address));
     if (chain === Network.Stellar) return await this.stellar.getTokenBalance(token, address);
+    if (chain === Network.Tron) return await this.tron().then((s) => s.getTokenBalance(token, address));
     if (isTon(chain)) return await this.ton.getTokenBalance(token, address);
     return await this.evm.getTokenBalance(token, chain, address);
   }
@@ -561,31 +572,6 @@ class HotBridge {
     }
   }
 
-  async waitPoaWithdraw(hash: string) {
-    const getLastWithdraw = async (hash: string) => {
-      const response = await this.api.requestApi("/rpc", {
-        method: "POST",
-        endpoint: "https://bridge.chaindefuser.com",
-        body: JSON.stringify({
-          method: "withdrawal_status",
-          params: [{ withdrawal_hash: hash }],
-          jsonrpc: "2.0",
-          id: "dontcare",
-        }),
-      });
-
-      const { result } = await response.json();
-      return result.status;
-    };
-
-    const status = await getLastWithdraw(hash).catch(() => null);
-    if (status === "FAILED") throw "Withdraw failed";
-    if (status === "COMPLETED") return;
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    await this.waitPoaWithdraw(hash);
-  }
-
   async gaslessWithdrawToken(args: { chain: Network; token: string; amount: bigint; receiver: string; intentAccount: string; signIntents: (intents: any[]) => Promise<any> }) {
     const { intents, quoteHashes } = await this.buildGaslessWithdrawToken(args);
     const signedIntents = await args.signIntents(intents);
@@ -628,7 +614,7 @@ class HotBridge {
     this.logger?.log(`Push withdraw intent`);
     const tx = await this.executeIntents([signedIntents], result.quoteHashes);
 
-    if (this.poa.getPoaId(args.chain, args.token)) return await this.waitPoaWithdraw(tx.hash);
+    if (this.poa.getPoaId(args.chain, args.token)) return await this.poa.waitWithdraw(tx.hash);
     if (args.chain === Network.Near) return; // NEAR chain has native withdrawals
 
     this.logger?.log(`Parsing withdrawal nonce`);
@@ -704,12 +690,9 @@ class HotBridge {
     if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
     if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_GAS, gasLimit: 300n * TGAS, chain });
 
-    // POA bridge
-    if (this.poa.getPoaId(chain, token)) return await this.poa.getDepositFee(chain, token, intentAccount);
-
-    // HOT Bridge
+    if (chain === Network.Tron) return (await this.tron().then((s) => s.getDepositFee(token, sender))) as ReviewFee;
     if (chain === Network.Stellar) return (await this.stellar.getDepositFee(sender, token, amount, intentAccount)) as ReviewFee;
-    if (chain === Network.Solana) return (await this.solana().then((s) => s.getDepositFee())) as ReviewFee;
+    if (chain === Network.Solana) return (await this.solana().then((s) => s.getDepositFee(token))) as ReviewFee;
     if (isTon(chain)) return (await this.ton.getDepositFee(token)) as ReviewFee;
     return (await this.evm.getDepositFee(chain, token, amount, sender)) as ReviewFee;
   }

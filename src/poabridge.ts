@@ -57,11 +57,6 @@ class PoaBridge {
     return result.address;
   }
 
-  async getDepositFee(chain: number, token: string, intentAccount: string): Promise<ReviewFee> {
-    const address = await this.getDepositAddress(intentAccount, chain);
-    return new ReviewFee({ gasless: true, chain, baseFee: 1n, token: `${chain}:${token}` });
-  }
-
   async getTokenInfo(address: string, chain: number, token: string) {
     const intentsChainId = this.chainIdToIntentsChainId(chain);
     if (!intentsChainId) return null;
@@ -134,6 +129,31 @@ class PoaBridge {
 
     await waitComplete();
     return { hash, receiver };
+  }
+
+  async waitWithdraw(hash: string) {
+    const getLastWithdraw = async (hash: string) => {
+      const response = await this.omni.api.requestApi("/rpc", {
+        method: "POST",
+        endpoint: "https://bridge.chaindefuser.com",
+        body: JSON.stringify({
+          method: "withdrawal_status",
+          params: [{ withdrawal_hash: hash }],
+          jsonrpc: "2.0",
+          id: "dontcare",
+        }),
+      });
+
+      const { result } = await response.json();
+      return result.status;
+    };
+
+    const status = await getLastWithdraw(hash).catch(() => null);
+    if (status === "FAILED") throw "Withdraw failed";
+    if (status === "COMPLETED") return;
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await this.waitWithdraw(hash);
   }
 }
 

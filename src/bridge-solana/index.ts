@@ -61,9 +61,13 @@ export class SolanaOmniService {
   }
 
   // TODO: Compute gas dinamically
-  async getDepositFee(): Promise<ReviewFee> {
-    const needNative = BigInt(parseAmount(0.005, 9));
-    return new ReviewFee({ reserve: needNative, chain: Network.Solana, baseFee: needNative / 10n });
+  async getDepositFee(token: string): Promise<ReviewFee> {
+    const reserve = BigInt(parseAmount(0.0005, 9));
+    if (this.omni.poa.getPoaId(Network.Solana, token)) {
+      return new ReviewFee({ chain: Network.Solana, reserve, baseFee: reserve / 20n });
+    }
+
+    return new ReviewFee({ reserve, chain: Network.Solana, baseFee: reserve / 10n });
   }
 
   async isWithdrawUsed(nonce: string, receiver: string) {
