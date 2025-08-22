@@ -1,5 +1,5 @@
 import { TronWeb } from "tronweb";
-import { TransactionWrapper } from "tronweb/lib/esm/types";
+import { Transaction, TransactionWrapper } from "tronweb/lib/esm/types";
 
 import { toOmniIntent, wait } from "../utils";
 import { Network } from "../types";
@@ -9,22 +9,22 @@ import { trc20 } from "./trc20";
 
 export class TronOmniService {
   readonly client: TronWeb;
-  constructor(readonly omni: OmniService, options: { client: TronWeb }) {
-    this.client = options.client;
+  constructor(readonly omni: OmniService, options: { client?: TronWeb }) {
+    this.client = options.client || new TronWeb({ fullHost: "https://api.trongrid.io" });
   }
 
   async getDepositFee(token: string, sender: string): Promise<ReviewFee> {
     return this.transferFee(sender, token, sender);
   }
 
-  async deposit(args: { chain: number; token: string; amount: bigint; sender: string; intentAccount: string }): Promise<string | null> {
+  async deposit(args: { chain: number; token: string; amount: bigint; sender: string; intentAccount: string; sendTransaction: (tx: Transaction) => Promise<string> }): Promise<string | null> {
     if (!this.omni.poa.getPoaId(args.chain, args.token)) throw "Unsupported token";
 
     const intent = toOmniIntent(args.chain, args.token);
     const receiver = await this.omni.poa.getDepositAddress(args.intentAccount, args.chain);
     const balanceBefore = await this.omni.getIntentBalance(intent, args.intentAccount);
 
-    await this.transfer({ ...args, receiver });
+    await this.transfer({ ...args, receiver, sendTransaction: args.sendTransaction });
     await this.omni.waitUntilBalance(intent, balanceBefore + args.amount, args.intentAccount);
     return null;
   }
@@ -40,24 +40,22 @@ export class TronOmniService {
     return BigInt(balance.toString());
   }
 
-  async transfer(args: { sender: string; chain: number; token: string; amount: bigint; receiver: string }) {
+  async transfer(args: { sender: string; chain: number; token: string; amount: bigint; receiver: string; sendTransaction: (tx: Transaction) => Promise<string> }) {
     if (args.token === "native") {
-      const tx = await this.client.transactionBuilder.sendTrx(args.receiver, Number(args.amount), args.sender);
-      const signedtxn = await this.client.trx.sign(tx);
-      const receipt = await this.client.trx.sendRawTransaction(signedtxn);
-
-      if (!receipt.result) throw receipt.code;
-      const result = await this.waitTransaction(receipt.transaction.txID);
+      const tx = await this.client.transactionBuilder.sendTrx(args.receiver, Number(args.amount), args.sender, {});
+      const hash = await args.sendTransaction(tx);
+      const result = await this.waitTransaction(hash);
       return result;
     }
 
-    const contractInfo = await this.client.trx.getContract(args.token);
-    const contract = this.client.contract(trc20, args.token);
-    const userFee = contractInfo.consume_user_resource_percent;
+    const abiParams: Array<{ type: string; value: string }> = [
+      { type: "address", value: args.receiver },
+      { type: "uint256", value: args.amount.toString() },
+    ];
 
-    // @ts-ignore
-    const tx = await contract.methods.transfer(args.receiver, args.amount).send({ userFeePercentage: userFee });
-    const result = await this.waitTransaction(tx);
+    const { transaction } = await this.client.transactionBuilder.triggerSmartContract(args.token, "transfer(address,uint256)", { feeLimit: 20_000, callValue: 0 }, abiParams, args.sender);
+    const hash = await args.sendTransaction(transaction);
+    const result = await this.waitTransaction(hash);
     return result;
   }
 

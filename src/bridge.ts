@@ -90,7 +90,6 @@ class HotBridge {
   async tron() {
     if (this._tron) return this._tron;
     const pkg = await import("./bridge-tron");
-    if (!this.options.tronClient) throw "Tron client is required";
     this._tron = new pkg.TronOmniService(this, { client: this.options.tronClient });
     return this._tron;
   }

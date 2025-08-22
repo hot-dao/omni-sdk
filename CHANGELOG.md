@@ -1,8 +1,12 @@
-# 2.19.5
+# 2.20.0-alpha.2
 
-- Add solana POA deposit fee
-- Add Eth POA deposit fee
-- Add Tron POA
+- Add TRON sendTransaction option
+
+# 2.20.0-alpha.1
+
+- Add Solana PoA deposit fee
+- Add Eth PoA deposit fee
+- Add Tron PoA
 
 # 2.19.4
 

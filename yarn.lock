@@ -390,10 +390,10 @@
   dependencies:
     core-js-pure "^3.38.0"
 
-"@ton-api/ton-adapter@0.4.0":
-  version "0.4.0"
-  resolved "https://registry.yarnpkg.com/@ton-api/ton-adapter/-/ton-adapter-0.4.0.tgz#1589c4ce1d9c0cbe8fdda3a8297074f3a46e7a73"
-  integrity sha512-xWXH6aETT/D8T07veKooBuFgYIOynZO/S2ImV+cZmZZFgmzqGQsOVXhH+M7fx93kaeFMf3anHBtx76V/oTR1rw==
+"@ton-api/ton-adapter@0.4.1":
+  version "0.4.1"
+  resolved "https://registry.yarnpkg.com/@ton-api/ton-adapter/-/ton-adapter-0.4.1.tgz#7f12f524548c49b3c007349b6f27c8eea742a88f"
+  integrity sha512-snvd49M2PnDiIgMyeeIpGPTWI7ECnRYz4qIcFplv/mmYvV+6OiNM4UtHOplAh7sGR1JY1xBf+HP+RJ8qzCN2Hw==
 
 "@ton/core@0.60.1":
   version "0.60.1"
