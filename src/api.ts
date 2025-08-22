@@ -55,8 +55,9 @@ class OmniApi {
     return ts;
   }
 
-  async getWithdrawFee(chain: Network, type: "bridge" | "refuel" = "bridge"): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
-    const res = await this.requestApi(`/api/v1/evm/${chain}/bridge_gas_price?type=${type}`, { method: "GET" });
+  async getWithdrawFee(options: { chain: Network; token: string; receiver: string; type?: "bridge" | "refuel" }): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
+    const { chain, token, receiver, type = "bridge" } = options;
+    const res = await this.requestApi(`/api/v1/evm/${chain === 1111 ? 1117 : chain}/bridge_gas_price?type=${type}&token_id=${token}&receiver=${receiver}`, { method: "GET" });
     const { gas_price, block_number } = await res.json();
     return { gasPrice: BigInt(gas_price), blockNumber: BigInt(block_number) };
   }

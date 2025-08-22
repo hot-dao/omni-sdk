@@ -348,9 +348,8 @@ class HotBridge {
     }
   }
 
-  async getGaslessWithdrawFee(chain: Network, type: "bridge" | "refuel" = "bridge"): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
-    if (chain === 1111) chain = 1117; // TON_ID to OMNI_TON
-    return await this.api.getWithdrawFee(chain, type);
+  async getGaslessWithdrawFee(options: { chain: Network; token: string; receiver: string; type?: "bridge" | "refuel" }): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
+    return await this.api.getWithdrawFee(options);
   }
 
   async buildWithdrawIntent(args: { chain: Network; token: string; amount: bigint; receiver: string; intentAccount: string }) {
@@ -481,7 +480,7 @@ class HotBridge {
 
     // Get gas price
     const type = args.gasless === "refuel" ? "refuel" : "bridge";
-    const { gasPrice } = await this.getGaslessWithdrawFee(args.chain, type).catch(() => ({ gasPrice: null }));
+    const { gasPrice } = await this.getGaslessWithdrawFee({ chain: args.chain, token: args.token, receiver: args.receiver, type }).catch(() => ({ gasPrice: null }));
     if (gasPrice == null) throw new GaslessNotAvailable(args.chain);
     this.logger?.log(`Gasless withdraw gas price: ${gasPrice}`);
 
@@ -690,7 +689,7 @@ class HotBridge {
     }
 
     if (gasless) {
-      const fee = await this.getGaslessWithdrawFee(chain).catch(() => null);
+      const fee = await this.getGaslessWithdrawFee({ chain, token, receiver: address, type: "bridge" }).catch(() => null);
       if (fee) return new ReviewFee({ gasless: true, chain, baseFee: BigInt(fee.gasPrice) });
     }
 
