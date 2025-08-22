@@ -3,6 +3,7 @@ import type { JsonRpcProvider } from "@near-js/providers";
 import type { Action } from "@near-js/transactions";
 import type { Connection } from "@solana/web3.js";
 import type { AbstractProvider } from "ethers";
+import type { TronWeb } from "tronweb";
 
 import { Logger } from "./utils";
 
@@ -67,6 +68,8 @@ export interface BridgeOptions {
   tonRpc?: TonApiClient | string;
 
   nearRpc?: JsonRpcProvider | string[];
+
+  tronClient?: TronWeb;
 
   stellarContract?: string;
   stellarHorizonRpc?: string[];
