@@ -1,3 +1,7 @@
+# 2.20.1
+
+- Fix withdraw native NEAR
+
 # 2.20.0-alpha.2
 
 - Add TRON sendTransaction option

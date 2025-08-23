@@ -381,11 +381,12 @@ class HotBridge {
     }
 
     if (format === "nep141") {
+      const isNative = address === "wrap.near" || address === "native";
       return {
-        intent: address === "wrap.near" ? "native_withdraw" : "ft_withdraw",
+        intent: isNative ? "native_withdraw" : "ft_withdraw",
         memo: args.chain !== Network.Near ? `WITHDRAW_TO:${args.receiver}` : undefined,
         receiver_id: args.chain !== Network.Near ? address : args.receiver,
-        token: address === "wrap.near" ? undefined : address,
+        token: isNative ? undefined : address,
         amount: args.amount.toString(),
       };
     }
@@ -593,7 +594,8 @@ class HotBridge {
     adjustMax?: boolean;
     gasless?: "refuel" | true | false;
   }) {
-    if (args.chain === Network.Near && args.token !== "wrap.near") {
+    const isNative = args.token === "wrap.near" || args.token === "native";
+    if (args.chain === Network.Near && !isNative) {
       const isRegistered = await this.near.isTokenRegistered(args.token, args.receiver);
       if (!isRegistered) throw new NearTokenNotRegistered(args.token, args.receiver);
     }
