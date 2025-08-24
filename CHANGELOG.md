@@ -1,3 +1,8 @@
+# 2.20.2
+
+- Fix parsing FT deposit logs for TON bridge
+- Change utils.toOmni logic, return 1010:native for nep141:wrap.near
+
 # 2.20.1
 
 - Fix withdraw native NEAR

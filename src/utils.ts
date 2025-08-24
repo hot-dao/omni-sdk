@@ -37,6 +37,8 @@ export const fromOmni = (id: string) => {
   id = id.split(":").pop() || id;
 
   if (PoaBridge.BRIDGE_TOKENS[id.replace("nep141:", "")]) return PoaBridge.BRIDGE_TOKENS[id.replace("nep141:", "")];
+
+  if (id === "nep141:wrap.near") return "1010:native";
   if (id.startsWith("nep141:")) return `1010:${id.replace("nep141:", "")}`;
   if (!id.includes("_")) return `1010:${id}`;
 

@@ -174,43 +174,50 @@ class TonOmniService {
     const deployTxHashes = events.actions.filter((t) => t.ContractDeploy != null).map((t) => t.baseTransactions[0]);
     if (!deployTxHashes.length) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
 
-    const OP_FT = 0x0f8a7ea5;
-    const OP_NATIVE = 0x205f209a;
-    const smartCallTx = events.actions.find((t) => t.SmartContractExec?.operation === "0x205f209a" || t.SmartContractExec?.operation === "0x0f8a7ea5");
-    if (!smartCallTx?.baseTransactions?.[0]) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
-
-    const tx = await this.tonApi.blockchain.getBlockchainTransaction(smartCallTx.baseTransactions[0]);
-    const body = tx.inMsg?.rawBody;
-    if (body == null) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
-
-    const slice = body.beginParse();
-    const opCode = slice.loadUint(32);
-    slice.loadUintBig(64); // load but not use
-
-    if (opCode !== OP_FT && opCode !== OP_NATIVE) {
-      throw new DepositNotFound(Network.Ton, hash, "Invalid op code");
-    }
+    const OP_NATIVE = "0x205f209a";
+    const OP_CREATE_DEPOSIT = "0xb7e30a3e";
+    const isDepositCall = events.actions.some((t) => [OP_NATIVE, OP_CREATE_DEPOSIT].includes(t.SmartContractExec?.operation ?? ""));
+    if (!isDepositCall) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
 
     const deposit: PendingDeposit = {
       timestamp: Date.now(),
-      sender: tx.account.address.toString({ bounceable: false }),
       chain: Network.OmniTon,
       receiver: "",
       nonce: "",
       amount: "",
       token: "",
+      sender: "",
       tx: hash,
     };
 
-    if (opCode === OP_FT) {
-      const event = events.actions.find((t) => t.JettonTransfer != null);
-      if (event?.JettonTransfer == null) throw new DepositNotFound(Network.Ton, hash, "Jetton transfer not found");
-      deposit.token = event.JettonTransfer.jetton.address.toString({ bounceable: true });
+    const ftDepositCall = events.actions.find((t) => t.JettonTransfer != null);
+    if (ftDepositCall?.JettonTransfer) {
+      const tx = await this.tonApi.blockchain.getBlockchainTransaction(ftDepositCall.baseTransactions[0]);
+      const body = tx.inMsg?.rawBody;
+      if (body == null) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
+
+      const slice = body.beginParse();
+      slice.loadUint(32); // Load OP code
+      slice.loadUintBig(64); // Load query id
+
       deposit.amount = slice.loadCoins().toString();
       deposit.receiver = baseEncode(slice.loadRef().beginParse().loadBuffer(32));
+
+      deposit.sender = tx.account.address.toString({ bounceable: false });
+      deposit.token = ftDepositCall.JettonTransfer.jetton.address.toString({ bounceable: true });
     }
 
-    if (opCode === OP_NATIVE) {
+    const nativeDepositCall = events.actions.find((t) => t.SmartContractExec?.operation === OP_NATIVE);
+    if (nativeDepositCall) {
+      const tx = await this.tonApi.blockchain.getBlockchainTransaction(nativeDepositCall.baseTransactions[0]);
+      const body = tx.inMsg?.rawBody;
+      if (body == null) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
+
+      const slice = body.beginParse();
+      slice.loadUint(32); // Load OP code
+      slice.loadUintBig(64); // Load query id
+
+      deposit.sender = tx.account.address.toString({ bounceable: false });
       deposit.receiver = baseEncode(slice.loadBuffer(32));
       deposit.amount = slice.loadCoins().toString();
       deposit.token = "native";
