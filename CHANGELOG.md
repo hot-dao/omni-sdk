@@ -1,3 +1,7 @@
+# 2.20.3
+
+- Fix parsing FT deposit logs for TON bridge again
+
 # 2.20.2
 
 - Fix parsing FT deposit logs for TON bridge

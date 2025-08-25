@@ -191,24 +191,28 @@ class TonOmniService {
     };
 
     const ftDepositCall = events.actions.find((t) => t.JettonTransfer != null);
-    if (ftDepositCall?.JettonTransfer) {
-      const tx = await this.tonApi.blockchain.getBlockchainTransaction(ftDepositCall.baseTransactions[0]);
-      const body = tx.inMsg?.rawBody;
-      if (body == null) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
-
-      const slice = body.beginParse();
-      slice.loadUint(32); // Load OP code
-      slice.loadUintBig(64); // Load query id
-
-      deposit.amount = slice.loadCoins().toString();
-      deposit.receiver = baseEncode(slice.loadRef().beginParse().loadBuffer(32));
-
-      deposit.sender = tx.account.address.toString({ bounceable: false });
-      deposit.token = ftDepositCall.JettonTransfer.jetton.address.toString({ bounceable: true });
-    }
-
     const nativeDepositCall = events.actions.find((t) => t.SmartContractExec?.operation === OP_NATIVE);
-    if (nativeDepositCall) {
+
+    if (ftDepositCall?.JettonTransfer) {
+      for (const hash of ftDepositCall.baseTransactions) {
+        try {
+          const tx = await this.tonApi.blockchain.getBlockchainTransaction(hash);
+          const body = tx.inMsg?.rawBody;
+          if (body == null) continue;
+
+          const slice = body.beginParse();
+          slice.loadUint(32); // Load OP code
+          slice.loadUintBig(64); // Load query id
+
+          deposit.amount = slice.loadCoins().toString();
+          deposit.receiver = baseEncode(slice.loadRef().beginParse().loadBuffer(32));
+
+          deposit.sender = tx.account.address.toString({ bounceable: false });
+          deposit.token = ftDepositCall.JettonTransfer.jetton.address.toString({ bounceable: true });
+          break;
+        } catch (e) {}
+      }
+    } else if (nativeDepositCall) {
       const tx = await this.tonApi.blockchain.getBlockchainTransaction(nativeDepositCall.baseTransactions[0]);
       const body = tx.inMsg?.rawBody;
       if (body == null) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
@@ -221,6 +225,8 @@ class TonOmniService {
       deposit.receiver = baseEncode(slice.loadBuffer(32));
       deposit.amount = slice.loadCoins().toString();
       deposit.token = "native";
+    } else {
+      throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
     }
 
     const parseDeployTx = async (hash: string) => {
