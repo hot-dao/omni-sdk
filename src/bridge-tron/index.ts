@@ -53,7 +53,7 @@ export class TronOmniService {
       { type: "uint256", value: args.amount.toString() },
     ];
 
-    const { transaction } = await this.client.transactionBuilder.triggerSmartContract(args.token, "transfer(address,uint256)", { feeLimit: 20_000, callValue: 0 }, abiParams, args.sender);
+    const { transaction } = await this.client.transactionBuilder.triggerSmartContract(args.token, "transfer(address,uint256)", { callValue: 0 }, abiParams, args.sender);
     const hash = await args.sendTransaction(transaction);
     const result = await this.waitTransaction(hash);
     return result;
