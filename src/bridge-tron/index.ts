@@ -1,11 +1,13 @@
 import { TronWeb } from "tronweb";
-import { Transaction, TransactionWrapper } from "tronweb/lib/esm/types";
+import { Transaction } from "tronweb/lib/esm/types";
 
 import { toOmniIntent, wait } from "../utils";
 import { Network } from "../types";
 import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
+
 import { trc20 } from "./trc20";
+import { estimateTransferFee } from "./estimate";
 
 export class TronOmniService {
   readonly client: TronWeb;
@@ -59,36 +61,6 @@ export class TronOmniService {
     return result;
   }
 
-  async getResources(sender: string) {
-    const res = await this.client.trx.getAccountResources(sender);
-    return {
-      bandwith: (res.NetLimit || 0) - (res.NetUsed || 0) + (res.freeNetLimit || 0) - (res.freeNetUsed || 0),
-      energy: (res.EnergyLimit || 0) - (res.EnergyUsed || 0),
-    };
-  }
-
-  private feeConstants: Promise<{ energy: number; bandwidth: number }> | null = null;
-  async getFeeConstants() {
-    if (this.feeConstants) return await this.feeConstants;
-
-    this.feeConstants = (async () => {
-      const energyData = await this.client.trx.getEnergyPrices();
-      const bandwidthData = await this.client.trx.getBandwidthPrices();
-      const energy = energyData.split(",").pop()?.split(":").pop() || 420;
-      const bandwidth = bandwidthData.split(",").pop()?.split(":").pop() || 1000;
-      return { energy: +energy, bandwidth: +bandwidth };
-    })();
-
-    return await this.feeConstants;
-  }
-
-  async getContractFee(_: string, tx: TransactionWrapper, userFee = 1) {
-    const prices = await this.getFeeConstants();
-    const bandwith = tx.transaction.raw_data_hex.length / 2 + 64 + 67 + 3;
-    const need = (tx.energy_used || 0) * prices.energy;
-    return (need * userFee + bandwith * prices.bandwidth) / 1_000_000;
-  }
-
   async transferFee(sender: string, token: string, receiver: string): Promise<ReviewFee> {
     if (token === "native") {
       const isExist = await this.client.trx.getAccount(receiver).catch(() => {});
@@ -96,15 +68,8 @@ export class TronOmniService {
       return new ReviewFee({ reserve, gasLimit: reserve, baseFee: 1n, chain: Network.Tron });
     }
 
-    const functionSelector = "transfer(address,uint256)";
-    const parameters = [
-      { type: "address", value: receiver },
-      { type: "uint256", value: 1n },
-    ];
-
-    const estimate = await this.client.transactionBuilder.triggerConstantContract(token, functionSelector, {}, parameters, sender);
-    const reserve = BigInt(Math.floor((await this.getContractFee(token, estimate)) * 1_000_000));
-    return new ReviewFee({ gasLimit: reserve, baseFee: 1n, chain: Network.Tron });
+    const estimate = await estimateTransferFee({ tronWeb: this.client, from: sender, to: receiver, contract: token });
+    return new ReviewFee({ gasLimit: BigInt(Math.ceil(estimate.totalCostTRX)), baseFee: 1n, chain: Network.Tron });
   }
 
   async waitTransaction(hash: string): Promise<string> {

@@ -1,3 +1,7 @@
+# 2.20.5
+
+- Improve TRON Gas estimation
+
 # 2.20.4
 
 - Remove fixed gas limit for TRON transfer
