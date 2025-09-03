@@ -1,3 +1,7 @@
+# 2.20.6
+
+- Update @stellar/stellar-sdk to 14.1.1
+
 # 2.20.5
 
 - Improve TRON Gas estimation
