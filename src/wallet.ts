@@ -1,7 +1,7 @@
 import type { Action } from "@near-js/transactions";
 import type { TransactionInstruction } from "@solana/web3.js";
-import type { TransactionRequest } from "ethers";
 import type { Transaction } from "@stellar/stellar-sdk";
+import type { TransactionRequest } from "ethers";
 import type { SenderArguments } from "@ton/core";
 import { Network } from "./types";
 

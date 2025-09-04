@@ -6,7 +6,7 @@ import { wait } from "../utils";
 
 let _nextId = 123;
 export const fastnearRpc = Math.random() > 0.5 ? "https://c1.rpc.fastnear.com" : "https://c2.rpc.fastnear.com";
-const defaultsProviders = [fastnearRpc, "https://rpc.near.org", "https://rpc.mainnet.pagoda.co", "https://rpc.mainnet.near.org", "https://nearrpc.aurora.dev"];
+const defaultsProviders = ["https://relmn.aurora.dev", "https://nearrpc.aurora.dev", "https://archival-rpc.mainnet.near.org", fastnearRpc];
 
 export class NetworkError extends Error {
   name = "NetworkError";

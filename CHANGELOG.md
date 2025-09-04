@@ -1,3 +1,8 @@
+# 2.20.7
+
+- Fix parse deposit on Stellar
+- Change NEAR defaults rpcs
+
 # 2.20.6
 
 - Update @stellar/stellar-sdk to 14.1.1

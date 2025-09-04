@@ -1,4 +1,4 @@
-import { Address, Asset, Contract, FeeBumpTransaction, Horizon, Networks, rpc, scValToBigInt, StrKey, TimeoutInfinite, TransactionBuilder, xdr, XdrLargeInt } from "@stellar/stellar-sdk";
+import { Address, Asset, Contract, Horizon, Networks, rpc, scValToBigInt, StrKey, TimeoutInfinite, TransactionBuilder, xdr, XdrLargeInt } from "@stellar/stellar-sdk";
 import { Operation, Transaction } from "@stellar/stellar-sdk";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import BigNumber from "bignumber.js";
@@ -136,24 +136,15 @@ class StellarService {
 
   async parseDeposit(hash: string): Promise<PendingDeposit> {
     const txResult = await this.callSoroban((rpc) => rpc.getTransaction(hash));
+
     if (txResult.status !== rpc.Api.GetTransactionStatus.SUCCESS) {
       throw new DepositNotFound(Network.Stellar, hash, "tx not found");
     }
 
-    let tx;
-    try {
-      // Try parsing as fee bump transaction first
-      const feeBumpTx = new FeeBumpTransaction(txResult.envelopeXdr, Networks.PUBLIC);
-      tx = feeBumpTx.innerTransaction;
-      if (!tx.operations.length || tx.operations[0].type !== "invokeHostFunction") {
-        throw new DepositNotFound(Network.Stellar, hash, "Deposit tx not found");
-      }
-    } catch {
-      // If not a fee bump tx, parse as regular transaction
-      tx = new Transaction(txResult.envelopeXdr, Networks.PUBLIC);
-      if (!tx.operations.length || tx.operations[0].type !== "invokeHostFunction") {
-        throw new DepositNotFound(Network.Stellar, hash, "Deposit tx not found");
-      }
+    // If not a fee bump tx, parse as regular transaction
+    const tx = TransactionBuilder.fromXDR(txResult.envelopeXdr, Networks.PUBLIC);
+    if (!tx.operations.length || tx.operations[0].type !== "invokeHostFunction") {
+      throw new DepositNotFound(Network.Stellar, hash, "Deposit tx not found");
     }
 
     const args = tx.operations[0].func.invokeContract().args();
@@ -162,7 +153,13 @@ class StellarService {
     const amount = scValToBigInt(args[1]);
     const token = Address.fromScAddress(args[2].address()).toString();
     const receiver = baseEncode(args[3].bytes());
-    const nonce = scValToBigInt(txResult.resultMetaXdr.v3().sorobanMeta()!.returnValue());
+
+    let nonce;
+    try {
+      nonce = scValToBigInt(txResult.resultMetaXdr.v4().sorobanMeta()!.returnValue()!);
+    } catch (e) {
+      nonce = scValToBigInt(txResult.resultMetaXdr.v3().sorobanMeta()!.returnValue()!);
+    }
 
     return {
       tx: hash,
