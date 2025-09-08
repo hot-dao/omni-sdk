@@ -6,7 +6,7 @@ import { TonApiClient } from "@ton-api/client";
 import OmniService from "../bridge";
 import { omniEphemeralReceiver } from "../utils";
 import { Network, PendingDeposit } from "../types";
-import { MIN_COMMISSION, OpCode } from "./constants";
+import { MIN_COMMISSION } from "./constants";
 import { DepositNotFound } from "../errors";
 
 import { TON_MINTER_TO_JETTON_MAPPER, TON_JETTON_TO_MINTER_MAPPER } from "./jettons";
@@ -55,6 +55,7 @@ class TonOmniService {
     const need = token === "native" ? toNano(0.07) : toNano(0.13);
     return new ReviewFee({ reserve: need, baseFee: toNano(0.025), chain: Network.Ton, gasLimit: 1n });
   }
+
   executor(sendTransaction: (tx: SenderArguments) => Promise<string>) {
     const executor = {
       hash: "",

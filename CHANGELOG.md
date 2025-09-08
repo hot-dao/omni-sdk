@@ -1,3 +1,7 @@
+# 2.20.8
+
+- Improve TRON Gas estimation, add additional reserve
+
 # 2.20.7
 
 - Fix parse deposit on Stellar

@@ -68,8 +68,20 @@ export class TronOmniService {
       return new ReviewFee({ reserve, gasLimit: reserve, baseFee: 1n, chain: Network.Tron });
     }
 
-    const estimate = await estimateTransferFee({ tronWeb: this.client, from: sender, to: receiver, contract: token });
-    return new ReviewFee({ gasLimit: BigInt(Math.ceil(estimate.totalCostTRX)), baseFee: 1n, chain: Network.Tron });
+    const estimate = await estimateTransferFee({
+      tronWeb: this.client,
+      from: sender,
+      to: receiver,
+      contract: token,
+      checkReceiverBalance: true,
+    });
+
+    return new ReviewFee({
+      gasLimit: estimate.gasLimit,
+      reserve: estimate.additionalReserve,
+      chain: Network.Tron,
+      baseFee: 1n,
+    });
   }
 
   async waitTransaction(hash: string): Promise<string> {
