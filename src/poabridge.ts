@@ -167,8 +167,8 @@ PoaBridge.setupTokens({
   "sol-c800a4bd850783ccb82c2b2c7e84175443606352.omft.near": `${Network.Solana}:Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB`, // USDT
   "sol-5ce3bf3a31af18be40ba30f721101b4341690186.omft.near": `${Network.Solana}:EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, // USDC
 
-  "btc.omft.near": `${Network.Near}:btc.omft.near`,
-  "zec.omft.near": `${Network.Near}:zec.omft.near`,
+  "btc.omft.near": `${Network.Btc}:native`,
+  "zec.omft.near": `${Network.Zcash}:native`,
 });
 
 export default PoaBridge;

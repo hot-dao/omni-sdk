@@ -83,12 +83,12 @@ export interface BridgeOptions {
 
   btc?: {
     getTransferFee: (receiver: string) => Promise<ReviewFeeOptions>;
-    transfer: (receiver: string, amount: bigint) => Promise<string>;
+    transfer: (receiver: string, amount: bigint, fee?: ReviewFeeOptions) => Promise<string>;
   };
 
   zcash?: {
     getTransferFee: (receiver: string) => Promise<ReviewFeeOptions>;
-    transfer: (receiver: string, amount: bigint) => Promise<string>;
+    transfer: (receiver: string, amount: bigint, fee?: ReviewFeeOptions) => Promise<string>;
   };
 }
 
