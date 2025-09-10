@@ -691,7 +691,7 @@ class HotBridge {
     if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
     if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_GAS, gasLimit: 300n * TGAS, chain });
 
-    if (chain === Network.Tron) return (await this.tron().then((s) => s.getDepositFee(token, sender))) as ReviewFee;
+    if (chain === Network.Tron) return (await this.tron().then((s) => s.getDepositFee(token, sender, intentAccount))) as ReviewFee;
     if (chain === Network.Stellar) return (await this.stellar.getDepositFee(sender, token, amount, intentAccount)) as ReviewFee;
     if (chain === Network.Solana) return (await this.solana().then((s) => s.getDepositFee(token))) as ReviewFee;
     if (isTon(chain)) return (await this.ton.getDepositFee(token)) as ReviewFee;

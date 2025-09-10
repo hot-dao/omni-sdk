@@ -6,7 +6,7 @@ import { useNearWallet } from "./near";
 export const bridge = new HotBridge({
   logger: console,
   api: ["https://api0.herewallet.app", "https://api2.herewallet.app"],
-  solanaRpc: ["https://api0.herewallet.app/api/v1/evm/everstake-sol"],
+  solanaRpc: ["https://api0.herewallet.app/api/v1/evm/rpc/1001"],
 
   evmRpc: {
     8453: base.rpcUrls.default.http as any,

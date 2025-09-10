@@ -15,8 +15,9 @@ export class TronOmniService {
     this.client = options.client || new TronWeb({ fullHost: "https://api.trongrid.io" });
   }
 
-  async getDepositFee(token: string, sender: string): Promise<ReviewFee> {
-    return this.transferFee(sender, token, sender);
+  async getDepositFee(token: string, sender: string, intentAccount: string): Promise<ReviewFee> {
+    const receiver = await this.omni.poa.getDepositAddress(intentAccount, Network.Tron);
+    return this.transferFee(sender, token, receiver);
   }
 
   async deposit(args: { chain: number; token: string; amount: bigint; sender: string; intentAccount: string; sendTransaction: (tx: Transaction) => Promise<string> }): Promise<string | null> {

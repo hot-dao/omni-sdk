@@ -1,4 +1,5 @@
 import { TronWeb } from "tronweb";
+import { bigIntMin } from "../utils";
 
 type EstimateFeeInput = {
   contract: string;
@@ -182,5 +183,7 @@ export async function estimateTransferFee(input: EstimateFeeInput) {
   const gasLimit = BigInt(Math.ceil(toTRX(totalCostSun)));
   let additionalReserve = BigInt(Math.ceil(toTRX(suggestedFeeLimitSun))) - BigInt(Math.ceil(toTRX(totalCostSun)));
   if (additionalReserve < 0n) additionalReserve = 0n;
-  return { gasLimit, additionalReserve };
+
+  const min = 10n * 10n ** 6n;
+  return { gasLimit, additionalReserve: bigIntMin(additionalReserve, min) };
 }
