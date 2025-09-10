@@ -9,7 +9,7 @@ export interface FeeOption {
   priorityFee?: bigint;
 }
 
-interface ReviewFeeOptions {
+export interface ReviewFeeOptions {
   evm?: "legacy" | "modern" | undefined;
 
   chain: number;
@@ -108,6 +108,10 @@ export class ReviewFee implements ReviewFeeOptions {
 
   clone() {
     return new ReviewFee(this);
+  }
+
+  static fromReview(review: ReviewFeeOptions) {
+    return new ReviewFee(review);
   }
 
   static fromFeeData(feeData: FeeData, chain: number) {

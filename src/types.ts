@@ -6,6 +6,7 @@ import type { AbstractProvider } from "ethers";
 import type { TronWeb } from "tronweb";
 
 import { Logger } from "./utils";
+import { ReviewFeeOptions } from "./fee";
 
 export enum Network {
   Omni_v1 = 0,
@@ -79,6 +80,16 @@ export interface BridgeOptions {
   solverBusRpc?: string;
   mpcApi?: string[];
   api?: string[];
+
+  btc?: {
+    getTransferFee: (receiver: string) => Promise<ReviewFeeOptions>;
+    transfer: (receiver: string, amount: bigint) => Promise<string>;
+  };
+
+  zcash?: {
+    getTransferFee: (receiver: string) => Promise<ReviewFeeOptions>;
+    transfer: (receiver: string, amount: bigint) => Promise<string>;
+  };
 }
 
 export interface ContractTransferType {

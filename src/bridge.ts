@@ -31,6 +31,7 @@ import OmniApi from "./api";
 
 import { INTENTS_CONTRACT, OMNI_HOT_V2 } from "./env";
 import { NEAR_PER_GAS, TGAS, ReviewFee } from "./fee";
+import { BasePoaOmniService } from "./bridge-btc";
 import StellarService from "./bridge-stellar";
 import EvmOmniService from "./bridge-evm";
 import TonOmniService from "./bridge-ton";
@@ -45,6 +46,8 @@ class HotBridge {
   executeNearTransaction?: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
 
   poa: PoaBridge;
+  bitcoin: BasePoaOmniService;
+  zcash: BasePoaOmniService;
   stellar: StellarService;
   ton: TonOmniService;
   evm: EvmOmniService;
@@ -75,6 +78,30 @@ class HotBridge {
     this.ton = new TonOmniService(this, {
       contract: options.tonContract,
       rpc: options.tonRpc,
+    });
+
+    this.bitcoin = new BasePoaOmniService(this, {
+      chain: Network.Btc,
+      getTransferFee: (receiver) => {
+        if (!options.btc) throw "btc.getTransferFee not specified";
+        return options.btc?.getTransferFee(receiver);
+      },
+      transfer: (receiver, amount) => {
+        if (!options.btc) throw "btc.transfer not specified";
+        return options.btc?.transfer(receiver, amount);
+      },
+    });
+
+    this.zcash = new BasePoaOmniService(this, {
+      chain: Network.Zcash,
+      getTransferFee: (receiver) => {
+        if (!options.zcash) throw "zcash.getTransferFee not specified";
+        return options.zcash?.getTransferFee(receiver);
+      },
+      transfer: (receiver, amount) => {
+        if (!options.zcash) throw "zcash.transfer not specified";
+        return options.zcash?.transfer(receiver, amount);
+      },
     });
   }
 
@@ -169,15 +196,6 @@ class HotBridge {
   async getIntentBalance(intentId: string, intentAccount: string, intentsContract = INTENTS_CONTRACT) {
     const balances = await this.getIntentBalances([intentId], intentAccount, intentsContract);
     return balances[intentId] || 0n;
-  }
-
-  async getTokenBalance(chain: Network, token: string, address: string) {
-    if (chain === Network.Near) return await this.near.getTokenBalance(token, address);
-    if (chain === Network.Solana) return await this.solana().then((s) => s.getTokenBalance(token, address));
-    if (chain === Network.Stellar) return await this.stellar.getTokenBalance(token, address);
-    if (chain === Network.Tron) return await this.tron().then((s) => s.getTokenBalance(token, address));
-    if (isTon(chain)) return await this.ton.getTokenBalance(token, address);
-    return await this.evm.getTokenBalance(token, chain, address);
   }
 
   async getPendingWithdrawals(chain: number, receiver: string): Promise<PendingWithdraw[]> {
@@ -691,6 +709,8 @@ class HotBridge {
     if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
     if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_GAS, gasLimit: 300n * TGAS, chain });
 
+    if (chain === Network.Btc) return (await this.bitcoin.getDepositFee(intentAccount)) as ReviewFee;
+    if (chain === Network.Zcash) return (await this.zcash.getDepositFee(intentAccount)) as ReviewFee;
     if (chain === Network.Tron) return (await this.tron().then((s) => s.getDepositFee(token, sender, intentAccount))) as ReviewFee;
     if (chain === Network.Stellar) return (await this.stellar.getDepositFee(sender, token, amount, intentAccount)) as ReviewFee;
     if (chain === Network.Solana) return (await this.solana().then((s) => s.getDepositFee(token))) as ReviewFee;

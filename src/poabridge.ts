@@ -1,5 +1,3 @@
-import { ReviewFee } from "./fee";
-
 import { Network } from "./types";
 import { toOmni, wait } from "./utils";
 import HotBridge from "./bridge";
