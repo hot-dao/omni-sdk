@@ -6,6 +6,7 @@ import viteCompression from "vite-plugin-compression";
 import svgLoader from "vite-plugin-svgr";
 
 export default defineConfig({
+  base: "/omni-sdk/",
   server: {
     port: 1234,
   },
