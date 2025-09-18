@@ -9,7 +9,7 @@ A fast and cheap bridge protocol over **HOT Protocol** that uses the **NEAR Inte
 
 ## Demo UI
 
-Deploy: https://hot-bridge-demo.surge.sh
+Deploy: [https://hot-dao.github.io/omni-sdk](https://hot-dao.github.io/omni-sdk/)
 
 **Covered cases:**
 
