@@ -3,16 +3,16 @@ import OmniService from "../bridge";
 import { ReviewFee, ReviewFeeOptions } from "../fee";
 
 export class BasePoaOmniService {
-  readonly getTransferFee: (receiver: string) => Promise<ReviewFeeOptions>;
-  readonly transfer: (receiver: string, amount: bigint, fee?: ReviewFeeOptions) => Promise<string>;
+  readonly getTransferFee: (receiver: string, amount: bigint) => Promise<ReviewFeeOptions>;
+  readonly transfer: (receiver: string, amount: bigint, fee: ReviewFeeOptions) => Promise<string>;
   readonly chain: number;
 
   constructor(
     readonly omni: OmniService,
     options: {
       chain: number;
-      getTransferFee: (receiver: string) => Promise<ReviewFeeOptions>;
-      transfer: (receiver: string, amount: bigint, fee?: ReviewFeeOptions) => Promise<string>;
+      getTransferFee: (receiver: string, amount: bigint) => Promise<ReviewFeeOptions>;
+      transfer: (receiver: string, amount: bigint, fee: ReviewFeeOptions) => Promise<string>;
     }
   ) {
     this.getTransferFee = options.getTransferFee;
@@ -20,13 +20,13 @@ export class BasePoaOmniService {
     this.chain = options.chain;
   }
 
-  async getDepositFee(intentAccount: string): Promise<ReviewFee> {
+  async getDepositFee(intentAccount: string, amount: bigint): Promise<ReviewFee> {
     const receiver = await this.omni.poa.getDepositAddress(intentAccount, this.chain);
-    const review = await this.getTransferFee(receiver);
+    const review = await this.getTransferFee(receiver, amount);
     return ReviewFee.fromReview(review);
   }
 
-  async deposit(args: { chain: number; token: string; amount: bigint; sender: string; intentAccount: string; fee?: ReviewFeeOptions }): Promise<string | null> {
+  async deposit(args: { chain: number; token: string; amount: bigint; sender: string; intentAccount: string; fee: ReviewFeeOptions }): Promise<string | null> {
     if (!this.omni.poa.getPoaId(args.chain, args.token)) throw "Unsupported token";
 
     const intent = toOmniIntent(args.chain, args.token);

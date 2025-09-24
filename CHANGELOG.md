@@ -1,3 +1,7 @@
+# 2.20.13
+
+- fix Bitcoin and Zcash types
+
 # 2.20.11, 2.20.12
 
 - Add Bitcoin and Zcash poa bridge

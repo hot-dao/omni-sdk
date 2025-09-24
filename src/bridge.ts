@@ -82,25 +82,25 @@ class HotBridge {
 
     this.bitcoin = new BasePoaOmniService(this, {
       chain: Network.Btc,
-      getTransferFee: (receiver) => {
+      getTransferFee: (receiver, amount) => {
         if (!options.btc) throw "btc.getTransferFee not specified";
-        return options.btc?.getTransferFee(receiver);
+        return options.btc?.getTransferFee(receiver, amount);
       },
-      transfer: (receiver, amount) => {
+      transfer: (receiver, amount, fee) => {
         if (!options.btc) throw "btc.transfer not specified";
-        return options.btc?.transfer(receiver, amount);
+        return options.btc?.transfer(receiver, amount, fee);
       },
     });
 
     this.zcash = new BasePoaOmniService(this, {
       chain: Network.Zcash,
-      getTransferFee: (receiver) => {
+      getTransferFee: (receiver, amount) => {
         if (!options.zcash) throw "zcash.getTransferFee not specified";
-        return options.zcash?.getTransferFee(receiver);
+        return options.zcash?.getTransferFee(receiver, amount);
       },
-      transfer: (receiver, amount) => {
+      transfer: (receiver, amount, fee) => {
         if (!options.zcash) throw "zcash.transfer not specified";
-        return options.zcash?.transfer(receiver, amount);
+        return options.zcash?.transfer(receiver, amount, fee);
       },
     });
   }
@@ -709,8 +709,8 @@ class HotBridge {
     if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
     if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_GAS, gasLimit: 300n * TGAS, chain });
 
-    if (chain === Network.Btc) return (await this.bitcoin.getDepositFee(intentAccount)) as ReviewFee;
-    if (chain === Network.Zcash) return (await this.zcash.getDepositFee(intentAccount)) as ReviewFee;
+    if (chain === Network.Btc) return (await this.bitcoin.getDepositFee(intentAccount, amount)) as ReviewFee;
+    if (chain === Network.Zcash) return (await this.zcash.getDepositFee(intentAccount, amount)) as ReviewFee;
     if (chain === Network.Tron) return (await this.tron().then((s) => s.getDepositFee(token, sender, intentAccount))) as ReviewFee;
     if (chain === Network.Stellar) return (await this.stellar.getDepositFee(sender, token, amount, intentAccount)) as ReviewFee;
     if (chain === Network.Solana) return (await this.solana().then((s) => s.getDepositFee(token))) as ReviewFee;
