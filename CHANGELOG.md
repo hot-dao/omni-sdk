@@ -1,3 +1,7 @@
+# 2.20.14
+
+- remove time limit for waitUntilBalance
+
 # 2.20.13
 
 - fix Bitcoin and Zcash types

@@ -649,7 +649,6 @@ class HotBridge {
   }
 
   async waitUntilBalance(intent: string, amount: bigint, intentAccount: string, attempts = 0): Promise<bigint> {
-    if (attempts > 120) throw "Balance is not changed after 120 seconds";
     const balance = await this.getIntentBalance(intent, intentAccount).catch(() => 0n);
     if (balance >= amount) return balance;
 
