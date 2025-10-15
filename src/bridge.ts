@@ -377,7 +377,17 @@ class HotBridge {
   }
 
   async getGaslessWithdrawFee(options: { chain: Network; token: string; receiver: string; type?: "bridge" | "refuel" }): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
-    return await this.api.getWithdrawFee(options);
+    try {
+      return await this.api.getWithdrawFee(options);
+    } catch (e) {
+      // Fallback gas price for Stellar
+      if (options.chain === Network.Stellar) {
+        console.warn("Fallback gas price for Stellar withdraw: 0.5 XLM");
+        return { gasPrice: 5000000n, blockNumber: 0n };
+      }
+
+      throw e;
+    }
   }
 
   async buildWithdrawIntent(args: { chain: Network; token: string; amount: bigint; receiver: string; intentAccount: string }) {

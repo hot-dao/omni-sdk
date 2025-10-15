@@ -16,15 +16,7 @@ class OmniApi {
 
       for (const endpoint of endpoints) {
         try {
-          const headers = Object.assign(
-            {
-              "omni-version": `v2`,
-              "Content-Type": "application/json",
-              Referer: "https://api0.herewallet.app",
-            },
-            init.headers
-          );
-
+          const headers = Object.assign({ "omni-version": `v2`, "Content-Type": "application/json", Referer: "https://near-intents.org", Origin: "https://near-intents.org" }, init.headers);
           const res = await fetch(`${endpoint}${req}`, { ...init, headers });
           if (!res.ok) throw await res.text();
           return res;

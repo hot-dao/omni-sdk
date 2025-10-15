@@ -1,3 +1,8 @@
+# 2.20.15
+
+- add Stellar withdraw gas price fallback (0.5 XLM)
+- add fallback Origin header to api
+
 # 2.20.14
 
 - remove time limit for waitUntilBalance
