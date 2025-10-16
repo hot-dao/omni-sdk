@@ -70,6 +70,7 @@ const DepositComponent = ({ stellar, evm, near, ton }: { stellar: any; evm: any;
 
       // Stellar
       else if (network === Network.Stellar) {
+        console.log("Depositing to Stellar");
         const tx = await bridge.stellar.deposit({
           sender: stellar.address!,
           intentAccount: near.intentAccount!,
@@ -78,6 +79,7 @@ const DepositComponent = ({ stellar, evm, near, ton }: { stellar: any; evm: any;
           token: token,
         });
 
+        console.log("Deposit tx: ", tx);
         const controller = new AbortController();
         const deposit = await bridge.waitPendingDeposit(network, tx, near.intentAccount!, controller.signal);
         await bridge.finishDeposit(deposit);

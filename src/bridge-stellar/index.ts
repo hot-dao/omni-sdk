@@ -5,7 +5,7 @@ import BigNumber from "bignumber.js";
 
 import { omniEphemeralReceiver, parseAmount } from "../utils";
 import { Network, PendingDeposit } from "../types";
-import { DepositNotFound } from "../errors";
+import { DepositNotFoundError } from "../errors";
 import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
 
@@ -138,13 +138,13 @@ class StellarService {
     const txResult = await this.callSoroban((rpc) => rpc.getTransaction(hash));
 
     if (txResult.status !== rpc.Api.GetTransactionStatus.SUCCESS) {
-      throw new DepositNotFound(Network.Stellar, hash, "tx not found");
+      throw new DepositNotFoundError(Network.Stellar, hash, "tx not found");
     }
 
     // If not a fee bump tx, parse as regular transaction
     const tx = TransactionBuilder.fromXDR(txResult.envelopeXdr, Networks.PUBLIC);
     if (!tx.operations.length || tx.operations[0].type !== "invokeHostFunction") {
-      throw new DepositNotFound(Network.Stellar, hash, "Deposit tx not found");
+      throw new DepositNotFoundError(Network.Stellar, hash, "Deposit tx not found");
     }
 
     const args = tx.operations[0].func.invokeContract().args();

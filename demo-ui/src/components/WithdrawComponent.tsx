@@ -61,6 +61,7 @@ const WithdrawComponent = ({ near, evm, ton, stellar }: { near: any; evm: any; t
         intentAccount: near.intentAccount!,
         receiver: receiver.trim(),
         amount: BigInt(amount),
+        gasless: true,
         chain: network,
         token: token,
       });

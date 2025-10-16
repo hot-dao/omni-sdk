@@ -16,7 +16,7 @@ import {
 import OmniService from "../bridge";
 import { Network, PendingDeposit } from "../types";
 import { bigIntMax, bigIntMin, omniEphemeralReceiver, parseAmount, toOmniIntent, wait } from "../utils";
-import { DepositNotFound } from "../errors";
+import { DepositNotFoundError } from "../errors";
 import { ReviewFee } from "../fee";
 
 import AdvancedConnection from "./provider";
@@ -202,13 +202,13 @@ export class SolanaOmniService {
 
     const status = await waitReceipt();
     const logMessages = status?.meta?.logMessages;
-    if (status == null || logMessages == null) throw new DepositNotFound(Network.Solana, hash, "no tx receipt yet");
+    if (status == null || logMessages == null) throw new DepositNotFoundError(Network.Solana, hash, "no tx receipt yet");
 
     const nonce = logMessages.map((t) => t.match(/nonce (\d+)/)?.[1]).find((t) => t != null);
     const amount = logMessages.map((t) => t.match(/amount: (\d+)/)?.[1]).find((t) => t != null);
     const receiverHex = logMessages.map((t) => t.match(/to ([0-9A-Fa-f]+)/)?.[1]).find((t) => t != null);
     const token = logMessages.find((t) => t.includes("NativeDeposit")) ? "native" : logMessages.map((t) => t.match(/mint: (.+),/)?.[1]).find((t) => t != null);
-    if (nonce == null || receiverHex == null || amount == null || token == null) throw new DepositNotFound(Network.Solana, hash, "no tx receipt yet");
+    if (nonce == null || receiverHex == null || amount == null || token == null) throw new DepositNotFoundError(Network.Solana, hash, "no tx receipt yet");
 
     const timestamp = (status.blockTime || 0) * 1000;
     const receiver = baseEncode(Buffer.from(receiverHex, "hex"));
@@ -229,7 +229,7 @@ export class SolanaOmniService {
     const [depositAddress] = this.findDepositAddress(BigInt(deposit.nonce), new sol.PublicKey(sender), receiver, mint, BigInt(deposit.amount));
 
     const isExist = await this.connection.getAccountInfo(depositAddress, { commitment: "confirmed" });
-    if (isExist == null) throw new DepositNotFound(Network.Solana, deposit.tx, "Deposit nonce account not found");
+    if (isExist == null) throw new DepositNotFoundError(Network.Solana, deposit.tx, "Deposit nonce account not found");
 
     const env = this.env(deposit.receiver);
     const builder = env.program.methods.clearDepositInfo(Array.from(receiver), mint, bnAmount, bnNonce).accounts({

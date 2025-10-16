@@ -16,15 +16,19 @@ import {
   legacyUnsafeOmniEphemeralReceiver,
 } from "./utils";
 import {
-  GaslessNotAvailable,
-  GaslessWithdrawCanceled,
-  GaslessWithdrawTxNotFound,
-  IntentBalanceIsLessThanAmount,
-  MismatchReceiverAndIntentAccount,
-  NearTokenNotRegistered,
-  ProcessAborted,
+  GaslessNotAvailableError,
+  GaslessWithdrawCanceledError,
+  GaslessWithdrawTxNotFoundError,
+  IntentBalanceIsLessThanAmountError,
+  MismatchReceiverAndIntentAccountError,
+  NearTokenNotRegisteredError,
+  ProcessAbortedError,
   SlippageError,
-  DepositAlreadyClaimed,
+  DepositAlreadyClaimedError,
+  CompletePreviousWithdrawalsError,
+  WithdrawalNotFoundError,
+  FailedToExecuteDepositError,
+  UnsupportedTokenFormatError,
 } from "./errors";
 import { BridgeOptions, Network, PendingDepositWithIntent, PendingWithdraw } from "./types";
 import OmniApi from "./api";
@@ -274,14 +278,14 @@ class HotBridge {
       args: { nonce },
     });
 
-    if (!transfer) throw "Withdrawal not found";
+    if (!transfer) throw new WithdrawalNotFoundError(nonce);
     this.logger?.log(`Transfer: ${JSON.stringify(transfer, null, 2)}`);
 
     this.logger?.log(`Checking if nonce is used`);
     const receiver = decodeReceiver(transfer.chain_id, transfer.receiver_id);
 
     const isUsed = await this.isWithdrawUsed(transfer.chain_id, nonce, receiver).catch(() => false);
-    if (isUsed) throw "Already claimed";
+    if (isUsed) throw new DepositAlreadyClaimedError(transfer.chain_id, nonce);
 
     this.logger?.log(`Depositing on ${transfer.chain_id}`);
     const token = decodeTokenAddress(transfer.chain_id, transfer.contract_id);
@@ -305,7 +309,7 @@ class HotBridge {
     };
 
     while (true) {
-      if (abort?.aborted) throw new ProcessAborted("waitPendingDeposit");
+      if (abort?.aborted) throw new ProcessAbortedError("waitPendingDeposit");
       const deposit = await waitPending().catch((e) => {
         this.logger?.log(`Error waiting pending deposit: ${e}`);
         return null;
@@ -313,12 +317,12 @@ class HotBridge {
 
       if (deposit) {
         const isUsed = await this.isDepositUsed(deposit.chain, deposit.nonce);
-        if (isUsed) throw new DepositAlreadyClaimed(deposit.chain, deposit.nonce);
+        if (isUsed) throw new DepositAlreadyClaimedError(deposit.chain, deposit.nonce);
 
         const receiver = baseEncode(omniEphemeralReceiver(intentAccount));
         const unsafeReceiver = baseEncode(legacyUnsafeOmniEphemeralReceiver(intentAccount));
         if (deposit.receiver !== receiver && deposit.receiver !== unsafeReceiver) {
-          throw new MismatchReceiverAndIntentAccount(deposit.receiver, intentAccount);
+          throw new MismatchReceiverAndIntentAccountError(deposit.receiver, intentAccount);
         }
 
         return { ...deposit, intentAccount };
@@ -351,7 +355,7 @@ class HotBridge {
     if (hash && sender_id) return { hash, sender: sender_id };
     if (status === "ok") return null;
 
-    if (!signature) throw status || "Failed to execute deposit";
+    if (!signature) throw new FailedToExecuteDepositError(status);
     const depositAction = functionCall({
       methodName: "mt_deposit_call",
       gas: String(80n * TGAS),
@@ -419,7 +423,7 @@ class HotBridge {
       };
     }
 
-    throw `Unsupported token format ${format}`;
+    throw new UnsupportedTokenFormatError(token);
   }
 
   async buildSwapExectInIntent(args: { intentAccount: string; intentFrom: string; intentTo: string; amountIn: bigint }) {
@@ -492,10 +496,15 @@ class HotBridge {
 
     const uncompleted = pendings.filter((t) => !t.completed);
     const earliest = uncompleted.find((t) => BigInt(t.nonce) < BigInt(nonce));
-    if (earliest) throw `Withdrawal previous pending withdrawal`;
+    if (earliest) throw new CompletePreviousWithdrawalsError(chain, receiver, earliest.nonce);
   }
 
   async checkLocker(chain: number, address: string, receiver: string) {
+    console.warn("use checkWithdrawLocker instead of checkLocker");
+    await this.checkWithdrawLocker(chain, address, receiver);
+  }
+
+  async checkWithdrawLocker(chain: number, address: string, receiver: string) {
     if (PoaBridge.BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]) return;
     if (chain === Network.Near) return;
 
@@ -503,7 +512,8 @@ class HotBridge {
     const completed = pendings.filter((t) => t.completed);
 
     if (completed.length) await this.clearPendingWithdrawals(completed);
-    if (pendings.some((t) => !t.completed)) throw "Complete previous withdrawals before make new";
+    const earliest = pendings.find((t) => !t.completed);
+    if (earliest) throw new CompletePreviousWithdrawalsError(chain, receiver, earliest.nonce);
   }
 
   async buildGaslessWithdrawToken(args: {
@@ -514,13 +524,13 @@ class HotBridge {
     intentAccount: string;
     gasless?: "refuel" | true;
   }): Promise<{ gasless: boolean; intents: any[]; quoteHashes: string[] }> {
-    if (this.poa.getPoaId(args.chain, args.token)) throw new GaslessNotAvailable(args.chain);
-    if (args.chain === Network.Near) throw new GaslessNotAvailable(args.chain);
+    if (this.poa.getPoaId(args.chain, args.token)) throw new GaslessNotAvailableError(args.chain);
+    if (args.chain === Network.Near) throw new GaslessNotAvailableError(args.chain);
 
     // Get gas price
     const type = args.gasless === "refuel" ? "refuel" : "bridge";
     const { gasPrice } = await this.getGaslessWithdrawFee({ chain: args.chain, token: args.token, receiver: args.receiver, type }).catch(() => ({ gasPrice: null }));
-    if (gasPrice == null) throw new GaslessNotAvailable(args.chain);
+    if (gasPrice == null) throw new GaslessNotAvailableError(args.chain);
     this.logger?.log(`Gasless withdraw gas price: ${gasPrice}`);
 
     // Swap part of input token to gas token
@@ -535,13 +545,13 @@ class HotBridge {
 
       // Not enough input amount for gas covering
       if (qoute == null || BigInt(qoute.amount_in) >= args.amount) {
-        throw new GaslessNotAvailable(args.chain);
+        throw new GaslessNotAvailableError(args.chain);
       }
     }
 
     // Not enough input amount for gas covering
     if (args.token === "native" && args.amount <= gasPrice) {
-      throw new GaslessNotAvailable(args.chain);
+      throw new GaslessNotAvailableError(args.chain);
     }
 
     const withdrawIntent = await this.buildGaslessWithdrawIntent({
@@ -576,7 +586,7 @@ class HotBridge {
         const gasless = args.gasless === "refuel" ? "refuel" : true;
         return await this.buildGaslessWithdrawToken({ ...args, gasless });
       } catch (e) {
-        if (!(e instanceof GaslessNotAvailable)) throw e;
+        if (!(e instanceof GaslessNotAvailableError)) throw e;
         this.logger?.log(`Gasless withdraw not available for chain ${args.chain}, using regular withdraw`);
       }
     }
@@ -589,11 +599,11 @@ class HotBridge {
     let attempts = 0;
 
     while (true) {
-      if (attempts > 50) throw new GaslessWithdrawTxNotFound(nonce, chain, receiver);
+      if (attempts > 50) throw new GaslessWithdrawTxNotFoundError(nonce, chain, receiver);
       await wait(2000);
 
       const status = await this.getGaslessWithdrawStatus(nonce);
-      if (status?.startsWith("CANCELED")) throw new GaslessWithdrawCanceled(status, nonce, chain, receiver);
+      if (status?.startsWith("CANCELED")) throw new GaslessWithdrawCanceledError(status, nonce, chain, receiver);
       if (status === "COMPLETED") return "0x0";
       if (status) return `0x${status}`;
       attempts += 1;
@@ -625,12 +635,12 @@ class HotBridge {
     const isNative = args.token === "wrap.near" || args.token === "native";
     if (args.chain === Network.Near && !isNative) {
       const isRegistered = await this.near.isTokenRegistered(args.token, args.receiver);
-      if (!isRegistered) throw new NearTokenNotRegistered(args.token, args.receiver);
+      if (!isRegistered) throw new NearTokenNotRegisteredError(args.token, args.receiver);
     }
 
     const balance = await this.getIntentBalance(toOmniIntent(args.chain, args.token), args.intentAccount);
     if (args.adjustMax && balance < args.amount) args.amount = balance;
-    if (balance < args.amount) throw new IntentBalanceIsLessThanAmount(args.token, args.intentAccount, args.amount);
+    if (balance < args.amount) throw new IntentBalanceIsLessThanAmountError(args.token, args.intentAccount, args.amount);
 
     await this.checkLocker(args.chain, args.token, args.receiver);
 

@@ -4,7 +4,7 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import { ERC20_ABI, OMNI_ABI, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
 import { bigIntMin, encodeTokenAddress, omniEphemeralReceiver, toOmniIntent, wait } from "../utils";
 import { Network, PendingDeposit } from "../types";
-import { DepositNotFound } from "../errors";
+import { DepositNotFoundError } from "../errors";
 import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
 
@@ -190,13 +190,13 @@ class EvmOmniService {
     };
 
     const receipt = await waitReceipt();
-    if (receipt == null) throw new DepositNotFound(chain, hash, "no tx receipt yet");
+    if (receipt == null) throw new DepositNotFoundError(chain, hash, "no tx receipt yet");
 
     const intrfc = new Interface([OMNI_DEPOSIT_LOG]);
-    if (receipt.logs[0] == null) throw new DepositNotFound(chain, hash, "no deposit logs");
+    if (receipt.logs[0] == null) throw new DepositNotFoundError(chain, hash, "no deposit logs");
 
     const log = receipt.logs.map((t) => intrfc.parseLog(t)).find((t) => t?.args[0] != null);
-    if (log == null) throw new DepositNotFound(chain, hash, "no deposit nonce yet");
+    if (log == null) throw new DepositNotFoundError(chain, hash, "no deposit nonce yet");
 
     const nonce = String(log.args[0]);
     const amount = String(log.args[1]);

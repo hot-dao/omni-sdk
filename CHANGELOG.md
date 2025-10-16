@@ -1,3 +1,9 @@
+# 2.20.16
+
+- add ApiError with details of request
+- add fallback for api.depositSign without autopilot=true
+- improve errors
+
 # 2.20.15
 
 - add Stellar withdraw gas price fallback (0.5 XLM)

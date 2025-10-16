@@ -7,7 +7,7 @@ import OmniService from "../bridge";
 import { omniEphemeralReceiver } from "../utils";
 import { Network, PendingDeposit } from "../types";
 import { MIN_COMMISSION } from "./constants";
-import { DepositNotFound } from "../errors";
+import { DepositNotFoundError } from "../errors";
 
 import { TON_MINTER_TO_JETTON_MAPPER, TON_JETTON_TO_MINTER_MAPPER } from "./jettons";
 import { TonMetaWallet as TonMetaWalletV2 } from "./wrappers/TonMetaWallet";
@@ -173,12 +173,12 @@ class TonOmniService {
   async parseDeposit(hash: string): Promise<PendingDeposit> {
     const events = await this.tonApi.events.getEvent(hash);
     const deployTxHashes = events.actions.filter((t) => t.ContractDeploy != null).map((t) => t.baseTransactions[0]);
-    if (!deployTxHashes.length) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
+    if (!deployTxHashes.length) throw new DepositNotFoundError(Network.Ton, hash, "Deposit tx not found");
 
     const OP_NATIVE = "0x205f209a";
     const OP_CREATE_DEPOSIT = "0xb7e30a3e";
     const isDepositCall = events.actions.some((t) => [OP_NATIVE, OP_CREATE_DEPOSIT].includes(t.SmartContractExec?.operation ?? ""));
-    if (!isDepositCall) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
+    if (!isDepositCall) throw new DepositNotFoundError(Network.Ton, hash, "Deposit tx not found");
 
     const deposit: PendingDeposit = {
       timestamp: Date.now(),
@@ -216,7 +216,7 @@ class TonOmniService {
     } else if (nativeDepositCall) {
       const tx = await this.tonApi.blockchain.getBlockchainTransaction(nativeDepositCall.baseTransactions[0]);
       const body = tx.inMsg?.rawBody;
-      if (body == null) throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
+      if (body == null) throw new DepositNotFoundError(Network.Ton, hash, "Deposit tx not found");
 
       const slice = body.beginParse();
       slice.loadUint(32); // Load OP code
@@ -227,12 +227,12 @@ class TonOmniService {
       deposit.amount = slice.loadCoins().toString();
       deposit.token = "native";
     } else {
-      throw new DepositNotFound(Network.Ton, hash, "Deposit tx not found");
+      throw new DepositNotFoundError(Network.Ton, hash, "Deposit tx not found");
     }
 
     const parseDeployTx = async (hash: string) => {
       const tx = await this.tonApi.blockchain.getBlockchainTransaction(hash);
-      if (tx.inMsg?.init?.boc == null) throw new DepositNotFound(Network.Ton, hash, "Deploy tx not found");
+      if (tx.inMsg?.init?.boc == null) throw new DepositNotFoundError(Network.Ton, hash, "Deploy tx not found");
 
       const slice = tx.inMsg.init.boc.beginParse();
       slice.loadRef();
@@ -249,7 +249,7 @@ class TonOmniService {
       if (nonce) return { ...deposit, nonce };
     }
 
-    throw new DepositNotFound(Network.Ton, hash, "Deposit not found");
+    throw new DepositNotFoundError(Network.Ton, hash, "Deposit not found");
   }
 }
 

@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import { encodeReceiver, wait } from "./utils";
 import { Network, TokenAsset } from "./types";
+import { ApiError } from "./errors";
 
 type RequestOptions = RequestInit & { endpoint?: string | string[]; retry?: number; retryDelay?: number };
 
@@ -18,7 +19,12 @@ class OmniApi {
         try {
           const headers = Object.assign({ "omni-version": `v2`, "Content-Type": "application/json", Referer: "https://near-intents.org", Origin: "https://near-intents.org" }, init.headers);
           const res = await fetch(`${endpoint}${req}`, { ...init, headers });
-          if (!res.ok) throw await res.text();
+
+          if (!res.ok) {
+            const text = await res.text().catch(() => "Unknown error");
+            throw new ApiError(res.status, init.method as "GET" | "POST", `${endpoint}${req}`, text);
+          }
+
           return res;
         } catch (e) {
           error = e as Error;
@@ -168,9 +174,9 @@ class OmniApi {
     }
   }
 
-  async depositSign(chain: number, nonce: string, sender_id: string, receiver_id: string, token_id: string, amount: string): Promise<{ signature: string }> {
+  async depositSign(chain: number, nonce: string, sender_id: string, receiver_id: string, token_id: string, amount: string, autopilot: boolean): Promise<{ signature: string }> {
     if (chain === 1111) chain = 1117;
-    const body = JSON.stringify({ nonce, chain_from: chain, sender_id, receiver_id, token_id, amount, autopilot: true });
+    const body = JSON.stringify({ nonce, chain_from: chain, sender_id, receiver_id, token_id, amount, autopilot });
     const res = await this.requestRpc("/deposit/sign", { method: "POST", body, retry: 3, retryDelay: 10_000 });
     return await res.json();
   }
@@ -190,7 +196,11 @@ class OmniApi {
       const res = await this.requestApi("/api/v1/transactions/process_bridge_deposit", { retry: 3, retryDelay: 10_000, method: "POST", body });
       return await res.json();
     } catch {
-      return this.depositSign(args.chain_id, args.nonce, args.sender_id, args.receiver_id, args.token_id, args.amount);
+      try {
+        return await this.depositSign(args.chain_id, args.nonce, args.sender_id, args.receiver_id, args.token_id, args.amount, true);
+      } catch {
+        return await this.depositSign(args.chain_id, args.nonce, args.sender_id, args.receiver_id, args.token_id, args.amount, false);
+      }
     }
   }
 }

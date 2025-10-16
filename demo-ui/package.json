@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@creit.tech/stellar-wallets-kit": "1.7.6",
-    "@hot-labs/omni-sdk": "2.20.7",
+    "@hot-labs/omni-sdk": "2.20.15",
     "@near-wallet-selector/core": "^8.10.2",
     "@near-wallet-selector/hot-wallet": "^8.10.2",
     "@near-wallet-selector/ledger": "^8.10.2",
