@@ -1,3 +1,7 @@
+# 2.20.17
+
+- Remove fallback for withdraw gas price on stellar
+
 # 2.20.16
 
 - add ApiError with details of request
