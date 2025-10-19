@@ -88,6 +88,7 @@ const DepositComponent = ({ stellar, evm, near, ton }: { stellar: any; evm: any;
       // EVM
       else {
         if (evm == null) throw "Connect EVM to deposit";
+        console.log("Depositing to EVM", network, token);
         const tx = await bridge.evm.deposit({
           sender: evm.address!,
           intentAccount: near.intentAccount!,

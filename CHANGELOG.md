@@ -1,3 +1,7 @@
+# 2.20.18
+
+- add fallback for incorrect api.executeDeposit responces
+
 # 2.20.17
 
 - Remove fallback for withdraw gas price on stellar

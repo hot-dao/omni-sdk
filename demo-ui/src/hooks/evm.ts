@@ -1,5 +1,5 @@
 import { type Config, http, createConfig, useConnectorClient, useDisconnect, useSwitchChain, useAccount } from "wagmi";
-import { base, mainnet, polygon, arbitrum, optimism, avalanche, aurora, linea, kava, bsc } from "wagmi/chains";
+import { base, mainnet, polygon, arbitrum, optimism, avalanche, aurora, linea, kava, bsc, xLayer } from "wagmi/chains";
 import { BrowserProvider, JsonRpcSigner, toNumber, TransactionRequest } from "ethers";
 import { defineChain, type Account, type Chain, type Client, type Transport } from "viem";
 import { injected, metaMask, safe } from "wagmi/connectors";
@@ -20,6 +20,7 @@ export const config = createConfig({
     aurora,
     linea,
     kava,
+    xLayer,
     defineChain({
       id: 10143,
       name: "Monad",
@@ -42,6 +43,7 @@ export const config = createConfig({
     [linea.id]: http(),
     [kava.id]: http(),
     [bsc.id]: http(),
+    [xLayer.id]: http(),
   },
 });
 

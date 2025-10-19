@@ -194,7 +194,10 @@ class OmniApi {
       if (args.chain_id === 1111) args.chain_id = 1117;
       const body = JSON.stringify(args);
       const res = await this.requestApi("/api/v1/transactions/process_bridge_deposit", { retry: 3, retryDelay: 10_000, method: "POST", body });
-      return await res.json();
+      const result = await res.json();
+
+      if (!result.signature && !result.hash) throw new Error("Failed to execute deposit");
+      return result;
     } catch {
       try {
         return await this.depositSign(args.chain_id, args.nonce, args.sender_id, args.receiver_id, args.token_id, args.amount, true);

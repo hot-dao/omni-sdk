@@ -7,7 +7,8 @@ import { useBridge } from "./bridge";
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const connector = new TonConnect({
-  walletsListSource: "/wallets-v2.json",
+  walletsListSource: "/omni-sdk/wallets-v2.json",
+  manifestUrl: "/omni-sdk/tonconnect-manifest.json",
 });
 
 const useTon = () => {

@@ -28,11 +28,9 @@ export const useAvailableTokens = (chain: number) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log("useAvailableTokens", chain);
     setLoading(true);
     getBridgableTokens()
       .then((tokens) => {
-        console.log("useAvailableTokens", tokens, chain);
         setTokens(Array.from(new Set(["native", ...tokens.filter((t) => t.chain === chain).map((t) => t.address)])));
       })
       .catch((e) => {

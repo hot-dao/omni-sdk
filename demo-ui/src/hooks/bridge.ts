@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { mainnet, base, arbitrum, optimism, polygon, bsc, avalanche, kava } from "viem/chains";
+import { mainnet, base, arbitrum, optimism, polygon, bsc, avalanche, kava, xLayer } from "viem/chains";
 import { HotBridge } from "@hot-labs/omni-sdk";
 import { useNearWallet } from "./near";
 
@@ -19,6 +19,7 @@ export const bridge = new HotBridge({
     2222: kava.rpcUrls.default.http as any,
     10143: ["https://testnet-rpc.monad.xyz"],
     1313161554: ["https://mainnet.aurora.dev", "https://1rpc.io/aurora", "https://aurora.drpc.org"],
+    196: xLayer.rpcUrls.default.http as any,
   },
 
   executeNearTransaction: async () => {
