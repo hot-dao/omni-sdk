@@ -8,7 +8,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const connector = new TonConnect({
   walletsListSource: "/omni-sdk/wallets-v2.json",
-  manifestUrl: "/omni-sdk/tonconnect-manifest.json",
+  manifestUrl: window.location.origin + "/omni-sdk/tonconnect-manifest.json",
 });
 
 const useTon = () => {
