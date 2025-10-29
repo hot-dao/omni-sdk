@@ -109,25 +109,21 @@ const execute = async (pending: WithdrawArgsWithPending): Promise<string | null>
 
     // Trying to withdraw TON
     if (pending.chain === Network.Ton || pending.chain === Network.OmniTon) {
-      return await bridge.ton.withdraw({
-        sendTransaction: async (tx) => "hash",
-        refundAddress: "address",
-        ...pending,
-      });
+      return await bridge.ton.withdraw({ sendTransaction, refundAddress: "address", ...pending });
     }
 
     // Trying to withdraw Stellar
     if (pending.chain === Network.Stellar) {
-      return await bridge.stellar.withdraw({ sender: "address", sendTransaction: async (tx) => "hash", ...pending });
+      return await bridge.stellar.withdraw({ sender: "address", sendTransaction, ...pending });
     }
 
     // Trying to withdraw Solana
     if (pending.chain === Network.Solana) {
       const solana = await bridge.solana();
-      return await solana.withdraw({ sender: "address", sendTransaction: async (tx) => "hash", ...pending });
+      return await solana.withdraw({ sender: "address", sendTransaction, ...pending });
     }
 
-    return await bridge.evm.withdraw({ sendTransaction: async (tx) => "hash", ...pending });
+    return await bridge.evm.withdraw({ sendTransaction, ...pending });
   } catch (error) {
     console.error(error);
     return null;
