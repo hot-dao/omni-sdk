@@ -101,16 +101,6 @@ for (const pending of uncompleted) {
 
 ## Processing pending withdrawals on the fly
 
-`parsePendingsWithdrawals` returns all pending withdrawals found using the NEAR indexer and does the following:
-
-Sorts from smallest nonce to largest nonce
-Works in parallel for each chain, but sequentially for each pending in chain
-
-Sequentially calls `needToExecute` for every pending in chain if nonce is not completed yet. needToExecute is async callback, every next call wait when this promises has been resolved
-
-Important! Each call to parsePendingsWithdrawals will return pending outputs that you've likely already started processing. You should also keep track of the tasks you've already started processing within your script.
-It's best to check task uniqueness using `near_trx`
-
 ```ts
 const execute = async (pending: WithdrawArgsWithPending): Promise<string | null> => {
   try {
