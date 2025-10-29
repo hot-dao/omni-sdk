@@ -114,6 +114,7 @@ class EvmOmniService {
 
     const hash = await args.sendTransaction({ ...tx, chainId: args.chain });
     this.omni.logger?.log(`Withdraw tx: ${hash}`);
+    return hash;
   }
 
   async deposit(args: {

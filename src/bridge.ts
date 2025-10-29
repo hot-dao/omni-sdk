@@ -31,7 +31,7 @@ import {
   FailedToExecuteDepositError,
   UnsupportedTokenFormatError,
 } from "./errors";
-import { BridgeOptions, Network, PendingDepositWithIntent, PendingWidthdrawData, PendingWithdraw, WithdrawArgs, WithdrawArgsWithPending } from "./types";
+import { BridgeOptions, Network, PendingDepositWithIntent, PendingWidthdrawData, WithdrawArgsWithPending } from "./types";
 import OmniApi from "./api";
 
 import { INTENTS_CONTRACT, OMNI_HOT_V2 } from "./env";
@@ -101,7 +101,7 @@ class HotBridge {
       return;
     }
 
-    const isCompleted = this._cacheCompleted[pending.near_trx];
+    const isCompleted = this._cacheCompleted[pending.nonce];
     if (isCompleted) {
       await data.completedWithoutHash?.(pending);
       return;
@@ -110,7 +110,7 @@ class HotBridge {
     if (pending.chain === Network.Solana) {
       const solana = await this.solana();
       const isUsed = await solana.isWithdrawUsed(pending.nonce, pending.receiver);
-      this._cacheCompleted[pending.near_trx] = isUsed;
+      this._cacheCompleted[pending.nonce] = isUsed;
       if (isUsed) await data.completedWithoutHash?.(pending);
       else await data.needToExecute?.(pending);
       return;
@@ -118,7 +118,7 @@ class HotBridge {
 
     if (pending.chain === Network.Stellar) {
       const isUsed = await this.stellar.isWithdrawUsed(pending.nonce);
-      this._cacheCompleted[pending.near_trx] = isUsed;
+      this._cacheCompleted[pending.nonce] = isUsed;
       if (isUsed) await data.completedWithoutHash?.(pending);
       else await data.needToExecute?.(pending);
       return;
@@ -126,25 +126,25 @@ class HotBridge {
 
     if (isTon(pending.chain)) {
       const isUsed = await this.ton.isWithdrawUsed(pending.nonce, pending.receiver);
-      this._cacheCompleted[pending.near_trx] = isUsed;
+      this._cacheCompleted[pending.nonce] = isUsed;
       if (isUsed) await data.completedWithoutHash?.(pending);
       else await data.needToExecute?.(pending);
       return;
     }
 
     const isUsed = await this.evm.isWithdrawUsed(pending.chain, pending.nonce);
-    this._cacheCompleted[pending.near_trx] = isUsed;
+    this._cacheCompleted[pending.nonce] = isUsed;
     if (isUsed) await data.completedWithoutHash?.(pending);
     else await data.needToExecute?.(pending);
   }
 
   parsePendingWithdrawal(pending: PendingWidthdrawData): WithdrawArgsWithPending {
     const args: WithdrawArgsWithPending = {
-      withdraw_hash: pending.withdraw_hash || undefined,
-      near_trx: pending.near_trx,
-      timestamp: pending.timestamp,
-      amount: BigInt(pending.withdraw_data.amount),
       receiver: decodeReceiver(pending.chain_id, pending.withdraw_data.receiver_id),
+      withdraw_hash: pending.withdraw_hash || undefined,
+      amount: BigInt(pending.withdraw_data.amount),
+      timestamp: pending.timestamp,
+      near_trx: pending.near_trx,
       chain: pending.chain_id,
       nonce: pending.nonce,
       token: "",
@@ -153,48 +153,49 @@ class HotBridge {
     // TODO: Fix it on backend
     const { contract_id, token_id } = pending.withdraw_data;
     const id = contract_id != null ? (contract_id.includes("_") ? contract_id : pending.chain_id + "_" + contract_id) : token_id?.includes("_") ? token_id : pending.chain_id + "_" + token_id;
-    args.token = fromOmni(id);
+    args.token = fromOmni(id).split(":")[1];
     return args;
   }
 
   /** Iterates over the withdrawals, in parallel for chains and sequentially and chronologically for each chain */
-  async parsePendingsWithdrawals(args: {
-    signal?: AbortSignal;
-
-    /** Called when failed to parse pending withdrawal */
-    parseFailed?: (error: Error, pending: PendingWidthdrawData) => Promise<any>;
-
-    /** Called when pending withdrawal does not have withdraw data, only hash and near TX */
-    unknown?: (pending: PendingWidthdrawData) => any;
-
-    /** Called when pending withdrawal is completed and has withdraw hash */
-    completedWithHash?: (pending: WithdrawArgsWithPending) => Promise<any>;
-
-    /** Called when pending withdrawal is completed and does not have withdraw hash */
-    completedWithoutHash?: (pending: WithdrawArgsWithPending) => Promise<any>;
-
-    /** Called when pending withdrawal is not executed yet */
-    needToExecute?: (pending: WithdrawArgsWithPending) => Promise<any>;
-  }) {
+  async iterateWithdrawals(args: { logger?: Logger; signal?: AbortSignal; execute: (pending: WithdrawArgsWithPending) => Promise<string | null> }) {
+    const logger = args.logger || new Logger();
     const pendings = await this.api.getPendingsWithdrawals();
-    const sortedPendings = pendings.sort((a, b) => +a.nonce - +b.nonce);
-
-    const grouped: Record<number, WithdrawArgsWithPending[]> = {};
-    sortedPendings.forEach((pending) => {
-      try {
-        if (pending.withdraw_data == null) return args.unknown?.(pending);
-        if (grouped[pending.chain_id] == null) grouped[pending.chain_id] = [];
-        grouped[pending.chain_id].push(this.parsePendingWithdrawal(pending));
-      } catch (e: any) {
-        args.parseFailed?.(e, pending);
-      }
+    const receivers: Record<number, Set<string>> = {};
+    pendings.forEach((pending) => {
+      if (pending.withdraw_data == null) return;
+      if (pending.sender_id !== "bridge-refuel.hot.tg") return;
+      if (receivers[pending.chain_id] == null) receivers[pending.chain_id] = new Set<string>();
+      receivers[pending.chain_id].add(decodeReceiver(pending.chain_id, pending.withdraw_data.receiver_id));
     });
 
-    // Run tasks for each chain parallelly
-    const tasks = Object.values(grouped).map(async (pendings) => {
-      for (const pending of pendings) {
-        if (args.signal?.aborted) break;
-        await this.checkPendingWithdrawalWithCache(pending, args).catch(() => {});
+    const tasks = Object.entries(receivers).map(async ([chain, receivers]) => {
+      for (const receiver of receivers) {
+        try {
+          if (args.signal?.aborted) break;
+          logger.log(`Getting pending withdrawals for chain ${chain} and receiver ${receiver}`);
+          const pendings = await this.getPendingWithdrawalsWithStatus(Number(chain), receiver);
+          const completed = pendings.filter((t) => t.completed);
+
+          logger.log(`Pending withdrawals: ${pendings.length}, completed: ${completed.length}`);
+          if (completed.length) {
+            if (args.signal?.aborted) break;
+            logger.log(`Clearing ${completed.length} completed withdrawals for chain ${chain} and receiver ${receiver}`, completed);
+            await this.clearPendingWithdrawals(completed);
+            if (args.signal?.aborted) break;
+          }
+
+          const uncompleted = pendings.filter((t) => !t.completed);
+          for (const pending of uncompleted) {
+            if (args.signal?.aborted) break;
+            logger.log(`Executing withdrawal for chain ${chain} and receiver ${receiver}`, pending);
+            const hash = await args.execute(pending);
+            if (hash == null) throw "Execute failed because of no hash";
+
+            logger.log(`Clearing withdrawal for chain ${chain} and receiver ${receiver}`, pending);
+            await this.clearPendingWithdrawals([pending]);
+          }
+        } catch {}
       }
     });
 
@@ -278,7 +279,7 @@ class HotBridge {
     return balances[intentId] || 0n;
   }
 
-  async getPendingWithdrawals(chain: number, receiver: string): Promise<PendingWithdraw[]> {
+  async getPendingWithdrawals(chain: number, receiver: string): Promise<WithdrawArgsWithPending[]> {
     if (chain === 1111) chain = 1117; // TON_ID to OMNI_TON
     const withdrawals = await this.near.viewFunction({
       args: { receiver_id: encodeReceiver(chain, receiver), chain_id: chain },
@@ -299,10 +300,10 @@ class HotBridge {
     });
   }
 
-  async getPendingWithdrawalsWithStatus(chain: number, receiver: string): Promise<(PendingWithdraw & { completed: boolean })[]> {
+  async getPendingWithdrawalsWithStatus(chain: number, receiver: string): Promise<(WithdrawArgsWithPending & { completed: boolean })[]> {
     if (chain === 1111) chain = 1117;
     const pendings = await this.getPendingWithdrawals(chain, receiver);
-    const tasks = pendings.map<Promise<PendingWithdraw & { completed: boolean }>>(async (pending) => {
+    const tasks = pendings.map<Promise<WithdrawArgsWithPending & { completed: boolean }>>(async (pending) => {
       const completed = await this.isWithdrawUsed(chain, pending.nonce, receiver).catch(() => false);
       return { ...pending, completed };
     });
@@ -310,10 +311,9 @@ class HotBridge {
     return await Promise.all(tasks);
   }
 
-  async clearPendingWithdrawals(withdrawals: PendingWithdraw[]) {
+  async clearPendingWithdrawals(withdrawals: WithdrawArgsWithPending[]) {
     const tasks = withdrawals.map<Promise<Action | null>>(async (withdraw) => {
-      const receiver = encodeReceiver(withdraw.chain, withdraw.receiver);
-      const { signature, hash, sender_id } = await this.api.executeClearWithdraw(withdraw.chain, withdraw.nonce, receiver);
+      const { signature, hash, sender_id } = await this.api.executeClearWithdraw(withdraw.chain, withdraw.nonce, withdraw.receiver);
       if (hash && sender_id) return null;
 
       return functionCall({
@@ -346,7 +346,7 @@ class HotBridge {
     return await this.evm.isWithdrawUsed(chain, nonce);
   }
 
-  async getPendingWithdrawal(nonce: string): Promise<PendingWithdraw> {
+  async getPendingWithdrawal(nonce: string): Promise<WithdrawArgsWithPending> {
     this.logger?.log(`Getting withdrawal by nonce ${nonce}`);
     const transfer = await this.near.viewFunction({
       contractId: OMNI_HOT_V2,

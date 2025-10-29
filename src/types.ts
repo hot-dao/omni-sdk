@@ -116,15 +116,6 @@ export interface ContractTransferType {
   amount: string;
 }
 
-export interface PendingWithdraw {
-  timestamp: number;
-  receiver: string;
-  chain: number;
-  amount: bigint;
-  nonce: string;
-  token: string;
-}
-
 export interface WithdrawArgs {
   chain: number;
   amount: bigint;
@@ -135,7 +126,7 @@ export interface WithdrawArgs {
 
 export interface WithdrawArgsWithPending extends WithdrawArgs {
   withdraw_hash?: string;
-  near_trx: string;
+  near_trx?: string;
   timestamp: number;
 }
 
@@ -150,7 +141,7 @@ export interface PendingDeposit {
   tx: string;
 }
 
-export interface PendingWithdrawWithStatus extends PendingWithdraw {
+export interface PendingWithdrawWithStatus extends WithdrawArgsWithPending {
   completed: boolean;
 }
 

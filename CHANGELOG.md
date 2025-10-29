@@ -1,3 +1,7 @@
+# 2.22.0
+
+- add `iterateWithdrawals`
+
 # 2.21.0
 
 - Remove POA (integrate 1click soon)

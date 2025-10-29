@@ -84,7 +84,7 @@ class TonOmniService {
   }
 
   async withdraw(args: WithdrawArgs & { refundAddress: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
-    const { metaWallet } = this.getMetaWallet();
+    const { metaWallet, JettonMinter } = this.getMetaWallet();
     const executor = this.executor(args.sendTransaction);
     const signature = await this.omni.api.withdrawSign(args.nonce);
 
@@ -97,24 +97,23 @@ class TonOmniService {
         value: toNano("0.15"),
         amount: args.amount,
       });
+
+      return executor.hash;
     }
 
-    // withdraw token
-    else {
-      const { metaWallet, JettonMinter } = this.getMetaWallet();
-      const minter = this.client.open(JettonMinter.createFromAddress(Address.parse(args.token)));
-      const tokenAddress = await minter.getWalletAddressOf(metaWallet.address);
+    const minter = this.client.open(JettonMinter.createFromAddress(Address.parse(args.token)));
+    const tokenAddress = await minter.getWalletAddressOf(metaWallet.address);
+    await metaWallet.sendUserTokenWithdraw(executor, {
+      userWallet: Address.parse(args.receiver),
+      signature: Buffer.from(baseDecode(signature)),
+      excessAcc: Address.parse(args.refundAddress),
+      token: tokenAddress,
+      nonce: BigInt(args.nonce),
+      amount: args.amount,
+      value: toNano("0.15"),
+    });
 
-      await metaWallet.sendUserTokenWithdraw(executor, {
-        userWallet: Address.parse(args.receiver),
-        signature: Buffer.from(baseDecode(signature)),
-        excessAcc: Address.parse(args.refundAddress),
-        token: tokenAddress,
-        nonce: BigInt(args.nonce),
-        amount: args.amount,
-        value: toNano("0.15"),
-      });
-    }
+    return executor.hash;
   }
 
   async deposit(args: { refundAddress?: string; token: string; amount: bigint; intentAccount: string; sender: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {

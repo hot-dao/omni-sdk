@@ -162,9 +162,9 @@ class OmniApi {
     const proof = crypto.createHash("sha256").update(data).digest();
     const res = await this.requestRpc("/clear/sign", {
       body: JSON.stringify({ nonce, ownership_proof: baseEncode(proof) }),
-      retryDelay: 3000,
+      retryDelay: 1000,
       method: "POST",
-      retry: 3,
+      retry: 1,
     });
 
     return await res.json();
@@ -173,7 +173,7 @@ class OmniApi {
   async executeClearWithdraw(chain: number, nonce: string, receiverId: string): Promise<{ signature: string; hash?: string; sender_id?: string }> {
     try {
       const body = JSON.stringify({ nonce });
-      const res = await this.requestApi("/api/v1/transactions/clear_completed_withdrawal", { method: "POST", retryDelay: 3000, retry: 3, body });
+      const res = await this.requestApi("/api/v1/transactions/clear_completed_withdrawal", { method: "POST", body });
       return await res.json();
     } catch {
       return await this.clearWithdrawSign(chain, nonce, receiverId);
