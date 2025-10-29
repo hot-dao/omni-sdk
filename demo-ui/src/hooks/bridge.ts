@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { mainnet, base, arbitrum, optimism, polygon, bsc, avalanche, kava, xLayer } from "viem/chains";
-import { HotBridge } from "@hot-labs/omni-sdk";
+import { HotBridge } from "../../../src";
 import { useNearWallet } from "./near";
 
 export const bridge = new HotBridge({

@@ -14,6 +14,7 @@ import {
   omniEphemeralReceiver,
   isTon,
   legacyUnsafeOmniEphemeralReceiver,
+  fromOmni,
 } from "./utils";
 import {
   GaslessNotAvailableError,
@@ -30,28 +31,21 @@ import {
   FailedToExecuteDepositError,
   UnsupportedTokenFormatError,
 } from "./errors";
-import { BridgeOptions, Network, PendingDepositWithIntent, PendingWithdraw } from "./types";
+import { BridgeOptions, Network, PendingDepositWithIntent, PendingWidthdrawData, PendingWithdraw, WithdrawArgs, WithdrawArgsWithPending } from "./types";
 import OmniApi from "./api";
 
 import { INTENTS_CONTRACT, OMNI_HOT_V2 } from "./env";
 import { NEAR_PER_GAS, TGAS, ReviewFee } from "./fee";
-import { BasePoaOmniService } from "./bridge-btc";
+import type { SolanaOmniService } from "./bridge-solana";
 import StellarService from "./bridge-stellar";
 import EvmOmniService from "./bridge-evm";
 import TonOmniService from "./bridge-ton";
 import NearBridge from "./bridge-near";
-import PoaBridge from "./poabridge";
-
-import type { SolanaOmniService } from "./bridge-solana";
-import type { TronOmniService } from "./bridge-tron";
 
 class HotBridge {
   logger?: Logger;
   executeNearTransaction?: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
 
-  poa: PoaBridge;
-  bitcoin: BasePoaOmniService;
-  zcash: BasePoaOmniService;
   stellar: StellarService;
   ton: TonOmniService;
   evm: EvmOmniService;
@@ -64,7 +58,6 @@ class HotBridge {
 
     this.api = new OmniApi(options.api, options.mpcApi);
     this.near = new NearBridge(this, options.nearRpc);
-    this.poa = new PoaBridge(this);
 
     this.evm = new EvmOmniService(this, {
       enableApproveMax: options.enableApproveMax,
@@ -83,30 +76,6 @@ class HotBridge {
       contract: options.tonContract,
       rpc: options.tonRpc,
     });
-
-    this.bitcoin = new BasePoaOmniService(this, {
-      chain: Network.Btc,
-      getTransferFee: (receiver, amount) => {
-        if (!options.btc) throw "btc.getTransferFee not specified";
-        return options.btc?.getTransferFee(receiver, amount);
-      },
-      transfer: (receiver, amount, fee) => {
-        if (!options.btc) throw "btc.transfer not specified";
-        return options.btc?.transfer(receiver, amount, fee);
-      },
-    });
-
-    this.zcash = new BasePoaOmniService(this, {
-      chain: Network.Zcash,
-      getTransferFee: (receiver, amount) => {
-        if (!options.zcash) throw "zcash.getTransferFee not specified";
-        return options.zcash?.getTransferFee(receiver, amount);
-      },
-      transfer: (receiver, amount, fee) => {
-        if (!options.zcash) throw "zcash.transfer not specified";
-        return options.zcash?.transfer(receiver, amount, fee);
-      },
-    });
   }
 
   _solana: SolanaOmniService | null = null;
@@ -117,12 +86,119 @@ class HotBridge {
     return this._solana;
   }
 
-  _tron: TronOmniService | null = null;
-  async tron() {
-    if (this._tron) return this._tron;
-    const pkg = await import("./bridge-tron");
-    this._tron = new pkg.TronOmniService(this, { client: this.options.tronClient });
-    return this._tron;
+  private _cacheCompleted: Record<string, boolean> = {};
+  /** Check pending withdrawal and cache completed withdrawals  */
+  async checkPendingWithdrawalWithCache(
+    pending: WithdrawArgsWithPending,
+    data: {
+      completedWithHash?: (pending: WithdrawArgsWithPending) => Promise<any>;
+      completedWithoutHash?: (pending: WithdrawArgsWithPending) => Promise<any>;
+      needToExecute?: (pending: WithdrawArgsWithPending) => Promise<any>;
+    }
+  ) {
+    if (pending.withdraw_hash) {
+      await data.completedWithHash?.(pending);
+      return;
+    }
+
+    const isCompleted = this._cacheCompleted[pending.near_trx];
+    if (isCompleted) {
+      await data.completedWithoutHash?.(pending);
+      return;
+    }
+
+    if (pending.chain === Network.Solana) {
+      const solana = await this.solana();
+      const isUsed = await solana.isWithdrawUsed(pending.nonce, pending.receiver);
+      this._cacheCompleted[pending.near_trx] = isUsed;
+      if (isUsed) await data.completedWithoutHash?.(pending);
+      else await data.needToExecute?.(pending);
+      return;
+    }
+
+    if (pending.chain === Network.Stellar) {
+      const isUsed = await this.stellar.isWithdrawUsed(pending.nonce);
+      this._cacheCompleted[pending.near_trx] = isUsed;
+      if (isUsed) await data.completedWithoutHash?.(pending);
+      else await data.needToExecute?.(pending);
+      return;
+    }
+
+    if (isTon(pending.chain)) {
+      const isUsed = await this.ton.isWithdrawUsed(pending.nonce, pending.receiver);
+      this._cacheCompleted[pending.near_trx] = isUsed;
+      if (isUsed) await data.completedWithoutHash?.(pending);
+      else await data.needToExecute?.(pending);
+      return;
+    }
+
+    const isUsed = await this.evm.isWithdrawUsed(pending.chain, pending.nonce);
+    this._cacheCompleted[pending.near_trx] = isUsed;
+    if (isUsed) await data.completedWithoutHash?.(pending);
+    else await data.needToExecute?.(pending);
+  }
+
+  parsePendingWithdrawal(pending: PendingWidthdrawData): WithdrawArgsWithPending {
+    const args: WithdrawArgsWithPending = {
+      withdraw_hash: pending.withdraw_hash || undefined,
+      near_trx: pending.near_trx,
+      timestamp: pending.timestamp,
+      amount: BigInt(pending.withdraw_data.amount),
+      receiver: decodeReceiver(pending.chain_id, pending.withdraw_data.receiver_id),
+      chain: pending.chain_id,
+      nonce: pending.nonce,
+      token: "",
+    };
+
+    // TODO: Fix it on backend
+    const { contract_id, token_id } = pending.withdraw_data;
+    const id = contract_id != null ? (contract_id.includes("_") ? contract_id : pending.chain_id + "_" + contract_id) : token_id?.includes("_") ? token_id : pending.chain_id + "_" + token_id;
+    args.token = fromOmni(id);
+    return args;
+  }
+
+  /** Iterates over the withdrawals, in parallel for chains and sequentially and chronologically for each chain */
+  async parsePendingsWithdrawals(args: {
+    signal?: AbortSignal;
+
+    /** Called when failed to parse pending withdrawal */
+    parseFailed?: (error: Error, pending: PendingWidthdrawData) => Promise<any>;
+
+    /** Called when pending withdrawal does not have withdraw data, only hash and near TX */
+    unknown?: (pending: PendingWidthdrawData) => any;
+
+    /** Called when pending withdrawal is completed and has withdraw hash */
+    completedWithHash?: (pending: WithdrawArgsWithPending) => Promise<any>;
+
+    /** Called when pending withdrawal is completed and does not have withdraw hash */
+    completedWithoutHash?: (pending: WithdrawArgsWithPending) => Promise<any>;
+
+    /** Called when pending withdrawal is not executed yet */
+    needToExecute?: (pending: WithdrawArgsWithPending) => Promise<any>;
+  }) {
+    const pendings = await this.api.getPendingsWithdrawals();
+    const sortedPendings = pendings.sort((a, b) => +a.nonce - +b.nonce);
+
+    const grouped: Record<number, WithdrawArgsWithPending[]> = {};
+    sortedPendings.forEach((pending) => {
+      try {
+        if (pending.withdraw_data == null) return args.unknown?.(pending);
+        if (grouped[pending.chain_id] == null) grouped[pending.chain_id] = [];
+        grouped[pending.chain_id].push(this.parsePendingWithdrawal(pending));
+      } catch (e: any) {
+        args.parseFailed?.(e, pending);
+      }
+    });
+
+    // Run tasks for each chain parallelly
+    const tasks = Object.values(grouped).map(async (pendings) => {
+      for (const pending of pendings) {
+        if (args.signal?.aborted) break;
+        await this.checkPendingWithdrawalWithCache(pending, args).catch(() => {});
+      }
+    });
+
+    await Promise.allSettled(tasks);
   }
 
   async executeIntents(signedDatas: any[], quoteHashes: string[]) {
@@ -495,9 +571,7 @@ class HotBridge {
   }
 
   async checkWithdrawLocker(chain: number, address: string, receiver: string) {
-    if (PoaBridge.BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]) return;
     if (chain === Network.Near) return;
-
     const pendings = await this.getPendingWithdrawalsWithStatus(chain, receiver);
     const completed = pendings.filter((t) => t.completed);
 
@@ -514,7 +588,6 @@ class HotBridge {
     intentAccount: string;
     gasless?: "refuel" | true;
   }): Promise<{ gasless: boolean; intents: any[]; quoteHashes: string[] }> {
-    if (this.poa.getPoaId(args.chain, args.token)) throw new GaslessNotAvailableError(args.chain);
     if (args.chain === Network.Near) throw new GaslessNotAvailableError(args.chain);
 
     // Get gas price
@@ -642,8 +715,6 @@ class HotBridge {
 
     this.logger?.log(`Push withdraw intent`);
     const tx = await this.executeIntents([signedIntents], result.quoteHashes);
-
-    if (this.poa.getPoaId(args.chain, args.token)) return await this.poa.waitWithdraw(tx.hash);
     if (args.chain === Network.Near) return; // NEAR chain has native withdrawals
 
     this.logger?.log(`Parsing withdrawal nonce`);
@@ -695,13 +766,6 @@ class HotBridge {
     if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_GAS, gasLimit: 300n * TGAS, chain });
     if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
 
-    // POA bridge
-    if (this.poa.getPoaId(chain, token)) {
-      const info = await this.poa.getTokenInfo(address, chain, token).catch(() => null);
-      const fee = BigInt(info?.withdrawal_fee || 0n);
-      return new ReviewFee({ gasless: true, token: `${chain}:${token}`, chain, baseFee: fee });
-    }
-
     if (gasless) {
       const fee = await this.getGaslessWithdrawFee({ chain, token, receiver: address, type: "bridge" }).catch(() => null);
       if (fee) return new ReviewFee({ gasless: true, chain, baseFee: BigInt(fee.gasPrice) });
@@ -717,10 +781,6 @@ class HotBridge {
     const { chain, token, amount, sender, intentAccount } = options;
     if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
     if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_GAS, gasLimit: 300n * TGAS, chain });
-
-    if (chain === Network.Btc) return (await this.bitcoin.getDepositFee(intentAccount, amount)) as ReviewFee;
-    if (chain === Network.Zcash) return (await this.zcash.getDepositFee(intentAccount, amount)) as ReviewFee;
-    if (chain === Network.Tron) return (await this.tron().then((s) => s.getDepositFee(token, sender, intentAccount))) as ReviewFee;
     if (chain === Network.Stellar) return (await this.stellar.getDepositFee(sender, token, amount, intentAccount)) as ReviewFee;
     if (chain === Network.Solana) return (await this.solana().then((s) => s.getDepositFee(token))) as ReviewFee;
     if (isTon(chain)) return (await this.ton.getDepositFee(token)) as ReviewFee;

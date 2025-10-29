@@ -99,20 +99,72 @@ for (const pending of uncompleted) {
 }
 ```
 
-## Finish pendings deposits (not implemented yet)
+## Processing pending withdrawals on the fly
+
+`parsePendingsWithdrawals` returns all pending withdrawals found using the NEAR indexer and does the following:
+
+Sorts from smallest nonce to largest nonce
+Works in parallel for each chain, but sequentially for each pending in chain
+
+Sequentially calls `needToExecute` for every pending in chain if nonce is not completed yet. needToExecute is async callback, every next call wait when this promises has been resolved
+
+Important! Each call to parsePendingsWithdrawals will return pending outputs that you've likely already started processing. You should also keep track of the tasks you've already started processing within your script.
+It's best to check task uniqueness using `near_trx`
 
 ```ts
-// Get all uncompleted withdrawals for this bnb address
-const pendings = await omni.getPendingDeposits({
-  intentAccount: "receiver_intent",
-  solana: "sender_address", // optional
-  ton: "sender_address", // optional
-  stellar: "sender_address", // optional
-  evm: "sender_address", // optional
-});
+const script = async (signal: AbortSignal) => {
+  await bridge.parsePendingsWithdrawals({
+    signal,
 
-// Finish all
-for (const pending of pendings) {
-  await omni.finishDeposit(pendings);
-}
+    parseFailed: async (error, pending) => {
+      // Failed to parse pending withdrawal
+      // Do something to parse it manually if you need or just wait for our parser solution
+    },
+
+    unknown: async (pending) => {
+      // If the pending withdrawal does not have withdraw data, only hash and near TX
+      // Do something to parse it manually if you need or just wait for our parser solution
+    },
+
+    completedWithHash: async (pending) => {
+      // Withdraw completed and we have withdraw hash
+      // Nothing to do here, just for analytics
+    },
+
+    completedWithoutHash: async (pending) => {
+      // Withdraw completed but we can't get withdraw hash on target chain
+      // Do something to get withdraw hash if you need or just wait for our parser solution
+    },
+
+    needToExecute: async (pending) => {
+      // If the pending withdrawal is less than 5 minutes old, do not try to withdraw again
+      if (Date.now() / 1000 - pending.timestamp < 5 * 60) return;
+
+      // Trying to withdraw TON
+      if (pending.chain === Network.Ton || pending.chain === Network.OmniTon) {
+        await bridge.ton.withdraw({ sendTransaction: async (tx) => "hash", refundAddress: "address", ...pending });
+      }
+
+      // Trying to withdraw Stellar
+      if (pending.chain === Network.Stellar) {
+        await bridge.stellar.withdraw({ sender: "address", sendTransaction: async (tx) => "hash", ...pending });
+      }
+
+      // Trying to withdraw Solana
+      if (pending.chain === Network.Solana) {
+        const solana = await bridge.solana();
+        await solana.withdraw({ sender: "address", sendTransaction: async (tx) => "hash", ...pending });
+      }
+
+      await bridge.evm.withdraw({ sendTransaction: async (tx) => "hash", ...pending });
+    },
+  });
+
+  // Run in loop!
+  if (signal.aborted) return;
+  await script(signal);
+};
+
+const abortController = new AbortController();
+script(abortController.signal);
 ```
