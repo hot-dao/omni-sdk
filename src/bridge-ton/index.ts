@@ -5,7 +5,7 @@ import { TonApiClient } from "@ton-api/client";
 
 import OmniService from "../bridge";
 import { omniEphemeralReceiver } from "../utils";
-import { Network, PendingDeposit } from "../types";
+import { Network, PendingDeposit, WithdrawArgs } from "../types";
 import { MIN_COMMISSION } from "./constants";
 import { DepositNotFoundError } from "../errors";
 
@@ -83,7 +83,7 @@ class TonOmniService {
     return BigInt(nonce) <= BigInt(lastNonce.toString());
   }
 
-  async withdraw(args: { refundAddress: string; amount: bigint; token: string; nonce: string; receiver: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
+  async withdraw(args: WithdrawArgs & { refundAddress: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
     const { metaWallet } = this.getMetaWallet();
     const executor = this.executor(args.sendTransaction);
     const signature = await this.omni.api.withdrawSign(args.nonce);

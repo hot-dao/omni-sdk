@@ -2,7 +2,7 @@ import RLP from "rlp";
 import crypto from "crypto";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import { encodeReceiver, wait } from "./utils";
-import { Network, TokenAsset } from "./types";
+import { Network, PendingWidthdrawData, TokenAsset } from "./types";
 import { ApiError } from "./errors";
 
 type RequestOptions = RequestInit & { endpoint?: string | string[]; retry?: number; retryDelay?: number };
@@ -47,6 +47,12 @@ class OmniApi {
   async requestApi(req: RequestInfo, init: RequestOptions): Promise<Response> {
     if (!init.endpoint) init.endpoint = this.api;
     return await this.request(req, init);
+  }
+
+  async getPendingsWithdrawals(): Promise<PendingWidthdrawData[]> {
+    const res = await fetch("https://api0.herewallet.app/api/v1/transactions/hot_bridge_withdrawals");
+    const { withdrawals } = await res.json();
+    return withdrawals;
   }
 
   async getTokenAssets(): Promise<TokenAsset[]> {

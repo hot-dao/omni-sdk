@@ -54,6 +54,22 @@ export enum Network {
   Sonic = 146,
 }
 
+export interface PendingWidthdrawData {
+  timestamp: number;
+  near_trx: string;
+  chain_id: number;
+  nonce: string;
+  sender_id: string;
+  withdraw_hash: string | null;
+  withdraw_data: {
+    amount: string;
+    receiver_id: string;
+    token_id: string;
+    contract_id: string;
+    chain_id: number;
+  };
+}
+
 export interface BridgeOptions {
   logger?: Logger;
   executeNearTransaction?: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
@@ -107,6 +123,20 @@ export interface PendingWithdraw {
   amount: bigint;
   nonce: string;
   token: string;
+}
+
+export interface WithdrawArgs {
+  chain: number;
+  amount: bigint;
+  token: string;
+  nonce: string;
+  receiver: string;
+}
+
+export interface WithdrawArgsWithPending extends WithdrawArgs {
+  withdraw_hash?: string;
+  near_trx: string;
+  timestamp: number;
 }
 
 export interface PendingDeposit {

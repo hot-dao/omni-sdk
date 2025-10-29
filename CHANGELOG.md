@@ -1,3 +1,8 @@
+# 2.21.0
+
+- Remove POA (integrate 1click soon)
+- Add `parsePendingsWithdrawals`
+
 # 2.20.18
 
 - add fallback for incorrect api.executeDeposit responces

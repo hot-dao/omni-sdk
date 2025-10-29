@@ -2,8 +2,8 @@ import { Contract, ethers, getBytes, hexlify, Interface, MaxUint256, Transaction
 import { baseDecode, baseEncode } from "@near-js/utils";
 
 import { ERC20_ABI, OMNI_ABI, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NATIVE } from "./constants";
-import { bigIntMin, encodeTokenAddress, omniEphemeralReceiver, toOmniIntent, wait } from "../utils";
-import { Network, PendingDeposit } from "../types";
+import { encodeTokenAddress, omniEphemeralReceiver, wait } from "../utils";
+import { Network, PendingDeposit, WithdrawArgs } from "../types";
 import { DepositNotFoundError } from "../errors";
 import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
@@ -41,7 +41,6 @@ class EvmOmniService {
 
   async getDepositFee(chain: number, address: string, amount: bigint, sender: string): Promise<ReviewFee> {
     const fee = await this.getGasPrice(chain);
-    if (this.omni.poa.getPoaId(chain, address)) return fee.changeGasLimit(address === "native" ? 21_000n : 100_000n);
     const gasLimit = await this.depositEstimateGas(chain, address, amount, sender);
     return fee.changeGasLimit(gasLimit);
   }
@@ -100,7 +99,7 @@ class EvmOmniService {
     return await contract.usedNonces(nonce);
   }
 
-  async withdraw(args: { chain: number; amount: bigint; token: string; nonce: string; receiver: string; sendTransaction: (tx: ethers.TransactionRequest) => Promise<string> }) {
+  async withdraw(args: WithdrawArgs & { sendTransaction: (tx: ethers.TransactionRequest) => Promise<string> }) {
     const signature = await this.omni.api.withdrawSign(args.nonce);
     this.omni.logger?.log(`Withdrawing ${args.amount} ${args.token} from ${args.chain}`);
     const contract = new Contract(this.contract, OMNI_ABI, this.getProvider(args.chain));
@@ -125,15 +124,6 @@ class EvmOmniService {
     intentAccount: string;
     sendTransaction: (tx: ethers.TransactionRequest) => Promise<string>;
   }): Promise<string | null> {
-    if (this.omni.poa.getPoaId(args.chain, args.token)) {
-      const intent = toOmniIntent(args.chain, args.token);
-      const receiver = await this.omni.poa.getDepositAddress(args.intentAccount, args.chain);
-      const balanceBefore = await this.omni.getIntentBalance(intent, args.intentAccount);
-      const { amount } = await this.transfer({ ...args, receiver });
-      await this.omni.waitUntilBalance(intent, balanceBefore + amount, args.intentAccount);
-      return null;
-    }
-
     this.omni.api.registerDeposit(args.intentAccount);
     this.omni.logger?.log(`Call deposit ${args.amount} ${args.token} to ${args.intentAccount}`);
     const receiver = omniEphemeralReceiver(args.intentAccount);
@@ -161,23 +151,6 @@ class EvmOmniService {
     const contract = new Contract(this.contract, [OMNI_DEPOSIT_FT], this.getProvider(args.chain));
     const depositTx = await contract.deposit.populateTransaction(hexlify(receiver), args.token, args.amount);
     return await args.sendTransaction({ ...depositTx, chainId: args.chain });
-  }
-
-  async transfer(args: { sender: string; chain: number; token: string; amount: bigint; receiver: string; sendTransaction: (tx: ethers.TransactionRequest) => Promise<string> }) {
-    const balance = await this.getTokenBalance(args.token, args.chain, args.sender);
-
-    const amount = bigIntMin(balance, args.amount);
-    if (amount === 0n) throw "Insufficient balance";
-
-    if (args.token === "native") {
-      const hash = await args.sendTransaction({ from: args.sender, value: amount, to: args.receiver, chainId: args.chain });
-      return { hash, amount };
-    }
-
-    const erc20 = new ethers.Contract(args.token, ERC20_ABI, this.getProvider(args.chain));
-    const tx = await erc20.transfer.populateTransaction(args.receiver, amount);
-    const hash = await args.sendTransaction(tx);
-    return { amount, hash };
   }
 
   async parseDeposit(chain: number, hash: string): Promise<PendingDeposit> {

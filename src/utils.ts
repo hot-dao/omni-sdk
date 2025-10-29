@@ -8,7 +8,6 @@ import crypto from "crypto";
 import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
 import TonOmniService from "./bridge-ton";
 import { Network } from "./types";
-import PoaBridge from "./poabridge";
 import { INTENT_PREFIX } from "./env";
 
 const serializeBigIntInObject = (obj: Record<string, any>) => {
@@ -35,9 +34,6 @@ export const isTon = (id: number): id is Network.OmniTon | Network.Ton => {
  */
 export const fromOmni = (id: string) => {
   id = id.split(":").pop() || id;
-
-  if (PoaBridge.BRIDGE_TOKENS[id.replace("nep141:", "")]) return PoaBridge.BRIDGE_TOKENS[id.replace("nep141:", "")];
-
   if (id === "nep141:wrap.near") return "1010:native";
   if (id.startsWith("nep141:")) return `1010:${id.replace("nep141:", "")}`;
   if (!id.includes("_")) return `1010:${id}`;
@@ -65,10 +61,6 @@ export const toOmni = (id: string | number, addr?: string) => {
 
   // From normal TON_ID to OMNI_TON
   if (+chain === 1111) chain = 1117;
-
-  // PoA bridge tokens
-  if (PoaBridge.BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]) return PoaBridge.BRIDGE_TOKENS_INVERTED[`${chain}:${address}`];
-
   if (+chain === Network.Hot) return address.replace(INTENT_PREFIX, "");
   if (+chain === Network.Near) return address;
   return `${chain}_${encodeTokenAddress(+chain, address)}`;
@@ -87,9 +79,6 @@ export const toOmniIntent = (id: string | number, addr?: string): string => {
 
   // From normal TON_ID to OMNI_TON
   if (+chain === 1111) chain = 1117;
-
-  // PoA bridge tokens
-  if (PoaBridge.BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]) return `nep141:${PoaBridge.BRIDGE_TOKENS_INVERTED[`${chain}:${address}`]}`;
 
   return `${INTENT_PREFIX}${chain}_${encodeTokenAddress(+chain, address)}`;
 };

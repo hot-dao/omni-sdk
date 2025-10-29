@@ -4,7 +4,7 @@ import { baseDecode, baseEncode } from "@near-js/utils";
 import BigNumber from "bignumber.js";
 
 import { omniEphemeralReceiver, parseAmount } from "../utils";
-import { Network, PendingDeposit } from "../types";
+import { Network, PendingDeposit, WithdrawArgs } from "../types";
 import { DepositNotFoundError } from "../errors";
 import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
@@ -108,7 +108,7 @@ class StellarService {
     return await args.sendTransaction(tx);
   }
 
-  async withdraw(args: { amount: bigint; token: string; nonce: string; receiver: string; sender: string; sendTransaction: (tx: Transaction) => Promise<string> }) {
+  async withdraw(args: WithdrawArgs & { sender: string; sendTransaction: (tx: Transaction) => Promise<string> }) {
     const to = new Contract(this.contract);
     const signature = await this.omni.api.withdrawSign(args.nonce);
     const sign = Buffer.from(baseDecode(signature));
