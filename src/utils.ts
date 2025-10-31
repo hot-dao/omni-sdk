@@ -177,8 +177,11 @@ export const decodeReceiver = (chain: Network, address: string) => {
 };
 
 export class Logger {
+  warn(...args: any[]) {
+    console.warn(...args);
+  }
   log(...args: any[]) {
-    console.log(args);
+    console.log(...args);
   }
 }
 

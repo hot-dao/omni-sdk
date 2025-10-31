@@ -99,7 +99,7 @@ class EvmOmniService {
     return await contract.usedNonces(nonce);
   }
 
-  async withdraw(args: WithdrawArgs & { sendTransaction: (tx: ethers.TransactionRequest) => Promise<string> }) {
+  async withdraw(args: WithdrawArgs & { sendTransaction: (tx: ethers.TransactionRequest) => Promise<string> }): Promise<string> {
     const signature = await this.omni.api.withdrawSign(args.nonce);
     this.omni.logger?.log(`Withdrawing ${args.amount} ${args.token} from ${args.chain}`);
     const contract = new Contract(this.contract, OMNI_ABI, this.getProvider(args.chain));

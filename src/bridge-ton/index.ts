@@ -83,7 +83,7 @@ class TonOmniService {
     return BigInt(nonce) <= BigInt(lastNonce.toString());
   }
 
-  async withdraw(args: WithdrawArgs & { refundAddress: string; sendTransaction: (tx: SenderArguments) => Promise<string> }) {
+  async withdraw(args: WithdrawArgs & { refundAddress: string; sendTransaction: (tx: SenderArguments) => Promise<string> }): Promise<string> {
     const { metaWallet, JettonMinter } = this.getMetaWallet();
     const executor = this.executor(args.sendTransaction);
     const signature = await this.omni.api.withdrawSign(args.nonce);

@@ -1,4 +1,4 @@
-import { Network, WithdrawArgsWithPending } from "../../src";
+import { Network, WithdrawArgsWithPending } from "@hot-labs/omni-sdk";
 import { bridge } from "./hooks/bridge";
 
 const execute = async (pending: WithdrawArgsWithPending): Promise<string | null> => {

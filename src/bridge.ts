@@ -158,7 +158,7 @@ class HotBridge {
   }
 
   /** Iterates over the withdrawals, in parallel for chains and sequentially and chronologically for each chain */
-  async iterateWithdrawals(args: { logger?: Logger; signal?: AbortSignal; execute: (pending: WithdrawArgsWithPending) => Promise<string | null> }) {
+  async iterateWithdrawals(args: { logger?: Logger; signal?: AbortSignal; submitHashesPwd?: string; execute: (pending: WithdrawArgsWithPending) => Promise<string | null> }) {
     const logger = args.logger || new Logger();
     const pendings = await this.api.getPendingsWithdrawals();
     const receivers: Record<number, Set<string>> = {};
@@ -192,10 +192,32 @@ class HotBridge {
             const hash = await args.execute(pending);
             if (hash == null) throw "Execute failed because of no hash";
 
+            if (args.submitHashesPwd) {
+              this.api
+                .requestApi("/api/v1/evm/bridge_withdrawal_hash", {
+                  endpoint: "https://dev.herewallet.app",
+                  method: "POST",
+                  body: JSON.stringify({
+                    nonce: pending.nonce,
+                    withdraw_hash: hash,
+                    pswd: args.submitHashesPwd,
+                    chain_id: chain,
+                  }),
+                })
+                .then(() => {
+                  logger.log(`Submitted withdrawal hash for nonce ${pending.nonce}: ${hash}`);
+                })
+                .catch((e) => {
+                  logger.warn(`Failed to submit withdrawal hash for nonce ${pending.nonce}: ${hash}`, e);
+                });
+            }
+
             logger.log(`Clearing withdrawal for chain ${chain} and receiver ${receiver}`, pending);
             await this.clearPendingWithdrawals([pending]);
           }
-        } catch {}
+        } catch (e) {
+          logger.warn(`Failed to execute withdrawal for chain ${chain} and receiver ${receiver}`, e);
+        }
       }
     });
 
