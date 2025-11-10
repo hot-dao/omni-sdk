@@ -5,7 +5,7 @@ import { ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountInstruction, g
 import { BN } from "@coral-xyz/anchor";
 
 import OmniService from "../bridge";
-import { parseAmount, wait } from "../utils";
+import { omniEphemeralReceiver, parseAmount, wait } from "../utils";
 import { Network, PendingDeposit, WithdrawArgs } from "../types";
 import { DepositNotFoundError } from "../errors";
 import { ReviewFee } from "../fee";
@@ -155,6 +155,77 @@ export class SolanaOmniService {
 
     const instruction = await builder.instruction();
     await sendTransaction([instruction]);
+  }
+
+  async deposit(args: { token: string; amount: bigint; sender: string; intentAccount: string; sendTransaction: (tx: sol.TransactionInstruction[]) => Promise<string> }): Promise<string | null> {
+    this.omni.api.registerDeposit(args.intentAccount);
+    const receiver = omniEphemeralReceiver(args.intentAccount);
+    const lastDeposit = await this.getLastDepositNonce(args.sender);
+    const env = this.env(args.sender);
+
+    const builder = env.program.methods.generateDepositNonce(env.userBump);
+    builder.accountsStrict({
+      user: env.userAccount.toBase58(),
+      state: env.stateAccount.toBase58(),
+      systemProgram: sol.SystemProgram.programId,
+      sender: args.sender,
+    });
+
+    await args.sendTransaction([await builder.instruction()]);
+
+    const waitNewNonce = async () => {
+      const newNonce = await this.getLastDepositNonce(args.sender).catch(() => lastDeposit);
+      if (newNonce === lastDeposit) return await waitNewNonce();
+      if (newNonce == null) return await waitNewNonce();
+      return newNonce;
+    };
+
+    const nonce = await waitNewNonce();
+    const amt = new anchor.BN(args.amount.toString());
+
+    if (args.token === "native") {
+      const [depositAddress, depositBump] = this.findDepositAddress(nonce, new sol.PublicKey(args.sender), receiver, sol.PublicKey.default, args.amount);
+      const depositBuilder = env.program.methods.nativeDeposit(receiver, amt, depositBump);
+      depositBuilder.accountsStrict({
+        user: env.userAccount.toBase58(),
+        state: env.stateAccount.toBase58(),
+        systemProgram: sol.SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        deposit: depositAddress,
+        sender: args.sender,
+      });
+
+      const instruction = await depositBuilder.instruction();
+      return await args.sendTransaction([instruction]);
+    }
+
+    const mint = new sol.PublicKey(args.token);
+    const [depositAddress, depositBump] = this.findDepositAddress(nonce, new sol.PublicKey(args.sender), receiver, mint, args.amount);
+    const instructions: sol.TransactionInstruction[] = [];
+
+    const contractATA = getAssociatedTokenAddressSync(mint, env.stateAccount, true);
+    const isContractATAExist = await getAccount(this.connection, contractATA, "confirmed", TOKEN_PROGRAM_ID).catch(() => null);
+
+    if (!isContractATAExist) {
+      const createATA = createAssociatedTokenAccountInstruction(new sol.PublicKey(args.sender), contractATA, env.stateAccount, mint, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID);
+      instructions.push(createATA);
+    }
+
+    const depositBuilder = env.program.methods.tokenDeposit(receiver, amt, depositBump);
+    depositBuilder.accountsStrict({
+      user: env.userAccount.toBase58(),
+      state: env.stateAccount.toBase58(),
+      systemProgram: sol.SystemProgram.programId,
+      smcTokenAccount: getAssociatedTokenAddressSync(mint, env.stateAccount, true),
+      senderTokenAccount: getAssociatedTokenAddressSync(mint, new sol.PublicKey(args.sender)),
+      tokenProgram: TOKEN_PROGRAM_ID,
+      deposit: depositAddress,
+      sender: args.sender,
+    });
+
+    const instruction = await depositBuilder.instruction();
+    instructions.push(instruction);
+    return await args.sendTransaction(instructions);
   }
 
   async withdraw(args: WithdrawArgs & { sender: string; sendTransaction: (tx: sol.TransactionInstruction[]) => Promise<string> }) {

@@ -1,3 +1,8 @@
+# 2.22.2
+
+- fix `iterateWithdrawals`
+- return Solana `deposit` method
+
 # 2.22.0
 
 - add `iterateWithdrawals`
