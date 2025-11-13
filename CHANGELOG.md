@@ -1,3 +1,7 @@
+# 2.22.3
+
+- Add TON EVAA token
+
 # 2.22.2
 
 - fix `iterateWithdrawals`

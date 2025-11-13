@@ -28,6 +28,7 @@ export const TON_MINTER_TO_JETTON_MAPPER = Object.fromEntries([
   ["EQB-vc00g9PeUWLptSAH4g1J5kYS7WTgtVEfhI6oKdQtRudE", "EQA8kYAV5keLJA4-_CM3vgSiClezX_joWPSi2HOZSMry2GuS"],
   ["EQDo8QC6mVi7Gq6uGWDF4XVp3cZ4wKZ-bqKBkmhVMPm-1ojm", "EQCLQKIsDA8VrfblMt_sTb_1uw088zaZLmpXEVgZIlUt8nac"],
   ["EQDWSm618mrf84PUjlu8rAMnlTa3RGhMzWb-UadvB5vLyqCv", "EQCE2vZmmZI2ijnF0XhJ1oIlbkr8jKWIfOGMfWHNKLrNzms9"],
+  ["EQBKMfjX_a_dsOLm-juxyVZytFP7_KKnzGv6J01kGc72gVBp", "EQAMoDW_66hWWNeKPvJ8WowAdBM_P3ATBDSmVeV6ydr7UXHr"], // EVAA
 ]);
 
 export const TON_JETTON_TO_MINTER_MAPPER: Record<string, string> = Object.fromEntries(Object.entries(TON_MINTER_TO_JETTON_MAPPER).map(([k, v]) => [v, k]));
