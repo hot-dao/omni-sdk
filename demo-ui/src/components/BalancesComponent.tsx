@@ -15,9 +15,11 @@ import {
   TokenImage,
 } from "../theme/styles";
 
-const BalancesComponent = ({ near }: { near: any }) => {
-  const { balances, isLoading, error } = useIntentBalances(near.intentAccount || undefined);
-  console.log("BalancesComponent", balances);
+import { useBridge } from "../hooks/bridge";
+
+const BalancesComponent = () => {
+  const { near } = useBridge();
+  const { balances, isLoading, error } = useIntentBalances(near?.omniAddress || undefined);
 
   if (isLoading) {
     return (

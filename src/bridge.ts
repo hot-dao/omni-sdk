@@ -15,6 +15,7 @@ import {
   isTon,
   legacyUnsafeOmniEphemeralReceiver,
   fromOmni,
+  isCosmos,
 } from "./utils";
 import {
   GaslessNotAvailableError,
@@ -34,9 +35,11 @@ import {
 import { BridgeOptions, Network, PendingDepositWithIntent, PendingWidthdrawData, WithdrawArgsWithPending } from "./types";
 import OmniApi from "./api";
 
-import { INTENTS_CONTRACT, OMNI_HOT_V2 } from "./env";
+import { INTENTS_CONTRACT, OMNI_HOT_V2, Settings } from "./env";
 import { NEAR_PER_GAS, TGAS, ReviewFee } from "./fee";
 import type { SolanaOmniService } from "./bridge-solana";
+import type { CosmosService } from "./bridge-cosmos";
+
 import StellarService from "./bridge-stellar";
 import EvmOmniService from "./bridge-evm";
 import TonOmniService from "./bridge-ton";
@@ -76,6 +79,8 @@ class HotBridge {
       contract: options.tonContract,
       rpc: options.tonRpc,
     });
+
+    Object.assign(Settings.cosmos, options.cosmos);
   }
 
   _solana: SolanaOmniService | null = null;
@@ -83,7 +88,15 @@ class HotBridge {
     if (this._solana) return this._solana;
     const pkg = await import("./bridge-solana");
     this._solana = new pkg.SolanaOmniService(this, { rpc: this.options.solanaRpc, programId: this.options.solanaProgramId });
-    return this._solana;
+    return this._solana!;
+  }
+
+  _cosmos: CosmosService | null = null;
+  async cosmos() {
+    if (this._cosmos) return this._cosmos;
+    const pkg = await import("./bridge-cosmos");
+    this._cosmos = new pkg.CosmosService(this);
+    return this._cosmos!;
   }
 
   private _cacheCompleted: Record<string, boolean> = {};
@@ -363,6 +376,7 @@ class HotBridge {
 
   async isWithdrawUsed(chain: number, nonce: string, receiver: string) {
     if (isTon(chain)) return await this.ton.isWithdrawUsed(nonce, receiver);
+    if (isCosmos(chain)) return await this.cosmos().then((s) => s.isWithdrawUsed(chain, nonce));
     if (chain === Network.Solana) return await this.solana().then((s) => s.isWithdrawUsed(nonce, receiver));
     if (chain === Network.Stellar) return await this.stellar.isWithdrawUsed(nonce);
     return await this.evm.isWithdrawUsed(chain, nonce);
@@ -401,6 +415,7 @@ class HotBridge {
   async waitPendingDeposit(chain: number, hash: string, intentAccount: string, abort?: AbortSignal): Promise<PendingDepositWithIntent> {
     const waitPending = async () => {
       if (isTon(chain)) return await this.ton.parseDeposit(hash);
+      if (isCosmos(chain)) return await this.cosmos().then((s) => s.parseDeposit(chain, hash));
       if (chain === Network.Solana) return await this.solana().then((s) => s.parseDeposit(hash));
       if (chain === Network.Stellar) return await this.stellar.parseDeposit(hash);
       return await this.evm.parseDeposit(chain, hash);
@@ -547,7 +562,7 @@ class HotBridge {
   }
 
   async buildGaslessWithdrawIntent(args: { feeToken: string; feeAmount: bigint; chain: Network; token: string; amount: bigint; receiver: string; intentAccount: string }) {
-    const nonEvm = args.chain === Network.Stellar || isTon(args.chain);
+    const nonEvm = args.chain === Network.Stellar || isTon(args.chain) || isCosmos(args.chain);
     const blockNumber = nonEvm ? 0 : await this.evm.getProvider(args.chain).getBlockNumber();
 
     const tokenAddress = toOmni(args.chain, args.token);
@@ -794,6 +809,7 @@ class HotBridge {
     }
 
     if (isTon(chain)) return (await this.ton.getWithdrawFee()) as ReviewFee;
+    if (isCosmos(chain)) return (await this.cosmos().then((s) => s.getWithdrawFee(chain))) as ReviewFee;
     if (chain === Network.Solana) return (await this.solana().then((s) => s.getWithdrawFee())) as ReviewFee;
     if (chain === Network.Stellar) return (await this.stellar.getWithdrawFee()) as ReviewFee;
     return (await this.evm.getWithdrawFee(chain)) as ReviewFee;
@@ -804,6 +820,7 @@ class HotBridge {
     if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
     if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_GAS, gasLimit: 300n * TGAS, chain });
     if (chain === Network.Stellar) return (await this.stellar.getDepositFee(sender, token, amount, intentAccount)) as ReviewFee;
+    if (isCosmos(chain)) return (await this.cosmos().then((s) => s.getDepositFee(chain, sender, token, amount, intentAccount))) as ReviewFee;
     if (chain === Network.Solana) return (await this.solana().then((s) => s.getDepositFee(token))) as ReviewFee;
     if (isTon(chain)) return (await this.ton.getDepositFee(token)) as ReviewFee;
     return (await this.evm.getDepositFee(chain, token, amount, sender)) as ReviewFee;

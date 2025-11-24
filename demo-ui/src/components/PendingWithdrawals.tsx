@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Network, PendingWithdraw, utils } from "@hot-labs/omni-sdk";
+import { Network, utils, WithdrawArgsWithPending } from "../../../src";
 
 import {
   Card,
@@ -22,10 +22,10 @@ import {
 
 import { useBridge } from "../hooks/bridge";
 
-const PendingWithdrawalsComponent = ({ near, evm, ton, stellar }: { near: any; evm: any; ton: any; stellar: any }) => {
-  const { bridge } = useBridge();
+const PendingWithdrawalsComponent = () => {
+  const { bridge, near, evm, ton, cosmos, stellar } = useBridge();
 
-  const [pendingWithdraw, setPendingWithdraw] = useState<PendingWithdraw[]>([]);
+  const [pendingWithdraw, setPendingWithdraw] = useState<WithdrawArgsWithPending[]>([]);
   const [selectedNetwork, setSelectedNetwork] = useState<Network>(Network.Base);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [processingWithdrawals, setProcessingWithdrawals] = useState<Record<string, boolean>>({});
@@ -38,7 +38,7 @@ const PendingWithdrawalsComponent = ({ near, evm, ton, stellar }: { near: any; e
     .map(([key, value]) => ({ label: key, value: Number(value) }));
 
   const fetchPendingWithdrawals = async () => {
-    if (!near.accountId) return setError("Wallet not connected. Please connect your wallet first.");
+    if (!near?.address) return setError("Wallet not connected. Please connect your wallet first.");
     if (!receiver.trim()) return setError("Please enter a receiver address.");
     setIsLoading(true);
     setError(null);
@@ -61,39 +61,59 @@ const PendingWithdrawalsComponent = ({ near, evm, ton, stellar }: { near: any; e
     }
   };
 
-  const finishWithdrawal = async (withdraw: PendingWithdraw) => {
-    if (!near.accountId) return setError("Wallet not connected. Please connect your wallet first.");
+  const finishWithdrawal = async (withdraw: WithdrawArgsWithPending) => {
+    if (!near?.address) return setError("Wallet not connected. Please connect your wallet first.");
     setProcessingWithdrawals((prev) => ({ ...prev, [withdraw.nonce]: true }));
     setError(null);
 
     try {
       await bridge.checkWithdrawNonce(withdraw.chain, withdraw.receiver, withdraw.nonce);
 
+      if (utils.isCosmos(withdraw.chain)) {
+        if (!cosmos?.address) throw new Error("Cosmos wallet not connected");
+        const sender = cosmos.address;
+        const sendTransaction = (t: any) => cosmos.sendTransaction(t);
+        await bridge.cosmos().then((s) => s.withdraw({ sendTransaction, sender, ...withdraw }));
+        await bridge.clearPendingWithdrawals([withdraw]);
+        return;
+      }
+
       // Get withdrawal data using buildWithdraw
       switch (withdraw.chain) {
         case Network.OmniTon: {
-          if (!ton.address) throw new Error("Ton wallet not connected");
-          const refundAddress = ton.address;
-          const sendTransaction = ton.sendTransaction;
+          if (!ton?.address) throw new Error("Ton wallet not connected");
+          const refundAddress = ton?.address;
 
-          await bridge.ton.withdraw({ sendTransaction, refundAddress, ...withdraw });
+          await bridge.ton.withdraw({
+            sendTransaction: (t: any) => ton.sendTransaction([t]),
+            refundAddress,
+            ...withdraw,
+          });
+
           await bridge.clearPendingWithdrawals([withdraw]);
           break;
         }
 
         case Network.Stellar: {
-          if (!stellar.address) throw new Error("Stellar wallet not connected");
+          if (!stellar?.address) throw new Error("Stellar wallet not connected");
           const sender = stellar.address;
-          const sendTransaction = stellar.sendTransaction;
-          await bridge.stellar.withdraw({ sendTransaction, sender, ...withdraw });
+          await bridge.stellar.withdraw({
+            sendTransaction: (t: any) => stellar.sendTransaction(t),
+            sender,
+            ...withdraw,
+          });
+
           await bridge.clearPendingWithdrawals([withdraw]);
           break;
         }
 
-        default:
-          await bridge.evm.withdraw({ sendTransaction: evm.sendTransaction as any, ...withdraw });
+        default: {
+          if (!evm?.address) throw new Error("EVM wallet not connected");
+          const sendTransaction = evm.sendTransaction as any;
+          await bridge.evm.withdraw({ sendTransaction, ...withdraw });
           await bridge.checkLocker(withdraw.chain, withdraw.receiver, withdraw.nonce);
           break;
+        }
       }
 
       setPendingWithdraw((prev) => prev.filter((item) => item.nonce !== withdraw.nonce));

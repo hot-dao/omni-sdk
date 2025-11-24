@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Network } from "@hot-labs/omni-sdk";
+import { Network, utils } from "../../../src";
 
 import { useAvailableTokens } from "../hooks/tokens";
 import { useBridge } from "../hooks/bridge";
@@ -21,8 +21,8 @@ const availableNetworks = Object.entries(Network)
   .filter(([key, value]) => value === 1010 || !isNaN(Number(value)))
   .map(([key, value]) => ({ label: key, value: Number(value) }));
 
-const WithdrawComponent = ({ near, evm, ton, stellar }: { near: any; evm: any; ton: any; stellar: any }) => {
-  const { bridge } = useBridge();
+const WithdrawComponent = () => {
+  const { bridge, near, evm, cosmos, ton, stellar } = useBridge();
 
   const [amount, setAmount] = useState<string>("");
   const [token, setToken] = useState<string>("");
@@ -35,12 +35,12 @@ const WithdrawComponent = ({ near, evm, ton, stellar }: { near: any; evm: any; t
   const { tokens } = useAvailableTokens(network);
 
   useEffect(() => {
-    if (network === Network.Near) return setReceiver(near.accountId || "");
-    setReceiver(evm.address || "");
+    if (network === Network.Near) return setReceiver(near?.address || "");
+    setReceiver(evm?.address! || "");
   }, [network]);
 
   const handleWithdraw = async () => {
-    if (!near.accountId) return;
+    if (!near?.address) return;
     if (!amount || !token || !receiver) {
       setError("Please enter both amount, token and receiver");
       return;
@@ -57,34 +57,47 @@ const WithdrawComponent = ({ near, evm, ton, stellar }: { near: any; evm: any; t
       }
 
       const result = await bridge.withdrawToken({
-        signIntents: near.signIntents,
-        intentAccount: near.intentAccount!,
+        signIntents: (intents: any[]) => near.signIntents(intents),
+        intentAccount: near.omniAddress!,
         receiver: receiver.trim(),
         amount: BigInt(amount),
-        gasless: true,
+        gasless: false,
         chain: network,
         token: token,
       });
 
       if (result?.nonce) {
         const pending = await bridge.getPendingWithdrawal(result.nonce);
+
+        if (utils.isCosmos(pending.chain)) {
+          if (!cosmos?.address) throw new Error("Cosmos wallet not connected");
+          const sender = cosmos.address;
+          const sendTransaction = (t: any) => cosmos.sendTransaction(t);
+          await bridge.cosmos().then((s) => s.withdraw({ sendTransaction, sender, ...pending }));
+          return;
+        }
+
         switch (pending.chain) {
           case Network.Ton: {
-            const refundAddress = ton.address!;
-            const sendTransaction = ton.sendTransaction;
+            if (!ton?.address) throw new Error("Ton wallet not connected");
+            const refundAddress = ton?.address;
+            const sendTransaction = (t: any) => ton.sendTransaction([t]);
             await bridge.ton.withdraw({ sendTransaction, refundAddress, ...pending });
             break;
           }
 
           case Network.Stellar: {
-            const sender = stellar.address!;
-            const sendTransaction = stellar.sendTransaction;
+            if (!stellar?.address) throw new Error("Stellar wallet not connected");
+            const sender = stellar.address;
+            const sendTransaction = (t: any) => stellar.sendTransaction(t);
             await bridge.stellar.withdraw({ sendTransaction, sender, ...pending });
             break;
           }
 
           default:
-            await bridge.evm.withdraw({ sendTransaction: evm.sendTransaction as any, ...pending });
+            if (!evm?.address) throw new Error("EVM wallet not connected");
+            const sendTransaction = (t: any) => evm.sendTransaction(pending.chain, t);
+            await bridge.evm.withdraw({ sendTransaction, ...pending });
             break;
         }
       }

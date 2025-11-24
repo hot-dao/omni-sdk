@@ -3,10 +3,9 @@ import type { JsonRpcProvider } from "@near-js/providers";
 import type { Action } from "@near-js/transactions";
 import type { Connection } from "@solana/web3.js";
 import type { AbstractProvider } from "ethers";
-import type { TronWeb } from "tronweb";
 
 import { Logger } from "./utils";
-import { ReviewFeeOptions } from "./fee";
+import { CosmosConfig } from "./env";
 
 export enum Network {
   Omni_v1 = 0,
@@ -16,6 +15,9 @@ export enum Network {
 
   OmniTon = 1117,
   Ton = 1111,
+
+  Juno = 4444118,
+  Gonka = 4444119,
 
   Eth = 1,
   Tron = 333,
@@ -86,7 +88,7 @@ export interface BridgeOptions {
 
   nearRpc?: JsonRpcProvider | string[];
 
-  tronClient?: TronWeb;
+  cosmos?: Record<number, CosmosConfig>;
 
   stellarContract?: string;
   stellarHorizonRpc?: string[];
@@ -96,16 +98,6 @@ export interface BridgeOptions {
   solverBusRpc?: string;
   mpcApi?: string[];
   api?: string[];
-
-  btc?: {
-    getTransferFee: (receiver: string, amount: bigint) => Promise<ReviewFeeOptions>;
-    transfer: (receiver: string, amount: bigint, fee: ReviewFeeOptions) => Promise<string>;
-  };
-
-  zcash?: {
-    getTransferFee: (receiver: string, amount: bigint) => Promise<ReviewFeeOptions>;
-    transfer: (receiver: string, amount: bigint, fee: ReviewFeeOptions) => Promise<string>;
-  };
 }
 
 export interface ContractTransferType {

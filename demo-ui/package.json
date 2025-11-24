@@ -11,6 +11,7 @@
   "dependencies": {
     "@creit.tech/stellar-wallets-kit": "1.7.6",
     "@hot-labs/omni-sdk": "2.21.1",
+    "@hot-labs/wibe3": "0.5.0-beta.8",
     "@near-wallet-selector/core": "^8.10.2",
     "@near-wallet-selector/hot-wallet": "^8.10.2",
     "@near-wallet-selector/ledger": "^8.10.2",
@@ -18,7 +19,10 @@
     "@near-wallet-selector/modal-ui": "^8.10.2",
     "@near-wallet-selector/my-near-wallet": "^8.10.2",
     "@near-wallet-selector/okx-wallet": "^8.10.2",
+    "@noble/hashes": "2.0.1",
     "@rainbow-me/rainbowkit": "^2.2.4",
+    "@scure/bip32": "2.0.1",
+    "@solana/web3.js": "1.98.4",
     "@tanstack/react-query": "^5.74.4",
     "@tonconnect/sdk": "^3.1.0",
     "@tonconnect/ui-react": "^2.1.0",

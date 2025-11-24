@@ -1,12 +1,22 @@
-import { useEffect } from "react";
 import { mainnet, base, arbitrum, optimism, polygon, bsc, avalanche, kava, xLayer } from "viem/chains";
-import { HotBridge } from "@hot-labs/omni-sdk";
-import { useNearWallet } from "./near";
+import {
+  CosmosWallet,
+  EvmWallet,
+  HotConnector,
+  NearWallet,
+  OmniWallet,
+  StellarWallet,
+  TonWallet,
+  WalletType,
+} from "@hot-labs/wibe3";
+import { HotBridge } from "../../../src";
+import { useEffect, useState } from "react";
 
 export const bridge = new HotBridge({
   logger: console,
-  api: ["https://api0.herewallet.app", "https://api2.herewallet.app"],
+  api: ["https://dev.herewallet.app", "https://dev.herewallet.app"],
   solanaRpc: ["https://api0.herewallet.app/api/v1/evm/rpc/1001"],
+  mpcApi: ["https://146ec32c49c4.ngrok-free.app"],
 
   evmRpc: {
     8453: base.rpcUrls.default.http as any,
@@ -27,15 +37,19 @@ export const bridge = new HotBridge({
   },
 });
 
+export const wibe3 = new HotConnector({});
+
 export const useBridge = () => {
-  const nearWallet = useNearWallet();
-
+  const [wallets, setWallets] = useState<OmniWallet[]>(wibe3.wallets);
   useEffect(() => {
-    bridge.executeNearTransaction = async (tx) => {
-      const hash = await nearWallet.sendTransaction(tx);
-      return { sender: nearWallet.accountId!, hash };
-    };
-  }, [nearWallet.accountId]);
+    wibe3.onConnect(() => setWallets(wibe3.wallets));
+    wibe3.onDisconnect(() => setWallets(wibe3.wallets));
+  }, []);
 
-  return { bridge };
+  const near = wallets.find((w) => w.type === 1010) as NearWallet | null;
+  const evm = wallets.find((w) => w.type === 1) as EvmWallet | null;
+  const ton = wallets.find((w) => w.type === 1111) as TonWallet | null;
+  const stellar = wallets.find((w) => w.type === 1100) as StellarWallet | null;
+  const cosmos = wallets.find((w) => w.type === WalletType.COSMOS) as CosmosWallet | null;
+  return { bridge, wibe3, near, evm, ton, stellar, cosmos };
 };

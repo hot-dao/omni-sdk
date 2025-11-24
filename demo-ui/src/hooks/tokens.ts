@@ -31,7 +31,9 @@ export const useAvailableTokens = (chain: number) => {
     setLoading(true);
     getBridgableTokens()
       .then((tokens) => {
-        setTokens(Array.from(new Set(["native", ...tokens.filter((t) => t.chain === chain).map((t) => t.address)])));
+        setTokens(
+          Array.from(new Set(["native", "ujuno", ...tokens.filter((t) => t.chain === chain).map((t) => t.address)]))
+        );
       })
       .catch((e) => {
         console.error("useAvailableTokens", e);

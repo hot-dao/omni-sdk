@@ -22,7 +22,8 @@ import {
 
 import { useBridge } from "../hooks/bridge";
 
-const FindDeposits = ({ near }: { near: any }) => {
+const FindDeposits = () => {
+  const { near } = useBridge();
   const { bridge } = useBridge();
 
   const [chain, setChain] = useState<Network>(Network.Base);
@@ -38,7 +39,7 @@ const FindDeposits = ({ near }: { near: any }) => {
     .map(([key, value]) => ({ label: key, value: Number(value) }));
 
   const fetchPendingWithdrawals = async () => {
-    if (!near.accountId) return setError("Wallet not connected. Please connect your wallet first.");
+    if (!near?.omniAddress) return setError("Wallet not connected. Please connect your wallet first.");
     if (!intentAccount.trim()) return setError("Please enter a receiver intent account.");
     if (!transactionHash.trim()) return setError("Please enter a transaction hash.");
     setIsLoading(true);
@@ -58,7 +59,7 @@ const FindDeposits = ({ near }: { near: any }) => {
   };
 
   const finishDeposit = async (deposit: PendingDeposit) => {
-    if (!near.accountId) return setError("Wallet not connected. Please connect your wallet first.");
+    if (!near?.omniAddress) return setError("Wallet not connected. Please connect your wallet first.");
     setIsLoading(true);
     setError(null);
 

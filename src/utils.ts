@@ -2,13 +2,14 @@ import { getBytes, hexlify } from "ethers";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import { Address as StellarAddress, xdr } from "@stellar/stellar-sdk";
 import { actionCreators } from "@near-js/transactions";
+import { base58, bech32 } from "@scure/base";
 import { Address } from "@ton/core";
 import crypto from "crypto";
 
-import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
 import TonOmniService from "./bridge-ton";
+import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
+import { Settings, INTENT_PREFIX } from "./env";
 import { Network } from "./types";
-import { INTENT_PREFIX } from "./env";
 
 const serializeBigIntInObject = (obj: Record<string, any>) => {
   for (const key in obj) {
@@ -24,6 +25,10 @@ export const functionCall = (args: { methodName: string; args: any; gas: string;
 
 export const isTon = (id: number): id is Network.OmniTon | Network.Ton => {
   return id === Network.OmniTon || id === Network.Ton;
+};
+
+export const isCosmos = (id: number) => {
+  return Settings.cosmos[id] !== undefined;
 };
 
 /**
@@ -87,6 +92,8 @@ export const toOmniIntent = (id: string | number, addr?: string): string => {
  * Convert token address to unified omni address format (base58 encoded)
  */
 export const encodeTokenAddress = (chain: Network, addr: string) => {
+  if (isCosmos(chain)) return baseEncode(Buffer.from(addr, "utf8"));
+
   if (chain === Network.Solana) {
     if (addr === "native") return "11111111111111111111111111111111";
     return addr;
@@ -122,6 +129,7 @@ export const decodeTokenAddress = (chain: Network, addr: string) => {
   if (addr === "11111111111111111111") return "native";
   if (addr === "11111111111111111111111111111111") return "native";
   if (addr === "111bzQBB5v7AhLyPMDwS8uJgQV24KaAPXtwyVWu2KXbbfQU6NXRCz") return "native";
+  if (isCosmos(chain)) return Buffer.from(baseDecode(addr)).toString("utf8");
 
   if (isTon(chain)) {
     try {
@@ -163,6 +171,11 @@ export const legacyUnsafeOmniEphemeralReceiver = (intentAccount: string) => {
 export const encodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Near) return address;
   if (chain === Network.Solana) return address;
+  if (isCosmos(chain)) {
+    const bytes = new Uint8Array(bech32.decode(address as `${string}1${string}`).words);
+    return base58.encode(bytes);
+  }
+
   if (chain === Network.Stellar) return baseEncode(StellarAddress.fromString(address).toScVal().toXDR());
   if (isTon(chain)) return baseEncode(createAddressRlp(Address.parse(address)));
   return baseEncode(getBytes(address));
@@ -171,6 +184,12 @@ export const encodeReceiver = (chain: Network, address: string) => {
 export const decodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Near) return address;
   if (chain === Network.Solana) return address;
+
+  if (isCosmos(chain)) {
+    const config = Settings.cosmos[chain];
+    return bech32.encode(config.prefix, base58.decode(address));
+  }
+
   if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(address)))).toString();
   if (isTon(chain)) return parseAddressRlp(address);
   return hexlify(baseDecode(address));

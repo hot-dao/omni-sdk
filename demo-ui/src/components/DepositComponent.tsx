@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Network } from "@hot-labs/omni-sdk";
+import { Network } from "../../../src";
 
 import {
   Card,
@@ -21,8 +21,8 @@ const availableNetworks = Object.entries(Network)
   .filter(([key, value]) => value === 1010 || !isNaN(Number(value)))
   .map(([key, value]) => ({ label: key, value: Number(value) }));
 
-const DepositComponent = ({ stellar, evm, near, ton }: { stellar: any; evm: any; near: any; ton: any }) => {
-  const { bridge } = useBridge();
+const DepositComponent = () => {
+  const { bridge, near, ton, evm, stellar, cosmos } = useBridge();
 
   const [amount, setAmount] = useState<string>("");
   const [token, setToken] = useState<string>("");
@@ -35,7 +35,7 @@ const DepositComponent = ({ stellar, evm, near, ton }: { stellar: any; evm: any;
 
   const handleDeposit = async (e: any) => {
     e.preventDefault();
-    if (!near.accountId) return;
+    if (!near?.address) return;
     if (!amount || !token) return setError("Please enter both amount and token");
 
     try {
@@ -43,25 +43,42 @@ const DepositComponent = ({ stellar, evm, near, ton }: { stellar: any; evm: any;
       setError(null);
       setSuccess(null);
 
-      if (network === Network.Ton) {
-        const hash = await bridge.ton.deposit({
-          sender: ton.address!,
-          refundAddress: ton.address!,
-          intentAccount: near.intentAccount!,
-          sendTransaction: ton.sendTransaction,
+      if (network === Network.Juno) {
+        if (cosmos == null) throw "Connect Cosmos to deposit";
+        const cosmosWallet = await bridge.cosmos();
+        const hash = await cosmosWallet.deposit({
+          chain: network,
+          sender: cosmos.address,
+          senderPublicKey: cosmos.publicKey!,
+          intentAccount: near?.omniAddress!,
+          sendTransaction: cosmos.wallet.sendTransaction,
           amount: BigInt(amount),
           token: token,
         });
 
-        const deposit = await bridge.waitPendingDeposit(network, hash, near.intentAccount!);
+        const deposit = await bridge.waitPendingDeposit(network, hash, near.omniAddress!);
+        await bridge.finishDeposit(deposit);
+      }
+
+      if (network === Network.Ton) {
+        const hash = await bridge.ton.deposit({
+          sender: ton?.address!,
+          refundAddress: ton?.address!,
+          intentAccount: near?.omniAddress!,
+          sendTransaction: ton?.sendTransaction,
+          amount: BigInt(amount),
+          token: token,
+        });
+
+        const deposit = await bridge.waitPendingDeposit(network, hash, near.omniAddress!);
         await bridge.finishDeposit(deposit);
       }
 
       // Near
       else if (network === Network.Near) {
         await bridge.near.deposit({
-          sender: near.accountId!,
-          intentAccount: near.intentAccount!,
+          sender: near.address!,
+          intentAccount: near.omniAddress!,
           sendTransaction: near.sendTransaction,
           amount: BigInt(amount),
           token: token,
@@ -72,16 +89,16 @@ const DepositComponent = ({ stellar, evm, near, ton }: { stellar: any; evm: any;
       else if (network === Network.Stellar) {
         console.log("Depositing to Stellar");
         const tx = await bridge.stellar.deposit({
-          sender: stellar.address!,
-          intentAccount: near.intentAccount!,
-          sendTransaction: stellar.sendTransaction as any,
+          sender: stellar?.address!,
+          intentAccount: near.omniAddress!,
+          sendTransaction: stellar?.sendTransaction as any,
           amount: BigInt(amount),
           token: token,
         });
 
         console.log("Deposit tx: ", tx);
         const controller = new AbortController();
-        const deposit = await bridge.waitPendingDeposit(network, tx, near.intentAccount!, controller.signal);
+        const deposit = await bridge.waitPendingDeposit(network, tx, near.omniAddress!, controller.signal);
         await bridge.finishDeposit(deposit);
       }
 
@@ -91,7 +108,7 @@ const DepositComponent = ({ stellar, evm, near, ton }: { stellar: any; evm: any;
         console.log("Depositing to EVM", network, token);
         const tx = await bridge.evm.deposit({
           sender: evm.address!,
-          intentAccount: near.intentAccount!,
+          intentAccount: near.omniAddress!,
           sendTransaction: evm.sendTransaction as any,
           amount: BigInt(amount),
           chain: network,
@@ -100,7 +117,7 @@ const DepositComponent = ({ stellar, evm, near, ton }: { stellar: any; evm: any;
 
         if (tx) {
           const controller = new AbortController();
-          const deposit = await bridge.waitPendingDeposit(network, tx, near.intentAccount!, controller.signal);
+          const deposit = await bridge.waitPendingDeposit(network, tx, near.omniAddress!, controller.signal);
           await bridge.finishDeposit(deposit);
         }
       }
@@ -125,7 +142,7 @@ const DepositComponent = ({ stellar, evm, near, ton }: { stellar: any; evm: any;
       <FormContainer>
         <FormGroup>
           <InputLabel>Intent account</InputLabel>
-          <StyledInput type="text" placeholder="Receiver" value={near.accountId!} disabled />
+          <StyledInput type="text" placeholder="Receiver" value={near?.omniAddress!} disabled />
         </FormGroup>
 
         <FormGroup>
