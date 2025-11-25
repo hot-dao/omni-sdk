@@ -14,9 +14,8 @@ import { useEffect, useState } from "react";
 
 export const bridge = new HotBridge({
   logger: console,
-  api: ["https://dev.herewallet.app", "https://dev.herewallet.app"],
+  api: ["https://api0.herewallet.app", "https://api2.herewallet.app"],
   solanaRpc: ["https://api0.herewallet.app/api/v1/evm/rpc/1001"],
-  mpcApi: ["https://146ec32c49c4.ngrok-free.app"],
 
   evmRpc: {
     8453: base.rpcUrls.default.http as any,

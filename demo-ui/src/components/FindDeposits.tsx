@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Network, PendingDeposit } from "@hot-labs/omni-sdk";
+import { Network, PendingDeposit } from "../../../src";
 
 import {
   Card,

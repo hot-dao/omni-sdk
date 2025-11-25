@@ -11,6 +11,11 @@ import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
 import { Settings, INTENT_PREFIX } from "./env";
 import { Network } from "./types";
 
+const fromBech32 = (address: string, limit = Infinity) => {
+  const decodedAddress = bech32.decode(address as `${string}1${string}`, limit);
+  return { prefix: decodedAddress.prefix, data: new Uint8Array(bech32.fromWords(decodedAddress.words)) };
+};
+
 const serializeBigIntInObject = (obj: Record<string, any>) => {
   for (const key in obj) {
     if (typeof obj[key] === "bigint") obj[key] = obj[key].toString();
@@ -171,8 +176,10 @@ export const legacyUnsafeOmniEphemeralReceiver = (intentAccount: string) => {
 export const encodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Near) return address;
   if (chain === Network.Solana) return address;
+
   if (isCosmos(chain)) {
-    const bytes = new Uint8Array(bech32.decode(address as `${string}1${string}`).words);
+    const { data } = fromBech32(address as `${string}1${string}`);
+    const bytes = new Uint8Array(data);
     return base58.encode(bytes);
   }
 
@@ -187,7 +194,7 @@ export const decodeReceiver = (chain: Network, address: string) => {
 
   if (isCosmos(chain)) {
     const config = Settings.cosmos[chain];
-    return bech32.encode(config.prefix, base58.decode(address));
+    return bech32.encode(config.prefix, bech32.toWords(base58.decode(address)));
   }
 
   if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(address)))).toString();
