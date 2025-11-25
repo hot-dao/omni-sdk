@@ -16,7 +16,7 @@ export interface CosmosConfig {
 export const Settings = {
   cosmos: {
     [Network.Juno]: {
-      contract: "juno15ju9ckc80dlg55zq4rdh3humcej0p65klmr0lnd245cyhzmuv8ts2c6pd4",
+      contract: "juno1va9q7gma6l62aqq988gghv4r7u4hnlgm85ssmsdf9ypw77qfwa0qaz7ea4",
       rpc: "https://juno-rpc.publicnode.com",
       gasLimit: 200000n,
       nativeToken: "ujuno",
