@@ -43,7 +43,7 @@ export class CosmosService {
     chain: number;
     token: string;
     amount: bigint;
-    senderPublicKey: string;
+    senderPublicKey: Uint8Array;
     intentAccount: string;
     sender: string;
     sendTransaction: (tx: any) => Promise<string>;
@@ -71,10 +71,13 @@ export class CosmosService {
     const txBody = TxBody.fromPartial({ messages: [msg], memo: "" });
     const fee = Fee.fromPartial({ gasLimit, amount: [{ denom: nativeToken, amount: String(gasLimit) }] });
 
+    let pubKey = encodePubkey({ type: "tendermint/PubKeySecp256k1", value: Buffer.from(args.senderPublicKey).toString("base64") });
+    if (account.pubkey) pubKey = encodePubkey(account.pubkey);
+
     const signer = SignerInfo.fromPartial({
-      publicKey: account.pubkey ? encodePubkey(account.pubkey) : undefined,
       modeInfo: { single: { mode: 1 } },
       sequence: BigInt(account.sequence),
+      publicKey: pubKey,
     });
 
     const authInfo = AuthInfo.encode(AuthInfo.fromPartial({ signerInfos: [signer], fee })).finish();
@@ -83,14 +86,14 @@ export class CosmosService {
     return result;
   }
 
-  async withdraw(args: WithdrawArgs & { sender: string; sendTransaction: (tx: any) => Promise<string> }) {
+  async withdraw(args: WithdrawArgs & { sender: string; senderPublicKey: Uint8Array; sendTransaction: (tx: any) => Promise<string> }) {
     const signature = await this.omni.api.withdrawSign(args.nonce);
     const sign = Buffer.from(baseDecode(signature));
 
+    const { nativeToken, chainId, gasLimit, rpc, contract } = Settings.cosmos[args.chain];
     const address = this.convertAddress(args.chain, args.sender);
-    const { nativeToken, chainId, gasLimit } = Settings.cosmos[args.chain];
 
-    const client = await StargateClient.connect(Settings.cosmos[args.chain].rpc);
+    const client = await StargateClient.connect(rpc);
     const account = await client.getAccount(address);
     if (account == null) throw new Error("Account not found");
 
@@ -107,7 +110,7 @@ export class CosmosService {
     const msg = {
       typeUrl: "/cosmwasm.wasm.v1.MsgExecuteContract",
       value: MsgExecuteContract.encode({
-        contract: Settings.cosmos[args.chain].contract,
+        contract: contract,
         msg: toUtf8(action),
         sender: address,
         funds: [],
@@ -117,10 +120,13 @@ export class CosmosService {
     const txBody = TxBody.fromPartial({ messages: [msg], memo: "" });
     const fee = Fee.fromPartial({ gasLimit, amount: [{ denom: nativeToken, amount: String(gasLimit) }] });
 
+    let pubKey = encodePubkey({ type: "tendermint/PubKeySecp256k1", value: Buffer.from(args.senderPublicKey).toString("base64") });
+    if (account.pubkey) pubKey = encodePubkey(account.pubkey);
+
     const signer = SignerInfo.fromPartial({
-      publicKey: account.pubkey ? encodePubkey(account.pubkey) : undefined,
       sequence: BigInt(account.sequence),
       modeInfo: { single: { mode: 1 } },
+      publicKey: pubKey,
     });
 
     const authInfo = AuthInfo.encode(AuthInfo.fromPartial({ signerInfos: [signer], fee })).finish();
