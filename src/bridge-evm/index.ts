@@ -5,8 +5,8 @@ import { ERC20_ABI, OMNI_ABI, OMNI_DEPOSIT_FT, OMNI_DEPOSIT_LOG, OMNI_DEPOSIT_NA
 import { encodeTokenAddress, omniEphemeralReceiver, wait } from "../utils";
 import { Network, PendingDeposit, WithdrawArgs } from "../types";
 import { DepositNotFoundError } from "../errors";
-import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
+import OmniService from "../bridge";
 
 const getProvider =
   (rpcs: Record<number, string[]>) =>
@@ -19,13 +19,27 @@ const getProvider =
 
 class EvmOmniService {
   getProvider: (chain: number) => ethers.AbstractProvider;
-  readonly contract: string;
   readonly enableApproveMax: boolean;
+  readonly treasuryDefaultContract: string;
+  readonly treasuryContracts: Record<number, string>;
 
-  constructor(readonly omni: OmniService, options: { enableApproveMax?: boolean; contract?: string; rpcs?: Record<number, string[]> | ((chain: number) => ethers.AbstractProvider) }) {
+  constructor(
+    readonly omni: OmniService,
+    options: {
+      enableApproveMax?: boolean;
+      treasuryDefaultContract?: string;
+      treasuryContracts?: Record<number, string>;
+      rpcs?: Record<number, string[]> | ((chain: number) => ethers.AbstractProvider);
+    }
+  ) {
     this.getProvider = typeof options.rpcs === "function" ? options.rpcs : getProvider(options.rpcs || {});
-    this.contract = options?.contract || "0x233c5370CCfb3cD7409d9A3fb98ab94dE94Cb4Cd";
+    this.treasuryDefaultContract = options?.treasuryDefaultContract || "0x233c5370CCfb3cD7409d9A3fb98ab94dE94Cb4Cd";
+    this.treasuryContracts = Object.assign({ [Network.ADI]: "0x4A3b9D07a9A1E3D9dfb0A6edfC87384f8F424003" }, options?.treasuryContracts || {});
     this.enableApproveMax = options.enableApproveMax ?? false;
+  }
+
+  getContract(chain: number): string {
+    return this.treasuryContracts[chain] || this.treasuryDefaultContract;
   }
 
   async getGasPrice(chain: number): Promise<ReviewFee> {
@@ -62,14 +76,14 @@ class EvmOmniService {
     const signer = new VoidSigner(sender, provider);
 
     if (address === "native") {
-      const contract = new Contract(this.contract, [OMNI_DEPOSIT_NATIVE], signer);
+      const contract = new Contract(this.getContract(chain), [OMNI_DEPOSIT_NATIVE], signer);
       return contract.deposit.estimateGas(sender, { value: amount });
     }
 
-    const approved = await this.approveTokenEstimate({ sender, chain, token: address, allowed: this.contract, need: amount });
+    const approved = await this.approveTokenEstimate({ sender, chain, token: address, allowed: this.getContract(chain), need: amount });
     if (approved) return approved + (chain == Network.Arbitrum ? 400_000n : 160_000n);
 
-    const contract = new Contract(this.contract, [OMNI_DEPOSIT_FT], signer);
+    const contract = new Contract(this.getContract(chain), [OMNI_DEPOSIT_FT], signer);
     return await contract.deposit.estimateGas(sender, address, amount);
   }
 
@@ -85,7 +99,7 @@ class EvmOmniService {
     this.omni.logger?.log(`Approve tx: ${hash}`);
   }
 
-  async getTokenBalance(token: string, chain: Network, address = this.contract): Promise<bigint> {
+  async getTokenBalance(token: string, chain: Network, address = this.getContract(chain)): Promise<bigint> {
     const provider = this.getProvider(chain);
     if (token === "native") return await provider.getBalance(address);
     const contract = new Contract(token, ERC20_ABI, provider);
@@ -95,14 +109,14 @@ class EvmOmniService {
 
   async isWithdrawUsed(chain: number, nonce: string): Promise<boolean> {
     const provider = this.getProvider(chain);
-    const contract = new Contract(this.contract, OMNI_ABI, provider);
+    const contract = new Contract(this.getContract(chain), OMNI_ABI, provider);
     return await contract.usedNonces(nonce);
   }
 
   async withdraw(args: WithdrawArgs & { sendTransaction: (tx: ethers.TransactionRequest) => Promise<string> }): Promise<string> {
     const signature = await this.omni.api.withdrawSign(args.nonce);
     this.omni.logger?.log(`Withdrawing ${args.amount} ${args.token} from ${args.chain}`);
-    const contract = new Contract(this.contract, OMNI_ABI, this.getProvider(args.chain));
+    const contract = new Contract(this.getContract(args.chain), OMNI_ABI, this.getProvider(args.chain));
 
     const tx = await contract.withdraw.populateTransaction(
       args.nonce,
@@ -131,7 +145,7 @@ class EvmOmniService {
 
     if (args.token === "native") {
       this.omni.logger?.log(`Depositing native`);
-      const contract = new Contract(this.contract, [OMNI_DEPOSIT_NATIVE], this.getProvider(args.chain));
+      const contract = new Contract(this.getContract(args.chain), [OMNI_DEPOSIT_NATIVE], this.getProvider(args.chain));
       const depositTx = await contract.deposit.populateTransaction(hexlify(receiver), { value: args.amount });
       const hash = await args.sendTransaction({ ...depositTx, chainId: args.chain });
       return hash;
@@ -142,14 +156,14 @@ class EvmOmniService {
       sendTransaction: args.sendTransaction,
       need: args.amount,
       amount: this.enableApproveMax ? MaxUint256 : args.amount,
-      allowed: this.contract,
+      allowed: this.getContract(args.chain),
       sender: args.sender,
       chain: args.chain,
       token: args.token,
     });
 
     this.omni.logger?.log(`Depositing token`);
-    const contract = new Contract(this.contract, [OMNI_DEPOSIT_FT], this.getProvider(args.chain));
+    const contract = new Contract(this.getContract(args.chain), [OMNI_DEPOSIT_FT], this.getProvider(args.chain));
     const depositTx = await contract.deposit.populateTransaction(hexlify(receiver), args.token, args.amount);
     return await args.sendTransaction({ ...depositTx, chainId: args.chain });
   }

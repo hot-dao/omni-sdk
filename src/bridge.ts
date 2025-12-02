@@ -58,7 +58,7 @@ class HotBridge {
 
   constructor(readonly options: BridgeOptions) {
     this.executeNearTransaction = options.executeNearTransaction;
-    this.publishIntents = options.publishIntents || this.executeIntents;
+    this.publishIntents = options.publishIntents ?? this.executeIntents;
     this.logger = options.logger;
 
     this.api = new OmniApi(options.api, options.mpcApi);
@@ -66,7 +66,8 @@ class HotBridge {
 
     this.evm = new EvmOmniService(this, {
       enableApproveMax: options.enableApproveMax,
-      contract: options.evmContract,
+      treasuryDefaultContract: options.evmTreasuryDefaultContract,
+      treasuryContracts: options.evmTreasuryContracts,
       rpcs: options.evmRpc,
     });
 

@@ -1,7 +1,10 @@
-# 2.23.1
+# 2.23.6
 
-- Add Cosmos bridge
-- add publishIntents option
+- Add Cosmos bridge support
+- add publishIntents in settings
+- add evmTreasuryDefaultContract in settings
+- add evmTreasuryContracts in settings
+- add ADI chain support (evm)
 
 # 2.22.3
 

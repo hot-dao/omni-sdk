@@ -54,6 +54,7 @@ export enum Network {
   Ronin = 2020,
   Lisk = 1135,
   Sonic = 146,
+  ADI = 36900,
 }
 
 export interface PendingWidthdrawData {
@@ -75,9 +76,10 @@ export interface PendingWidthdrawData {
 export interface BridgeOptions {
   logger?: Logger;
   executeNearTransaction?: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
-  publishIntents?: (signedDatas: any[], quoteHashes: string[]) => Promise<{ sender: string; hash: string }>;
+  publishIntents: (signedDatas: any[], quoteHashes: string[]) => Promise<{ sender: string; hash: string }>;
 
-  evmContract?: string;
+  evmTreasuryDefaultContract?: string;
+  evmTreasuryContracts?: Record<number, string>;
   evmRpc?: Record<number, string[]> | ((chain: number) => AbstractProvider);
   enableApproveMax?: boolean;
 
