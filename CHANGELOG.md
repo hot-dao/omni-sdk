@@ -1,3 +1,8 @@
+# 2.23.1
+
+- Add Cosmos bridge
+- add publishIntents option
+
 # 2.22.3
 
 - Add TON EVAA token

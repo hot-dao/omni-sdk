@@ -48,6 +48,7 @@ import NearBridge from "./bridge-near";
 class HotBridge {
   logger?: Logger;
   executeNearTransaction?: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
+  publishIntents: (signedDatas: any[], quoteHashes: string[]) => Promise<{ sender: string; hash: string }>;
 
   stellar: StellarService;
   ton: TonOmniService;
@@ -57,6 +58,7 @@ class HotBridge {
 
   constructor(readonly options: BridgeOptions) {
     this.executeNearTransaction = options.executeNearTransaction;
+    this.publishIntents = options.publishIntents || this.executeIntents;
     this.logger = options.logger;
 
     this.api = new OmniApi(options.api, options.mpcApi);
@@ -237,7 +239,7 @@ class HotBridge {
     await Promise.allSettled(tasks);
   }
 
-  async executeIntents(signedDatas: any[], quoteHashes: string[]) {
+  executeIntents = async (signedDatas: any[], quoteHashes: string[]) => {
     const res = await this.api.requestApi("/api/v1/evm/intent-solver", {
       method: "POST",
       body: JSON.stringify({
@@ -274,7 +276,7 @@ class HotBridge {
 
     const hash = await fetchResult();
     return { sender: INTENTS_CONTRACT, hash };
-  }
+  };
 
   async getAllIntentBalances(intentAccount: string, intentsContract = INTENTS_CONTRACT) {
     const accounts = new Set<string>();
@@ -713,7 +715,7 @@ class HotBridge {
   async gaslessWithdrawToken(args: { chain: Network; token: string; amount: bigint; receiver: string; intentAccount: string; signIntents: (intents: any[]) => Promise<any> }) {
     const { intents, quoteHashes } = await this.buildGaslessWithdrawToken(args);
     const signedIntents = await args.signIntents(intents);
-    const tx = await this.executeIntents([signedIntents], quoteHashes);
+    const tx = await this.publishIntents([signedIntents], quoteHashes);
 
     this.logger?.log(`Parsing withdrawal nonce`);
     const nonce = await this.near.parseWithdrawalNonce(tx.hash, tx.sender);
@@ -751,7 +753,7 @@ class HotBridge {
     const signedIntents = await args.signIntents(result.intents);
 
     this.logger?.log(`Push withdraw intent`);
-    const tx = await this.executeIntents([signedIntents], result.quoteHashes);
+    const tx = await this.publishIntents([signedIntents], result.quoteHashes);
     if (args.chain === Network.Near) return; // NEAR chain has native withdrawals
 
     this.logger?.log(`Parsing withdrawal nonce`);
@@ -794,7 +796,7 @@ class HotBridge {
     quote.intent.diff[args.intentTo] = String(args.minAmountOut);
 
     const signedIntents = await args.signIntents([quote.intent]);
-    await this.executeIntents([signedIntents, quote.signed_fee_quote].filter(Boolean), quote.quote_hashes);
+    await this.publishIntents([signedIntents, quote.signed_fee_quote].filter(Boolean), quote.quote_hashes);
     await this.waitUntilBalance(args.intentTo, args.minAmountOut, args.intentAccount);
     return { amountOut };
   }
