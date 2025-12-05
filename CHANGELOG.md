@@ -1,3 +1,9 @@
+# 2.24.0
+
+- Add tests for getGaslessWithdrawFee
+- Rewrite getGaslessWithdrawFee without api request
+- Add defaultEvmWithdrawFee and withdrawFees in settings
+
 # 2.23.6
 
 - Add Cosmos bridge support

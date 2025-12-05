@@ -72,6 +72,12 @@ class StellarService {
     return !!result.result?.retval.value();
   }
 
+  async isAccountExists(address: string) {
+    const account = await this.callHorizon((rpc) => rpc.accounts().accountId(address).call()).catch(() => null);
+    if (!account) return false;
+    return account.balances.length > 0;
+  }
+
   async isTrustlineExists(sender: string, token: string) {
     if (token === "native") return true;
     const asset = await this.getAssetFromContractId(token);

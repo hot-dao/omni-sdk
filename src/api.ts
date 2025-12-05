@@ -1,8 +1,9 @@
 import RLP from "rlp";
 import crypto from "crypto";
 import { baseDecode, baseEncode } from "@near-js/utils";
+
+import { PendingWidthdrawData, TokenAsset } from "./types";
 import { encodeReceiver, wait } from "./utils";
-import { Network, PendingWidthdrawData, TokenAsset } from "./types";
 import { ApiError } from "./errors";
 
 type RequestOptions = RequestInit & { endpoint?: string | string[]; retry?: number; retryDelay?: number };
@@ -65,13 +66,6 @@ class OmniApi {
     const res = await this.requestApi("/api/v1/web/time", { method: "GET" });
     const { ts } = await res.json();
     return ts;
-  }
-
-  async getWithdrawFee(options: { chain: Network; token: string; receiver: string; type?: "bridge" | "refuel" }): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
-    const { chain, token, receiver, type = "bridge" } = options;
-    const res = await this.requestApi(`/api/v1/evm/${chain === 1111 ? 1117 : chain}/bridge_gas_price?type=${type}&token_id=${token}&receiver=${receiver}`, { method: "GET" });
-    const { gas_price, block_number } = await res.json();
-    return { gasPrice: BigInt(gas_price), blockNumber: BigInt(block_number) };
   }
 
   async getSwapQuoteExectOut(

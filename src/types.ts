@@ -44,7 +44,8 @@ export enum Network {
   Manta = 169,
   Kava = 2222,
   ZkSync = 324,
-  Monad = 10143,
+  MonadTestnet = 10143,
+  Monad = 143,
   Metis = 1088,
   Gnosis = 100,
   Fantom = 250,
@@ -76,7 +77,7 @@ export interface PendingWidthdrawData {
 export interface BridgeOptions {
   logger?: Logger;
   executeNearTransaction?: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
-  publishIntents: (signedDatas: any[], quoteHashes: string[]) => Promise<{ sender: string; hash: string }>;
+  publishIntents?: (signedDatas: any[], quoteHashes: string[]) => Promise<{ sender: string; hash: string }>;
 
   evmTreasuryDefaultContract?: string;
   evmTreasuryContracts?: Record<number, string>;
@@ -101,6 +102,9 @@ export interface BridgeOptions {
   solverBusRpc?: string;
   mpcApi?: string[];
   api?: string[];
+
+  withdrawFees?: Record<number, bigint>;
+  defaultEvmWithdrawFee?: bigint;
 }
 
 export interface ContractTransferType {

@@ -50,6 +50,18 @@ class HotBridge {
   executeNearTransaction?: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
   publishIntents: (signedDatas: any[], quoteHashes: string[]) => Promise<{ sender: string; hash: string }>;
 
+  defaultEvmWithdrawFee: bigint = 1_000_000n;
+  withdrawFees: Record<number, bigint> = {
+    [Network.Bnb]: 200_000n,
+    [Network.Eth]: 200_000n,
+    [Network.Polygon]: 200_000n,
+    [Network.Avalanche]: 200_000n,
+    [Network.Base]: 200_000n,
+    [Network.Optimism]: 200_000n,
+    [Network.Xlayer]: 200_000n,
+    [Network.Monad]: 200_000n,
+  };
+
   stellar: StellarService;
   ton: TonOmniService;
   evm: EvmOmniService;
@@ -70,6 +82,9 @@ class HotBridge {
       treasuryContracts: options.evmTreasuryContracts,
       rpcs: options.evmRpc,
     });
+
+    this.withdrawFees = Object.assign(this.withdrawFees, options.withdrawFees);
+    this.defaultEvmWithdrawFee = options.defaultEvmWithdrawFee || 1_000_000n;
 
     this.stellar = new StellarService(this, {
       contract: options.stellarContract,
@@ -496,8 +511,25 @@ class HotBridge {
     }
   }
 
-  async getGaslessWithdrawFee(options: { chain: Network; token: string; receiver: string; type?: "bridge" | "refuel" }): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
-    return await this.api.getWithdrawFee(options);
+  async getGaslessWithdrawFee(options: { chain: number; token: string; receiver: string }): Promise<{ gasPrice: bigint; blockNumber: bigint }> {
+    if (options.chain === Network.Solana) throw new GaslessNotAvailableError(options.chain);
+
+    if (options.chain === Network.Stellar) {
+      const exists = await this.stellar.isAccountExists(options.receiver);
+      if (!exists) return { gasPrice: 11000000n, blockNumber: 0n };
+      return { gasPrice: 1000000n, blockNumber: 0n };
+    }
+
+    if ([Network.Juno, Network.Gonka, Network.Near, Network.Hot].includes(options.chain)) return { gasPrice: 0n, blockNumber: 0n };
+
+    if ([Network.Ton, Network.OmniTon].includes(options.chain)) return { gasPrice: 40000000n, blockNumber: 0n };
+
+    const { gasPrice } = await this.evm.getProvider(options.chain).getFeeData();
+    const blockNumber = await this.evm.getProvider(options.chain).getBlockNumber();
+    const gasLimit = this.withdrawFees[options.chain] || this.defaultEvmWithdrawFee;
+    const fee = (BigInt(gasPrice || 0n) * 130n) / 100n;
+
+    return { gasPrice: fee * gasLimit, blockNumber: BigInt(blockNumber) };
   }
 
   async buildWithdrawIntent(args: { chain: Network; token: string; amount: bigint; receiver: string; intentAccount: string }) {
@@ -548,7 +580,7 @@ class HotBridge {
     };
   }
 
-  async buildSwapExectOutIntent(args: { intentAccount: string; intentFrom: string; intentTo: string; amountOut: bigint }) {
+  async buildSwapExectOutIntent(args: { intentFrom: string; intentTo: string; amountOut: bigint }) {
     const quote = await this.api.getSwapQuoteExectOut(args.intentFrom, args.intentTo, args.amountOut);
     const amountIn = BigInt(quote.amount_in);
 
@@ -564,10 +596,7 @@ class HotBridge {
     };
   }
 
-  async buildGaslessWithdrawIntent(args: { feeToken: string; feeAmount: bigint; chain: Network; token: string; amount: bigint; receiver: string; intentAccount: string }) {
-    const nonEvm = args.chain === Network.Stellar || isTon(args.chain) || isCosmos(args.chain);
-    const blockNumber = nonEvm ? 0 : await this.evm.getProvider(args.chain).getBlockNumber();
-
+  async buildGaslessWithdrawIntent(args: { feeToken: string; feeAmount: bigint; blockNumber: bigint; chain: Network; token: string; amount: bigint; receiver: string }) {
     const tokenAddress = toOmni(args.chain, args.token);
     const feeTokenAddress = toOmni(args.chain, args.feeToken);
     const receiver = encodeReceiver(args.chain, args.receiver);
@@ -582,7 +611,7 @@ class HotBridge {
       msg: JSON.stringify({
         receiver_id: receiver,
         amount_native: args.feeAmount.toString(),
-        block_number: blockNumber,
+        block_number: Number(args.blockNumber),
       }),
     };
   }
@@ -620,20 +649,12 @@ class HotBridge {
     if (earliest) throw new CompletePreviousWithdrawalsError(chain, receiver, earliest.nonce);
   }
 
-  async buildGaslessWithdrawToken(args: {
-    chain: Network;
-    token: string;
-    amount: bigint;
-    receiver: string;
-    intentAccount: string;
-    gasless?: "refuel" | true;
-  }): Promise<{ gasless: boolean; intents: any[]; quoteHashes: string[] }> {
+  async buildGaslessWithdrawToken(args: { chain: Network; token: string; amount: bigint; receiver: string; gasless?: boolean }): Promise<{ gasless: boolean; intents: any[]; quoteHashes: string[] }> {
     if (args.chain === Network.Near) throw new GaslessNotAvailableError(args.chain);
 
     // Get gas price
-    const type = args.gasless === "refuel" ? "refuel" : "bridge";
-    const { gasPrice } = await this.getGaslessWithdrawFee({ chain: args.chain, token: args.token, receiver: args.receiver, type }).catch(() => ({ gasPrice: null }));
-    if (gasPrice == null) throw new GaslessNotAvailableError(args.chain);
+    const { gasPrice, blockNumber } = await this.getGaslessWithdrawFee({ chain: args.chain, token: args.token, receiver: args.receiver }).catch(() => ({ gasPrice: null, blockNumber: null }));
+    if (gasPrice == null || blockNumber == null) throw new GaslessNotAvailableError(args.chain);
     this.logger?.log(`Gasless withdraw gas price: ${gasPrice}`);
 
     // Swap part of input token to gas token
@@ -642,7 +663,6 @@ class HotBridge {
       qoute = await this.buildSwapExectOutIntent({
         intentFrom: toOmniIntent(args.chain, args.token),
         intentTo: toOmniIntent(args.chain, "native"),
-        intentAccount: args.intentAccount,
         amountOut: gasPrice,
       }).catch(() => null);
 
@@ -659,12 +679,12 @@ class HotBridge {
 
     const withdrawIntent = await this.buildGaslessWithdrawIntent({
       amount: args.amount - BigInt(qoute?.amount_in || 0n),
-      intentAccount: args.intentAccount,
       receiver: args.receiver,
       chain: args.chain,
       token: args.token,
       feeToken: "native",
       feeAmount: gasPrice,
+      blockNumber: blockNumber,
     });
 
     return {
@@ -680,14 +700,13 @@ class HotBridge {
     amount: bigint;
     receiver: string;
     intentAccount: string;
-    gasless?: "refuel" | true | false;
+    gasless?: boolean;
   }): Promise<{ intents: any[]; quoteHashes: string[]; gasless: boolean }> {
     this.logger?.log(`Withdrawing ${args.amount} ${args.chain} ${args.token}`);
 
-    if (args.gasless != null && args.gasless !== false) {
+    if (args.gasless) {
       try {
-        const gasless = args.gasless === "refuel" ? "refuel" : true;
-        return await this.buildGaslessWithdrawToken({ ...args, gasless });
+        return await this.buildGaslessWithdrawToken(args);
       } catch (e) {
         if (!(e instanceof GaslessNotAvailableError)) throw e;
         this.logger?.log(`Gasless withdraw not available for chain ${args.chain}, using regular withdraw`);
@@ -733,7 +752,7 @@ class HotBridge {
     intentAccount: string;
     signIntents: (intents: Record<string, any>[]) => Promise<any>;
     adjustMax?: boolean;
-    gasless?: "refuel" | true | false;
+    gasless?: boolean;
   }) {
     const isNative = args.token === "wrap.near" || args.token === "native";
     if (args.chain === Network.Near && !isNative) {
@@ -807,7 +826,7 @@ class HotBridge {
     if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
 
     if (gasless) {
-      const fee = await this.getGaslessWithdrawFee({ chain, token, receiver: address, type: "bridge" }).catch(() => null);
+      const fee = await this.getGaslessWithdrawFee({ chain, token, receiver: address }).catch(() => null);
       if (fee) return new ReviewFee({ gasless: true, chain, baseFee: BigInt(fee.gasPrice) });
     }
 
