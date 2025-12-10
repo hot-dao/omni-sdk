@@ -17,5 +17,8 @@
     "lib": ["ESNext", "dom"],
     "types": ["node"]
   },
-  "include": ["./src", "tests/getGaslessWithdrawFee.ts"]
+  "include": ["./src", "tests/getGaslessWithdrawFee.ts"],
+  "tsc-alias": {
+    "resolveFullPaths": true
+  }
 }

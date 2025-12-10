@@ -13,7 +13,7 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc-alias",
     "cli": "npx tsx ./example/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@types/bn.js": "5.1.6",
+    "tsc-alias": "1.8.16",
     "typescript": "5.8.3",
     "vitest": "^2.0.0"
   }
