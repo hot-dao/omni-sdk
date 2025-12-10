@@ -1,3 +1,7 @@
+# 2.24.1
+
+- type: module
+
 # 2.24.0
 
 - Add tests for getGaslessWithdrawFee
