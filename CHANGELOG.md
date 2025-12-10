@@ -1,3 +1,7 @@
+# 2.24.3
+
+- Added tsc-alias with resolveFullPaths: true to add .js extensions to imports after build
+
 # 2.24.1
 
 - type: module
