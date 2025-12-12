@@ -315,6 +315,7 @@ class HotBridge {
   }
 
   async getIntentBalances(intents: string[], intentAccount: string, intentsContract = INTENTS_CONTRACT) {
+    if (intents.length === 0) return {};
     const balances = await this.near.viewFunction({
       args: { token_ids: intents, account_id: intentAccount },
       methodName: "mt_batch_balance_of",

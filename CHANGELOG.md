@@ -1,3 +1,7 @@
+# 2.24.5
+
+- Improve getAllIntentBalances (remove zero list fetch request)
+
 # 2.24.4
 
 - Fix isWithdrawUsed on Cosmos
