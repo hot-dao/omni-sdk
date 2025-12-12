@@ -1,6 +1,7 @@
 import { baseDecode, baseEncode } from "@near-js/utils";
 import { encodePubkey, makeSignDoc } from "@cosmjs/proto-signing";
 import { fromBech32, toBech32, toUtf8 } from "@cosmjs/encoding";
+import { CosmWasmClient } from "@cosmjs/cosmwasm-stargate";
 import { StargateClient } from "@cosmjs/stargate";
 
 import { TxBody } from "cosmjs-types/cosmos/tx/v1beta1/tx";
@@ -28,7 +29,8 @@ export class CosmosService {
   async isWithdrawUsed(chain: number, nonce: string): Promise<boolean> {
     const rpcUrl = Settings.cosmos[chain].rpc;
     const contractAddress = Settings.cosmos[chain].contract;
-    const result = await smartQuery(rpcUrl, contractAddress, { is_withdrawn: nonce });
+    const client = await CosmWasmClient.connect(rpcUrl);
+    const result = await client.queryContractSmart(contractAddress, { is_executed: { nonce } });
     return result !== null;
   }
 

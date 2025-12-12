@@ -9,13 +9,24 @@ import {
   TonWallet,
   WalletType,
 } from "@hot-labs/wibe3";
-import { HotBridge } from "../../../src";
+import { CosmosConfig, HotBridge, Network } from "@hot-labs/omni-sdk";
 import { useEffect, useState } from "react";
 
 export const bridge = new HotBridge({
   logger: console,
   api: ["https://api0.herewallet.app", "https://api2.herewallet.app"],
   solanaRpc: ["https://api0.herewallet.app/api/v1/evm/rpc/1001"],
+
+  cosmos: {
+    [Network.Gonka]: {
+      contract: "gonka15wng2302rhq5w8ddy3l3jslrhfcpufzfs6wc3zc6cxt8cpwrfp4qqgenkc",
+      rpc: "https://api0.herewallet.app/api/v1/evm/rpc/4444119",
+      prefix: "gonka",
+      nativeToken: "ngonka",
+      chainId: "gonka-mainnet",
+      gasLimit: 200000n,
+    },
+  } as Record<number, CosmosConfig>,
 
   evmRpc: {
     8453: base.rpcUrls.default.http as any,

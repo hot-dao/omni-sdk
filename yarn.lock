@@ -57,6 +57,21 @@
     "@cosmjs/math" "^0.37.0"
     "@cosmjs/utils" "^0.37.0"
 
+"@cosmjs/cosmwasm-stargate@0.37.0":
+  version "0.37.0"
+  resolved "https://registry.yarnpkg.com/@cosmjs/cosmwasm-stargate/-/cosmwasm-stargate-0.37.0.tgz#b87a9c61c7c37cf0cacb9e35eb8b98e0f20ca5cf"
+  integrity sha512-q3bezZzAIyPpUT89CpQrOhI6xJU4wiMU0ufN5nsPtRaZ1Cn8mwoj76j56wb7lvwsAPIk7ALjVbQwULmn7hii6A==
+  dependencies:
+    "@cosmjs/amino" "^0.37.0"
+    "@cosmjs/crypto" "^0.37.0"
+    "@cosmjs/encoding" "^0.37.0"
+    "@cosmjs/math" "^0.37.0"
+    "@cosmjs/proto-signing" "^0.37.0"
+    "@cosmjs/stargate" "^0.37.0"
+    "@cosmjs/tendermint-rpc" "^0.37.0"
+    "@cosmjs/utils" "^0.37.0"
+    cosmjs-types "^0.10.1"
+
 "@cosmjs/crypto@^0.37.0":
   version "0.37.0"
   resolved "https://registry.yarnpkg.com/@cosmjs/crypto/-/crypto-0.37.0.tgz#e0b4f47c958ed48e9388cc9f7dc8fd7449dc2887"
@@ -115,7 +130,7 @@
     ws "^7"
     xstream "^11.14.0"
 
-"@cosmjs/stargate@0.37.0":
+"@cosmjs/stargate@0.37.0", "@cosmjs/stargate@^0.37.0":
   version "0.37.0"
   resolved "https://registry.yarnpkg.com/@cosmjs/stargate/-/stargate-0.37.0.tgz#0368cf82b0727aae5027ef78cea9ab4032045e64"
   integrity sha512-accDRW9QvMbWf6zrg/YHR/E8UCDr1q2gu8zUI7Hdn8KjhO4yO/+Ry119Lqr8FRNxCJ4DvLe8yhYDLk5FFKuQCQ==
