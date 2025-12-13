@@ -1,5 +1,6 @@
 import React from "react";
 import { ThemeProvider as StyledThemeProvider } from "styled-components";
+import { observer } from "mobx-react-lite";
 
 import { useTheme } from "./theme/ThemeContext";
 import { ThemeProvider } from "./theme/ThemeContext";
@@ -24,7 +25,7 @@ import DepositComponent from "./components/DepositComponent";
 import WithdrawComponent from "./components/WithdrawComponent";
 import PendingWithdrawalsComponent from "./components/PendingWithdrawals";
 import FindDeposits from "./components/FindDeposits";
-import { useBridge, wibe3 } from "./hooks/bridge";
+import { wibe3 } from "./hooks/bridge";
 
 // Theme toggle icon component
 const ThemeIcon = ({ isDark }: { isDark: boolean }) => (
@@ -33,8 +34,7 @@ const ThemeIcon = ({ isDark }: { isDark: boolean }) => (
   </span>
 );
 
-function AppContent() {
-  const { near } = useBridge();
+const AppContent = observer(() => {
   const { theme, toggleTheme } = useTheme();
   const themeObj = theme === "light" ? lightTheme : darkTheme;
 
@@ -55,7 +55,7 @@ function AppContent() {
           </div>
         </Header>
 
-        {near ? (
+        {wibe3.near ? (
           <MainContent>
             <LeftColumn>
               <DepositComponent />
@@ -78,7 +78,7 @@ function AppContent() {
       </AppContainer>
     </StyledThemeProvider>
   );
-}
+});
 
 function App() {
   return (

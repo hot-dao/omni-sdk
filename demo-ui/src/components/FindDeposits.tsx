@@ -1,6 +1,8 @@
 import React, { useState } from "react";
-import { Network, PendingDeposit } from "../../../src";
+import { Network, PendingDeposit } from "@hot-labs/omni-sdk";
+import { observer } from "mobx-react-lite";
 
+import { wibe3 } from "../hooks/bridge";
 import {
   Card,
   EmptyState,
@@ -20,12 +22,7 @@ import {
   Button,
 } from "../theme/styles";
 
-import { useBridge } from "../hooks/bridge";
-
-const FindDeposits = () => {
-  const { near } = useBridge();
-  const { bridge } = useBridge();
-
+const FindDeposits = observer(() => {
   const [chain, setChain] = useState<Network>(Network.Base);
   const [intentAccount, setIntentAccount] = useState<string>("");
   const [transactionHash, setTransactionHash] = useState<string>("");
@@ -39,14 +36,14 @@ const FindDeposits = () => {
     .map(([key, value]) => ({ label: key, value: Number(value) }));
 
   const fetchPendingWithdrawals = async () => {
-    if (!near?.omniAddress) return setError("Wallet not connected. Please connect your wallet first.");
+    if (!wibe3.near?.omniAddress) return setError("Wallet not connected. Please connect your wallet first.");
     if (!intentAccount.trim()) return setError("Please enter a receiver intent account.");
     if (!transactionHash.trim()) return setError("Please enter a transaction hash.");
     setIsLoading(true);
     setError(null);
 
     try {
-      const pending = await bridge.waitPendingDeposit(chain, transactionHash, intentAccount);
+      const pending = await wibe3.hotBridge.waitPendingDeposit(chain, transactionHash, intentAccount);
       setDeposit(pending);
       setIsLoading(false);
       setError(null);
@@ -59,12 +56,12 @@ const FindDeposits = () => {
   };
 
   const finishDeposit = async (deposit: PendingDeposit) => {
-    if (!near?.omniAddress) return setError("Wallet not connected. Please connect your wallet first.");
+    if (!wibe3.near?.omniAddress) return setError("Wallet not connected. Please connect your wallet first.");
     setIsLoading(true);
     setError(null);
 
     try {
-      await bridge.finishDeposit({ ...deposit, intentAccount });
+      await wibe3.hotBridge.finishDeposit({ ...deposit, intentAccount });
       setDeposit(null);
       setIntentAccount("");
       setTransactionHash("");
@@ -169,6 +166,6 @@ const FindDeposits = () => {
       )}
     </Card>
   );
-};
+});
 
 export default FindDeposits;

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Network } from "../../../src";
-
+import { Network } from "@hot-labs/omni-sdk";
+import { observer } from "mobx-react-lite";
 import {
   Card,
   StyledInput,
@@ -14,16 +14,15 @@ import {
 } from "../theme/styles";
 
 import { useAvailableTokens } from "../hooks/tokens";
-import { useBridge } from "../hooks/bridge";
+import { wibe3 } from "../hooks/bridge";
+import { hex } from "@scure/base";
 
 // Get available networks for the selector
 const availableNetworks = Object.entries(Network)
   .filter(([key, value]) => value === 1010 || !isNaN(Number(value)))
   .map(([key, value]) => ({ label: key, value: Number(value) }));
 
-const DepositComponent = () => {
-  const { bridge, near, ton, evm, stellar, cosmos } = useBridge();
-
+const DepositComponent = observer(() => {
   const [amount, setAmount] = useState<string>("");
   const [token, setToken] = useState<string>("");
   const [network, setNetwork] = useState<Network>(Network.Near);
@@ -35,7 +34,7 @@ const DepositComponent = () => {
 
   const handleDeposit = async (e: any) => {
     e.preventDefault();
-    if (!near?.address) return;
+    if (!wibe3.near?.address) return;
     if (!amount || !token) return setError("Please enter both amount and token");
 
     try {
@@ -44,42 +43,42 @@ const DepositComponent = () => {
       setSuccess(null);
 
       if (network === Network.Juno) {
-        if (cosmos == null) throw "Connect Cosmos to deposit";
-        const cosmosWallet = await bridge.cosmos();
+        if (wibe3.cosmos == null) throw "Connect Cosmos to deposit";
+        const cosmosWallet = await wibe3.hotBridge.cosmos();
         const hash = await cosmosWallet.deposit({
           chain: network,
-          sender: cosmos.address,
-          senderPublicKey: cosmos.publicKey!,
-          intentAccount: near?.omniAddress!,
-          sendTransaction: cosmos.wallet.sendTransaction,
+          sender: wibe3.cosmos?.address,
+          senderPublicKey: hex.decode(wibe3.cosmos.publicKey),
+          intentAccount: wibe3.near?.omniAddress!,
+          sendTransaction: wibe3.cosmos?.sendTransaction as any,
           amount: BigInt(amount),
           token: token,
         });
 
-        const deposit = await bridge.waitPendingDeposit(network, hash, near.omniAddress!);
-        await bridge.finishDeposit(deposit);
+        const deposit = await wibe3.hotBridge.waitPendingDeposit(network, hash, wibe3.near?.omniAddress!);
+        await wibe3.hotBridge.finishDeposit(deposit);
       }
 
       if (network === Network.Ton) {
-        const hash = await bridge.ton.deposit({
-          sender: ton?.address!,
-          refundAddress: ton?.address!,
-          intentAccount: near?.omniAddress!,
-          sendTransaction: ton?.sendTransaction,
+        const hash = await wibe3.hotBridge.ton.deposit({
+          sender: wibe3.ton?.address!,
+          refundAddress: wibe3.ton?.address!,
+          intentAccount: wibe3.near?.omniAddress!,
+          sendTransaction: wibe3.ton?.sendTransaction as any,
           amount: BigInt(amount),
           token: token,
         });
 
-        const deposit = await bridge.waitPendingDeposit(network, hash, near.omniAddress!);
-        await bridge.finishDeposit(deposit);
+        const deposit = await wibe3.hotBridge.waitPendingDeposit(network, hash, wibe3.near?.omniAddress!);
+        await wibe3.hotBridge.finishDeposit(deposit);
       }
 
       // Near
       else if (network === Network.Near) {
-        await bridge.near.deposit({
-          sender: near.address!,
-          intentAccount: near.omniAddress!,
-          sendTransaction: near.sendTransaction,
+        await wibe3.hotBridge.near.deposit({
+          sender: wibe3.near?.address!,
+          intentAccount: wibe3.near?.omniAddress!,
+          sendTransaction: wibe3.near?.sendTransaction as any,
           amount: BigInt(amount),
           token: token,
         });
@@ -88,28 +87,34 @@ const DepositComponent = () => {
       // Stellar
       else if (network === Network.Stellar) {
         console.log("Depositing to Stellar");
-        const tx = await bridge.stellar.deposit({
-          sender: stellar?.address!,
-          intentAccount: near.omniAddress!,
-          sendTransaction: stellar?.sendTransaction as any,
+        const tx = await wibe3.hotBridge.stellar.deposit({
+          sender: wibe3.stellar?.address!,
+          intentAccount: wibe3.near?.omniAddress!,
+          sendTransaction: wibe3.stellar?.sendTransaction as any,
           amount: BigInt(amount),
           token: token,
         });
 
         console.log("Deposit tx: ", tx);
         const controller = new AbortController();
-        const deposit = await bridge.waitPendingDeposit(network, tx, near.omniAddress!, controller.signal);
-        await bridge.finishDeposit(deposit);
+        const deposit = await wibe3.hotBridge.waitPendingDeposit(
+          network,
+          tx,
+          wibe3.near.omniAddress,
+          controller.signal
+        );
+
+        await wibe3.hotBridge.finishDeposit(deposit);
       }
 
       // EVM
       else {
-        if (evm == null) throw "Connect EVM to deposit";
+        if (wibe3.evm == null) throw "Connect EVM to deposit";
         console.log("Depositing to EVM", network, token);
-        const tx = await bridge.evm.deposit({
-          sender: evm.address!,
-          intentAccount: near.omniAddress!,
-          sendTransaction: evm.sendTransaction as any,
+        const tx = await wibe3.hotBridge.evm.deposit({
+          sender: wibe3.evm?.address!,
+          intentAccount: wibe3.near?.omniAddress!,
+          sendTransaction: wibe3.evm?.sendTransaction as any,
           amount: BigInt(amount),
           chain: network,
           token: token,
@@ -117,8 +122,14 @@ const DepositComponent = () => {
 
         if (tx) {
           const controller = new AbortController();
-          const deposit = await bridge.waitPendingDeposit(network, tx, near.omniAddress!, controller.signal);
-          await bridge.finishDeposit(deposit);
+          const deposit = await wibe3.hotBridge.waitPendingDeposit(
+            network,
+            tx,
+            wibe3.near.omniAddress,
+            controller.signal
+          );
+
+          await wibe3.hotBridge.finishDeposit(deposit);
         }
       }
 
@@ -142,7 +153,7 @@ const DepositComponent = () => {
       <FormContainer>
         <FormGroup>
           <InputLabel>Intent account</InputLabel>
-          <StyledInput type="text" placeholder="Receiver" value={near?.omniAddress!} disabled />
+          <StyledInput type="text" placeholder="Receiver" value={wibe3.near?.omniAddress} disabled />
         </FormGroup>
 
         <FormGroup>
@@ -192,6 +203,6 @@ const DepositComponent = () => {
       </FormContainer>
     </Card>
   );
-};
+});
 
 export default DepositComponent;

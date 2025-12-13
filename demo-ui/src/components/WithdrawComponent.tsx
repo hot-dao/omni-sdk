@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Network, utils } from "../../../src";
+import { observer } from "mobx-react-lite";
+import { utils } from "@hot-labs/omni-sdk";
+import { Network } from "@hot-labs/kit";
+import { hex } from "@scure/base";
 
 import { useAvailableTokens } from "../hooks/tokens";
-import { useBridge } from "../hooks/bridge";
+import { wibe3 } from "../hooks/bridge";
 
 import {
   Card,
@@ -21,9 +24,7 @@ const availableNetworks = Object.entries(Network)
   .filter(([key, value]) => value === 1010 || !isNaN(Number(value)))
   .map(([key, value]) => ({ label: key, value: Number(value) }));
 
-const WithdrawComponent = () => {
-  const { bridge, near, evm, cosmos, ton, stellar } = useBridge();
-
+const WithdrawComponent = observer(() => {
   const [amount, setAmount] = useState<string>("");
   const [token, setToken] = useState<string>("");
   const [receiver, setReceiver] = useState<string>("");
@@ -35,12 +36,12 @@ const WithdrawComponent = () => {
   const { tokens } = useAvailableTokens(network);
 
   useEffect(() => {
-    if (network === Network.Near) return setReceiver(near?.address || "");
-    setReceiver(evm?.address! || "");
+    if (network === Network.Near) return setReceiver(wibe3.near?.address || "");
+    setReceiver(wibe3.evm?.address! || "");
   }, [network]);
 
   const handleWithdraw = async () => {
-    if (!near?.address) return;
+    if (!wibe3.near?.address) return;
     if (!amount || !token || !receiver) {
       setError("Please enter both amount, token and receiver");
       return;
@@ -52,13 +53,13 @@ const WithdrawComponent = () => {
       setSuccess(null);
 
       if (network === Network.Stellar && token !== "native") {
-        const isTrustline = await bridge.stellar.isTrustlineExists(receiver.trim(), token);
+        const isTrustline = await wibe3.hotBridge.stellar.isTrustlineExists(receiver.trim(), token);
         if (!isTrustline) throw "Trustline not found";
       }
 
-      const result = await bridge.withdrawToken({
-        signIntents: (intents: any[]) => near.signIntents(intents),
-        intentAccount: near.omniAddress!,
+      const result = await wibe3.hotBridge.withdrawToken({
+        signIntents: (intents: any[]) => wibe3.near!.signIntents(intents) as any,
+        intentAccount: wibe3.near?.omniAddress!,
         receiver: receiver.trim(),
         amount: BigInt(amount),
         gasless: false,
@@ -67,37 +68,39 @@ const WithdrawComponent = () => {
       });
 
       if (result?.nonce) {
-        const pending = await bridge.getPendingWithdrawal(result.nonce);
+        const pending = await wibe3.hotBridge.getPendingWithdrawal(result.nonce);
 
         if (utils.isCosmos(pending.chain)) {
-          if (!cosmos?.address) throw new Error("Cosmos wallet not connected");
-          const sender = cosmos.address;
-          const sendTransaction = (t: any) => cosmos.sendTransaction(t);
-          await bridge.cosmos().then((s) => s.withdraw({ sendTransaction, sender, ...pending }));
+          if (!wibe3.cosmos?.address) throw new Error("Cosmos wallet not connected");
+          const sender = wibe3.cosmos!.address;
+          const sendTransaction = (t: any) => wibe3.cosmos!.sendTransaction(t) as any;
+          const senderPublicKey = hex.decode(wibe3.cosmos!.publicKey);
+          const cosmos = await wibe3.hotBridge.cosmos();
+          await cosmos.withdraw({ sendTransaction, sender, senderPublicKey, ...pending });
           return;
         }
 
         switch (pending.chain) {
           case Network.Ton: {
-            if (!ton?.address) throw new Error("Ton wallet not connected");
-            const refundAddress = ton?.address;
-            const sendTransaction = (t: any) => ton.sendTransaction([t]);
-            await bridge.ton.withdraw({ sendTransaction, refundAddress, ...pending });
+            if (!wibe3.ton?.address) throw new Error("Ton wallet not connected");
+            const refundAddress = wibe3.ton?.address;
+            const sendTransaction = (t: any) => wibe3.ton?.sendTransaction([t]) as any;
+            await wibe3.hotBridge.ton.withdraw({ sendTransaction, refundAddress, ...pending });
             break;
           }
 
           case Network.Stellar: {
-            if (!stellar?.address) throw new Error("Stellar wallet not connected");
-            const sender = stellar.address;
-            const sendTransaction = (t: any) => stellar.sendTransaction(t);
-            await bridge.stellar.withdraw({ sendTransaction, sender, ...pending });
+            if (!wibe3.stellar?.address) throw new Error("Stellar wallet not connected");
+            const sender = wibe3.stellar?.address;
+            const sendTransaction = (t: any) => wibe3.stellar?.sendTransaction(t) as any;
+            await wibe3.hotBridge.stellar.withdraw({ sendTransaction, sender, ...pending });
             break;
           }
 
           default:
-            if (!evm?.address) throw new Error("EVM wallet not connected");
-            const sendTransaction = (t: any) => evm.sendTransaction(pending.chain, t);
-            await bridge.evm.withdraw({ sendTransaction, ...pending });
+            if (!wibe3.evm?.address) throw new Error("EVM wallet not connected");
+            const sendTransaction = (t: any) => wibe3.evm?.sendTransaction(pending.chain, t) as any;
+            await wibe3.hotBridge.evm.withdraw({ sendTransaction, ...pending });
             break;
         }
       }
@@ -176,6 +179,6 @@ const WithdrawComponent = () => {
       </FormContainer>
     </Card>
   );
-};
+});
 
 export default WithdrawComponent;

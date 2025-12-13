@@ -4,6 +4,7 @@ import { observer } from "mobx-react-lite";
 
 import { useIntentBalances } from "../hooks/balances";
 import { tokens } from "../hooks/tokens";
+import { wibe3 } from "../hooks/bridge";
 import {
   BalancesContainer,
   TokenCard,
@@ -15,11 +16,8 @@ import {
   TokenImage,
 } from "../theme/styles";
 
-import { useBridge } from "../hooks/bridge";
-
-const BalancesComponent = () => {
-  const { near } = useBridge();
-  const { balances, isLoading, error } = useIntentBalances(near?.omniAddress || undefined);
+const BalancesComponent = observer(() => {
+  const { balances, isLoading, error } = useIntentBalances(wibe3.near?.omniAddress || undefined);
 
   if (isLoading) {
     return (
@@ -53,6 +51,6 @@ const BalancesComponent = () => {
       })}
     </BalancesContainer>
   );
-};
+});
 
-export default observer(BalancesComponent);
+export default BalancesComponent;

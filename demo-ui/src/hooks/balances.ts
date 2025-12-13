@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { utils } from "@hot-labs/omni-sdk";
-import { useBridge } from "./bridge";
+import { wibe3 } from "./bridge";
 
 export const useIntentBalances = (accountId?: string) => {
-  const { bridge } = useBridge();
   const [balances, setBalances] = useState<{ chain: number; address: string; intent: string; amount: bigint }[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +19,7 @@ export const useIntentBalances = (accountId?: string) => {
       setError(null);
 
       try {
-        const intentBalances = await bridge.getAllIntentBalances(accountId);
+        const intentBalances = await wibe3.hotBridge.getAllIntentBalances(accountId);
         const balances = Object.entries(intentBalances)
           .filter(([intent]) => !intent.startsWith("nep171:"))
           .map(([intent, amount]) => ({
