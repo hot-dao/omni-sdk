@@ -13,10 +13,9 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "paths": {
-      "~/*": ["./*"],
-      "@hot-labs/omni-sdk": ["../src"]
+      "~/*": ["./*"]
     }
   },
-  "include": ["src/**/*", "../src/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["./node_modules"]
 }

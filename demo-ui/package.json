@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@hot-labs/kit": "1.0.56",
+    "@hot-labs/kit": "1.0.57",
     "@hot-labs/omni-sdk": "2.21.1",
     "@noble/hashes": "2.0.1",
     "@scure/bip32": "2.0.1",
@@ -19,7 +19,8 @@
     "near-api-js": "^5.1.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "styled-components": "^6.1.17"
+    "styled-components": "^6.1.17",
+    "uuid4": "2.0.3"
   },
   "devDependencies": {
     "@types/react": "^19.1.2",

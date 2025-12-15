@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Network, PendingDeposit } from "@hot-labs/omni-sdk";
+import { PendingDeposit } from "@hot-labs/omni-sdk";
+import { Network } from "@hot-labs/kit";
 import { observer } from "mobx-react-lite";
 
 import { wibe3 } from "../hooks/bridge";

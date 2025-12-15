@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
-import { utils } from "@hot-labs/omni-sdk";
 import { Network } from "@hot-labs/kit";
 import { hex } from "@scure/base";
 
@@ -70,7 +69,7 @@ const WithdrawComponent = observer(() => {
       if (result?.nonce) {
         const pending = await wibe3.hotBridge.getPendingWithdrawal(result.nonce);
 
-        if (utils.isCosmos(pending.chain)) {
+        if (pending.chain === Network.Juno || pending.chain === Network.Gonka) {
           if (!wibe3.cosmos?.address) throw new Error("Cosmos wallet not connected");
           const sender = wibe3.cosmos!.address;
           const sendTransaction = (t: any) => wibe3.cosmos!.sendTransaction(t) as any;

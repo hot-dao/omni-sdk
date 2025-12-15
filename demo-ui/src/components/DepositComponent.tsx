@@ -1,6 +1,8 @@
 import React, { useState } from "react";
-import { Network } from "@hot-labs/omni-sdk";
 import { observer } from "mobx-react-lite";
+import { Network } from "@hot-labs/kit";
+import { hex } from "@scure/base";
+
 import {
   Card,
   StyledInput,
@@ -15,7 +17,6 @@ import {
 
 import { useAvailableTokens } from "../hooks/tokens";
 import { wibe3 } from "../hooks/bridge";
-import { hex } from "@scure/base";
 
 // Get available networks for the selector
 const availableNetworks = Object.entries(Network)
@@ -42,7 +43,7 @@ const DepositComponent = observer(() => {
       setError(null);
       setSuccess(null);
 
-      if (network === Network.Juno) {
+      if (network === Network.Juno || network === Network.Gonka) {
         if (wibe3.cosmos == null) throw "Connect Cosmos to deposit";
         const cosmosWallet = await wibe3.hotBridge.cosmos();
         const hash = await cosmosWallet.deposit({

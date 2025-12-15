@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { utils, Network } from "@hot-labs/omni-sdk";
-import { WithdrawArgsWithPending } from "@hot-labs/omni-sdk";
+import { utils, WithdrawArgsWithPending } from "@hot-labs/omni-sdk";
 import { observer } from "mobx-react-lite";
+import { Network } from "@hot-labs/kit";
 import { hex } from "@scure/base";
 
 import {
@@ -45,7 +45,7 @@ const PendingWithdrawalsComponent = observer(() => {
 
     try {
       try {
-        const address = utils.decodeReceiver(selectedNetwork, receiver);
+        const address = utils.decodeReceiver(selectedNetwork as any, receiver);
         const pending = await wibe3.hotBridge.getPendingWithdrawalsWithStatus(selectedNetwork, address);
         if (pending.length === 0) throw new Error("No pending withdrawals found");
         setPendingWithdraw(pending.filter((t) => !t.completed));
@@ -69,7 +69,7 @@ const PendingWithdrawalsComponent = observer(() => {
     try {
       await wibe3.hotBridge.checkWithdrawNonce(withdraw.chain, withdraw.receiver, withdraw.nonce);
 
-      if (utils.isCosmos(withdraw.chain)) {
+      if (withdraw.chain === Network.Juno || withdraw.chain === Network.Gonka) {
         if (!wibe3.cosmos) throw new Error("Cosmos wallet not connected");
         const sendTransaction = (t: any) => wibe3.cosmos!.sendTransaction(t) as any;
         const senderPublicKey = hex.decode(wibe3.cosmos.publicKey);
