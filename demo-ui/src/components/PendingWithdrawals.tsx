@@ -116,8 +116,11 @@ const PendingWithdrawalsComponent = observer(() => {
 
         default: {
           if (!wibe3.evm?.address) throw new Error("EVM wallet not connected");
-          const sendTransaction = wibe3.evm?.sendTransaction as any;
-          await wibe3.hotBridge.evm.withdraw({ sendTransaction, ...withdraw });
+          await wibe3.hotBridge.evm.withdraw({
+            sendTransaction: (t) => wibe3.evm?.sendTransaction(withdraw.chain, t) as any,
+            ...withdraw,
+          });
+
           await wibe3.hotBridge.checkLocker(withdraw.chain, withdraw.receiver, withdraw.nonce);
           break;
         }
@@ -125,6 +128,7 @@ const PendingWithdrawalsComponent = observer(() => {
 
       setPendingWithdraw((prev) => prev.filter((item) => item.nonce !== withdraw.nonce));
     } catch (err) {
+      console.error("Error completing withdrawal:", err);
       setError(`Failed to complete withdrawal #${withdraw.nonce}. ${err}`);
     } finally {
       setProcessingWithdrawals((prev) => ({ ...prev, [withdraw.nonce]: false }));
