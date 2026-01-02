@@ -51,7 +51,7 @@ const DepositComponent = observer(() => {
           sender: wibe3.cosmos?.address,
           senderPublicKey: hex.decode(wibe3.cosmos.publicKey),
           intentAccount: wibe3.near?.omniAddress!,
-          sendTransaction: wibe3.cosmos?.sendTransaction as any,
+          sendTransaction: (t: any) => wibe3.cosmos?.sendTransaction(t) as any,
           amount: BigInt(amount),
           token: token,
         });
@@ -65,7 +65,7 @@ const DepositComponent = observer(() => {
           sender: wibe3.ton?.address!,
           refundAddress: wibe3.ton?.address!,
           intentAccount: wibe3.near?.omniAddress!,
-          sendTransaction: wibe3.ton?.sendTransaction as any,
+          sendTransaction: (t: any) => wibe3.ton?.sendTransaction([t]) as any,
           amount: BigInt(amount),
           token: token,
         });
@@ -79,7 +79,7 @@ const DepositComponent = observer(() => {
         await wibe3.hotBridge.near.deposit({
           sender: wibe3.near?.address!,
           intentAccount: wibe3.near?.omniAddress!,
-          sendTransaction: wibe3.near?.sendTransaction as any,
+          sendTransaction: (t: any) => wibe3.near?.sendTransaction(t) as any,
           amount: BigInt(amount),
           token: token,
         });
@@ -91,7 +91,7 @@ const DepositComponent = observer(() => {
         const tx = await wibe3.hotBridge.stellar.deposit({
           sender: wibe3.stellar?.address!,
           intentAccount: wibe3.near?.omniAddress!,
-          sendTransaction: wibe3.stellar?.sendTransaction as any,
+          sendTransaction: (t: any) => wibe3.stellar?.sendTransaction(t) as any,
           amount: BigInt(amount),
           token: token,
         });
@@ -115,7 +115,7 @@ const DepositComponent = observer(() => {
         const tx = await wibe3.hotBridge.evm.deposit({
           sender: wibe3.evm?.address!,
           intentAccount: wibe3.near?.omniAddress!,
-          sendTransaction: wibe3.evm?.sendTransaction as any,
+          sendTransaction: (t: any) => wibe3.evm?.sendTransaction(network, t) as any,
           amount: BigInt(amount),
           chain: network,
           token: token,
