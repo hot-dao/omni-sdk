@@ -777,6 +777,8 @@ class HotBridge {
     const tx = await this.publishIntents([signedIntents], result.quoteHashes);
     if (args.chain === Network.Near) return; // NEAR chain has native withdrawals
 
+    this.api.notifyWithdrawal(tx.hash);
+
     this.logger?.log(`Parsing withdrawal nonce`);
     const nonce = await this.near.parseWithdrawalNonce(tx.hash, tx.sender);
 

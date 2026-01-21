@@ -1,3 +1,7 @@
+# 2.24.7
+
+- Add api.notifyWithdrawal(nearTx) method
+
 # 2.24.5
 
 - Improve getAllIntentBalances (remove zero list fetch request)

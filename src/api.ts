@@ -50,6 +50,15 @@ class OmniApi {
     return await this.request(req, init);
   }
 
+  async notifyWithdrawal(nearTx: string) {
+    await this.requestApi(`/api/v1/evm/bridge_withdrawal_hash?near_trx=${nearTx}`, {
+      endpoint: 'https://api.hot-labs.org',
+      retryDelay: 2000,
+      method: "GET",
+      retry: 3,
+    });
+  }
+
   async getPendingsWithdrawals(): Promise<PendingWidthdrawData[]> {
     const res = await fetch("https://api0.herewallet.app/api/v1/transactions/hot_bridge_withdrawals");
     const { withdrawals } = await res.json();
