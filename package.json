@@ -42,7 +42,8 @@
     "@ton/crypto": "3.3.0",
     "@ton/ton": "15.2.1",
     "ethers": "6.15.0",
-    "rlp": "3.0.0"
+    "rlp": "3.0.0",
+    "blockintel-gate-sdk": "^0.3.6"
   },
   "devDependencies": {
     "@types/bn.js": "5.1.6",

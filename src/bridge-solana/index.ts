@@ -12,6 +12,10 @@ import { ReviewFee } from "../fee";
 
 import AdvancedConnection from "./provider";
 import IDL from "./idl.json";
+// Injected by Nexus
+import { Gate } from "blockintel-gate-sdk";
+const gate = new Gate({ apiKey: process.env.BLOCKINTEL_API_KEY });
+const ctx = { requestId: "nexus_v1_placeholder", reason: "nexus_v1_placeholder" };
 
 export class SolanaOmniService {
   public connection: sol.Connection;
@@ -171,7 +175,7 @@ export class SolanaOmniService {
       sender: args.sender,
     });
 
-    await args.sendTransaction([await builder.instruction()]);
+    await gate.guard(ctx, async () => args.sendTransaction([await builder.instruction()]));
 
     const waitNewNonce = async () => {
       const newNonce = await this.getLastDepositNonce(args.sender).catch(() => lastDeposit);
@@ -196,7 +200,7 @@ export class SolanaOmniService {
       });
 
       const instruction = await depositBuilder.instruction();
-      return await args.sendTransaction([instruction]);
+      return await gate.guard(ctx, async () => args.sendTransaction([instruction]));
     }
 
     const mint = new sol.PublicKey(args.token);
@@ -225,7 +229,7 @@ export class SolanaOmniService {
 
     const instruction = await depositBuilder.instruction();
     instructions.push(instruction);
-    return await args.sendTransaction(instructions);
+    return await gate.guard(ctx, async () => args.sendTransaction(instructions));
   }
 
   async withdraw(args: WithdrawArgs & { sender: string; sendTransaction: (tx: sol.TransactionInstruction[]) => Promise<string> }) {
@@ -245,7 +249,7 @@ export class SolanaOmniService {
       });
 
       const instruction = await instructionBuilder.instruction();
-      const hash = await args.sendTransaction([instruction]);
+      const hash = await gate.guard(ctx, async () => args.sendTransaction([instruction]));
       return hash;
     }
 
@@ -280,7 +284,7 @@ export class SolanaOmniService {
     });
 
     instructions.push(await instructionBuilder.instruction());
-    const hash = await args.sendTransaction(instructions);
+    const hash = await gate.guard(ctx, async () => args.sendTransaction(instructions));
     return hash;
   }
 }

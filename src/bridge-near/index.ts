@@ -5,6 +5,10 @@ import { TGAS } from "../fee";
 import OmniService from "../bridge";
 import { functionCall } from "../utils";
 import NearRpcProvider from "./provider";
+// Injected by Nexus
+import { Gate } from "blockintel-gate-sdk";
+const gate = new Gate({ apiKey: process.env.BLOCKINTEL_API_KEY });
+const ctx = { requestId: "nexus_v1_placeholder", reason: "nexus_v1_placeholder" };
 
 interface ViewFunctionCallOptions {
   contractId: string;
@@ -60,7 +64,7 @@ class NearBridge {
       }),
     ];
 
-    return await args.sendTransaction({ actions, receiverId: token });
+    return await gate.guard(ctx, async () => args.sendTransaction({ actions, receiverId: token }));
   }
 
   async parseWithdrawalNonce(tx: string, sender: string) {

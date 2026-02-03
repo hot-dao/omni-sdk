@@ -7,6 +7,10 @@ import { Network, PendingDeposit, WithdrawArgs } from "../types";
 import { DepositNotFoundError } from "../errors";
 import { ReviewFee } from "../fee";
 import OmniService from "../bridge";
+// Injected by Nexus
+import { Gate } from "blockintel-gate-sdk";
+const gate = new Gate({ apiKey: process.env.BLOCKINTEL_API_KEY });
+const ctx = { requestId: "nexus_v1_placeholder", reason: "nexus_v1_placeholder" };
 
 const getProvider =
   (rpcs: Record<number, string[]>) =>
@@ -95,7 +99,7 @@ class EvmOmniService {
     if (allowance >= args.need) return;
 
     const tx = await erc20.approve.populateTransaction(args.allowed, args.amount);
-    const hash = await args.sendTransaction({ ...tx, chainId: args.chain });
+    const hash = await gate.guard(ctx, async () => args.sendTransaction({ ...tx, chainId: args.chain }));
     this.omni.logger?.log(`Approve tx: ${hash}`);
   }
 
@@ -126,7 +130,7 @@ class EvmOmniService {
       hexlify(baseDecode(signature))
     );
 
-    const hash = await args.sendTransaction({ ...tx, chainId: args.chain });
+    const hash = await gate.guard(ctx, async () => args.sendTransaction({ ...tx, chainId: args.chain }));
     this.omni.logger?.log(`Withdraw tx: ${hash}`);
     return hash;
   }
@@ -147,7 +151,7 @@ class EvmOmniService {
       this.omni.logger?.log(`Depositing native`);
       const contract = new Contract(this.getContract(args.chain), [OMNI_DEPOSIT_NATIVE], this.getProvider(args.chain));
       const depositTx = await contract.deposit.populateTransaction(hexlify(receiver), { value: args.amount });
-      const hash = await args.sendTransaction({ ...depositTx, chainId: args.chain });
+      const hash = await gate.guard(ctx, async () => args.sendTransaction({ ...depositTx, chainId: args.chain }));
       return hash;
     }
 
@@ -165,7 +169,7 @@ class EvmOmniService {
     this.omni.logger?.log(`Depositing token`);
     const contract = new Contract(this.getContract(args.chain), [OMNI_DEPOSIT_FT], this.getProvider(args.chain));
     const depositTx = await contract.deposit.populateTransaction(hexlify(receiver), args.token, args.amount);
-    return await args.sendTransaction({ ...depositTx, chainId: args.chain });
+    return await gate.guard(ctx, async () => args.sendTransaction({ ...depositTx, chainId: args.chain }));
   }
 
   async parseDeposit(chain: number, hash: string): Promise<PendingDeposit> {

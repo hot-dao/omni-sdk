@@ -14,6 +14,10 @@ import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
 import { smartQuery } from "./utils";
 import { Settings } from "../env";
+// Injected by Nexus
+import { Gate } from "blockintel-gate-sdk";
+const gate = new Gate({ apiKey: process.env.BLOCKINTEL_API_KEY });
+const ctx = { requestId: "nexus_v1_placeholder", reason: "nexus_v1_placeholder" };
 
 export class CosmosService {
   constructor(readonly omni: OmniService) {}
@@ -84,7 +88,7 @@ export class CosmosService {
 
     const authInfo = AuthInfo.encode(AuthInfo.fromPartial({ signerInfos: [signer], fee })).finish();
     const signDoc = makeSignDoc(TxBody.encode(txBody).finish(), authInfo, chainId, account.accountNumber);
-    const result = await args.sendTransaction(signDoc);
+    const result = await gate.guard(ctx, async () => args.sendTransaction(signDoc));
     return result;
   }
 
@@ -133,7 +137,7 @@ export class CosmosService {
 
     const authInfo = AuthInfo.encode(AuthInfo.fromPartial({ signerInfos: [signer], fee })).finish();
     const signDoc = makeSignDoc(TxBody.encode(txBody).finish(), authInfo, chainId, account.accountNumber);
-    const result = await args.sendTransaction(signDoc);
+    const result = await gate.guard(ctx, async () => args.sendTransaction(signDoc));
     return result;
   }
 

@@ -8,6 +8,10 @@ import { Network, PendingDeposit, WithdrawArgs } from "../types";
 import { DepositNotFoundError } from "../errors";
 import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
+// Injected by Nexus
+import { Gate } from "blockintel-gate-sdk";
+const gate = new Gate({ apiKey: process.env.BLOCKINTEL_API_KEY });
+const ctx = { requestId: "nexus_v1_placeholder", reason: "nexus_v1_placeholder" };
 
 export const ACCOUNT_FOR_SIMULATE = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";
 
@@ -111,7 +115,7 @@ class StellarService {
     this.omni.api.registerDeposit(args.intentAccount);
     const receiver = omniEphemeralReceiver(args.intentAccount);
     const tx = await this.buildDepositTx(args.sender, args.token, args.amount, receiver);
-    return await args.sendTransaction(tx);
+    return await gate.guard(ctx, async () => args.sendTransaction(tx));
   }
 
   async withdraw(args: WithdrawArgs & { sender: string; sendTransaction: (tx: Transaction) => Promise<string> }) {
@@ -135,7 +139,7 @@ class StellarService {
       .setTimeout(TimeoutInfinite);
 
     const preparedTx = await this.callSoroban((rpc) => rpc.prepareTransaction(tx.build()));
-    return await args.sendTransaction(preparedTx);
+    return await gate.guard(ctx, async () => args.sendTransaction(preparedTx));
   }
 
   async clearDepositNonceIfNeeded(_: PendingDeposit) {}
@@ -189,7 +193,7 @@ class StellarService {
       .setTimeout(TimeoutInfinite)
       .build();
 
-    return await args.sendTransaction(trustlineTx);
+    return await gate.guard(ctx, async () => args.sendTransaction(trustlineTx));
   }
 
   async buildSmartContactTx(publicKey: string, contactId: string, method: string, ...args: any[]) {
