@@ -4,7 +4,7 @@ import type { Action } from "@near-js/transactions";
 import type { Connection } from "@solana/web3.js";
 import type { AbstractProvider } from "ethers";
 
-import { Logger } from "./utils";
+import { Logger } from "./logger";
 import { CosmosConfig } from "./env";
 
 export enum Network {
