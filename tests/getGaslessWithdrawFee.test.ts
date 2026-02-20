@@ -55,7 +55,8 @@ describe("HotBridge.getGaslessWithdrawFee", () => {
       const MOCK_BLOCK_NUMBER = 99999n;
 
       bridge.withdrawFees = { [Network.Eth]: 100_000n };
-      bridge.evm.getProvider = vi.fn().mockReturnValue({
+      const evmBridge = await bridge.evm();
+      evmBridge.getProvider = vi.fn().mockReturnValue({
         getFeeData: vi.fn().mockResolvedValue({ gasPrice: MOCK_GAS_PRICE }),
         getBlockNumber: vi.fn().mockResolvedValue(MOCK_BLOCK_NUMBER),
       });
@@ -75,7 +76,8 @@ describe("HotBridge.getGaslessWithdrawFee", () => {
       const MOCK_BLOCK_NUMBER = 99999n;
 
       bridge.withdrawFees = {};
-      bridge.evm.getProvider = vi.fn().mockReturnValue({
+      const evmBridge = await bridge.evm();
+      evmBridge.getProvider = vi.fn().mockReturnValue({
         getFeeData: vi.fn().mockResolvedValue({ gasPrice: MOCK_GAS_PRICE }),
         getBlockNumber: vi.fn().mockResolvedValue(MOCK_BLOCK_NUMBER),
       });
