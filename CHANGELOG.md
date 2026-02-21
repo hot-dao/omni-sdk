@@ -1,3 +1,7 @@
+# 2.24.8
+
+- Add apiKey in options
+
 # 2.24.7
 
 - Add api.notifyWithdrawal(nearTx) method

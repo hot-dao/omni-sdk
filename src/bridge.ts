@@ -74,6 +74,8 @@ class HotBridge {
     this.logger = options.logger;
 
     this.api = new OmniApi(options.api, options.mpcApi);
+    if (options.apiKey) this.api.setApiKey(options.apiKey);
+
     this.near = new NearBridge(this, options.nearRpc);
 
     this.evm = new EvmOmniService(this, {

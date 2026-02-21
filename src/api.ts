@@ -9,7 +9,13 @@ import { ApiError } from "./errors";
 type RequestOptions = RequestInit & { endpoint?: string | string[]; retry?: number; retryDelay?: number };
 
 class OmniApi {
+  headers: Record<string, string> = {};
+
   constructor(readonly api: string[] = ["https://api0.herewallet.app", "https://api2.herewallet.app"], readonly mpcApi: string[] = ["https://rpc1.hotdao.ai", "https://rpc2.hotdao.ai"]) {}
+
+  setApiKey(apiKey: string) {
+    this.headers["api-key"] = apiKey;
+  }
 
   async request(req: RequestInfo, init: RequestOptions): Promise<Response> {
     try {
@@ -18,9 +24,18 @@ class OmniApi {
 
       for (const endpoint of endpoints) {
         try {
-          const headers = Object.assign({ "omni-version": `v2`, "Content-Type": "application/json", Referer: "https://near-intents.org", Origin: "https://near-intents.org" }, init.headers);
-          const res = await fetch(`${endpoint}${req}`, { ...init, headers });
+          const headers = Object.assign(
+            {
+              "omni-version": `v2`,
+              "Content-Type": "application/json",
+              Referer: "https://near-intents.org",
+              Origin: "https://near-intents.org",
+            },
+            init.headers,
+            this.headers
+          );
 
+          const res = await fetch(`${endpoint}${req}`, { ...init, headers });
           if (!res.ok) {
             const text = await res.text().catch(() => "Unknown error");
             throw new ApiError(res.status, init.method as "GET" | "POST", `${endpoint}${req}`, text);
@@ -52,7 +67,7 @@ class OmniApi {
 
   async notifyWithdrawal(nearTx: string) {
     await this.requestApi(`/api/v1/evm/bridge_withdrawal_hash?near_trx=${nearTx}`, {
-      endpoint: 'https://api.hot-labs.org',
+      endpoint: "https://api.hot-labs.org",
       retryDelay: 2000,
       method: "GET",
       retry: 3,

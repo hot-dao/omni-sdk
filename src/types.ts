@@ -75,6 +75,7 @@ export interface PendingWidthdrawData {
 }
 
 export interface BridgeOptions {
+  apiKey?: string;
   logger?: Logger;
   executeNearTransaction?: (tx: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
   publishIntents?: (signedDatas: any[], quoteHashes: string[]) => Promise<{ sender: string; hash: string }>;
