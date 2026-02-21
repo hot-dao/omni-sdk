@@ -23,6 +23,7 @@ Deploy: [https://hot-dao.github.io/omni-sdk](https://hot-dao.github.io/omni-sdk/
 
 ```ts
 const omni = new OmniBridge({
+  apiKey: "optional",
   logger: console, // optional
 
   tonRpc: env.TON_API_KEY, // only if use TON
