@@ -9,6 +9,22 @@
     ".": {
       "types": "./build/index.d.ts",
       "default": "./build/index.js"
+    },
+    "./evm": {
+      "types": "./build/bridge-evm/index.d.ts",
+      "default": "./build/bridge-evm/index.js"
+    },
+    "./ton": {
+      "types": "./build/bridge-ton/index.d.ts",
+      "default": "./build/bridge-ton/index.js"
+    },
+    "./stellar": {
+      "types": "./build/bridge-stellar/index.d.ts",
+      "default": "./build/bridge-stellar/index.js"
+    },
+    "./near": {
+      "types": "./build/bridge-near/index.d.ts",
+      "default": "./build/bridge-near/index.js"
     }
   },
   "sideEffects": false,
@@ -26,7 +42,14 @@
     "@cosmjs/stargate": "0.37.0",
     "@solana/spl-token": "0.4.13",
     "@solana/web3.js": "1.68.0",
-    "cosmjs-types": "0.11.0"
+    "@stellar/stellar-sdk": "14.1.1",
+    "@ton-api/client": "0.4.0",
+    "@ton-api/ton-adapter": "0.4.1",
+    "@ton/core": "0.60.1",
+    "@ton/crypto": "3.3.0",
+    "@ton/ton": "15.2.1",
+    "cosmjs-types": "0.11.0",
+    "ethers": "6.15.0"
   },
   "dependencies": {
     "@near-js/crypto": "2.2.5",
@@ -35,13 +58,6 @@
     "@near-js/types": "2.2.5",
     "@near-js/utils": "2.2.5",
     "@scure/base": "2.0.0",
-    "@stellar/stellar-sdk": "14.1.1",
-    "@ton-api/client": "0.4.0",
-    "@ton-api/ton-adapter": "0.4.1",
-    "@ton/core": "0.60.1",
-    "@ton/crypto": "3.3.0",
-    "@ton/ton": "15.2.1",
-    "ethers": "6.15.0",
     "rlp": "3.0.0"
   },
   "devDependencies": {

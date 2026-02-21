@@ -2,7 +2,6 @@ import type { Action } from "@near-js/transactions";
 import { baseEncode } from "@near-js/utils";
 
 import {
-  Logger,
   toOmniIntent,
   encodeReceiver,
   encodeTokenAddress,
@@ -37,12 +36,12 @@ import OmniApi from "./api";
 
 import { INTENTS_CONTRACT, OMNI_HOT_V2, Settings } from "./env";
 import { NEAR_PER_GAS, TGAS, ReviewFee } from "./fee";
+import { Logger } from "./logger";
 import type { SolanaOmniService } from "./bridge-solana";
 import type { CosmosService } from "./bridge-cosmos";
-
-import StellarService from "./bridge-stellar";
-import EvmOmniService from "./bridge-evm";
-import TonOmniService from "./bridge-ton";
+import type StellarService from "./bridge-stellar";
+import type EvmOmniService from "./bridge-evm";
+import type TonOmniService from "./bridge-ton";
 import NearBridge from "./bridge-near";
 
 class HotBridge {
@@ -62,9 +61,6 @@ class HotBridge {
     [Network.Monad]: 200_000n,
   };
 
-  stellar: StellarService;
-  ton: TonOmniService;
-  evm: EvmOmniService;
   near: NearBridge;
   api: OmniApi;
 
@@ -78,29 +74,47 @@ class HotBridge {
 
     this.near = new NearBridge(this, options.nearRpc);
 
-    this.evm = new EvmOmniService(this, {
-      enableApproveMax: options.enableApproveMax,
-      treasuryDefaultContract: options.evmTreasuryDefaultContract,
-      treasuryContracts: options.evmTreasuryContracts,
-      rpcs: options.evmRpc,
-    });
-
     this.withdrawFees = Object.assign(this.withdrawFees, options.withdrawFees);
     this.defaultEvmWithdrawFee = options.defaultEvmWithdrawFee || 1_000_000n;
 
-    this.stellar = new StellarService(this, {
-      contract: options.stellarContract,
-      sorobanRpc: options.stellarRpc,
-      horizonRpc: options.stellarHorizonRpc,
-      baseFee: options.stellarBaseFee,
-    });
-
-    this.ton = new TonOmniService(this, {
-      contract: options.tonContract,
-      rpc: options.tonRpc,
-    });
-
     Object.assign(Settings.cosmos, options.cosmos);
+  }
+
+  _evm: EvmOmniService | null = null;
+  async evm() {
+    if (this._evm) return this._evm;
+    const pkg = await import("./bridge-evm");
+    this._evm = new pkg.default(this, {
+      enableApproveMax: this.options.enableApproveMax,
+      treasuryDefaultContract: this.options.evmTreasuryDefaultContract,
+      treasuryContracts: this.options.evmTreasuryContracts,
+      rpcs: this.options.evmRpc,
+    });
+    return this._evm;
+  }
+
+  _stellar: StellarService | null = null;
+  async stellar() {
+    if (this._stellar) return this._stellar;
+    const pkg = await import("./bridge-stellar");
+    this._stellar = new pkg.default(this, {
+      contract: this.options.stellarContract,
+      sorobanRpc: this.options.stellarRpc,
+      horizonRpc: this.options.stellarHorizonRpc,
+      baseFee: this.options.stellarBaseFee,
+    });
+    return this._stellar;
+  }
+
+  _ton: TonOmniService | null = null;
+  async ton() {
+    if (this._ton) return this._ton;
+    const pkg = await import("./bridge-ton");
+    this._ton = new pkg.default(this, {
+      contract: this.options.tonContract,
+      rpc: this.options.tonRpc,
+    });
+    return this._ton;
   }
 
   _solana: SolanaOmniService | null = null;
@@ -150,7 +164,7 @@ class HotBridge {
     }
 
     if (pending.chain === Network.Stellar) {
-      const isUsed = await this.stellar.isWithdrawUsed(pending.nonce);
+      const isUsed = await (await this.stellar()).isWithdrawUsed(pending.nonce);
       this._cacheCompleted[pending.nonce] = isUsed;
       if (isUsed) await data.completedWithoutHash?.(pending);
       else await data.needToExecute?.(pending);
@@ -158,14 +172,14 @@ class HotBridge {
     }
 
     if (isTon(pending.chain)) {
-      const isUsed = await this.ton.isWithdrawUsed(pending.nonce, pending.receiver);
+      const isUsed = await (await this.ton()).isWithdrawUsed(pending.nonce, pending.receiver);
       this._cacheCompleted[pending.nonce] = isUsed;
       if (isUsed) await data.completedWithoutHash?.(pending);
       else await data.needToExecute?.(pending);
       return;
     }
 
-    const isUsed = await this.evm.isWithdrawUsed(pending.chain, pending.nonce);
+    const isUsed = await (await this.evm()).isWithdrawUsed(pending.chain, pending.nonce);
     this._cacheCompleted[pending.nonce] = isUsed;
     if (isUsed) await data.completedWithoutHash?.(pending);
     else await data.needToExecute?.(pending);
@@ -396,11 +410,11 @@ class HotBridge {
   }
 
   async isWithdrawUsed(chain: number, nonce: string, receiver: string) {
-    if (isTon(chain)) return await this.ton.isWithdrawUsed(nonce, receiver);
+    if (isTon(chain)) return await this.ton().then((s) => s.isWithdrawUsed(nonce, receiver));
     if (isCosmos(chain)) return await this.cosmos().then((s) => s.isWithdrawUsed(chain, nonce));
     if (chain === Network.Solana) return await this.solana().then((s) => s.isWithdrawUsed(nonce, receiver));
-    if (chain === Network.Stellar) return await this.stellar.isWithdrawUsed(nonce);
-    return await this.evm.isWithdrawUsed(chain, nonce);
+    if (chain === Network.Stellar) return await this.stellar().then((s) => s.isWithdrawUsed(nonce));
+    return await this.evm().then((s) => s.isWithdrawUsed(chain, nonce));
   }
 
   async getPendingWithdrawal(nonce: string): Promise<WithdrawArgsWithPending> {
@@ -435,11 +449,11 @@ class HotBridge {
 
   async waitPendingDeposit(chain: number, hash: string, intentAccount: string, abort?: AbortSignal): Promise<PendingDepositWithIntent> {
     const waitPending = async () => {
-      if (isTon(chain)) return await this.ton.parseDeposit(hash);
+      if (isTon(chain)) return await this.ton().then((s) => s.parseDeposit(hash));
       if (isCosmos(chain)) return await this.cosmos().then((s) => s.parseDeposit(chain, hash));
       if (chain === Network.Solana) return await this.solana().then((s) => s.parseDeposit(hash));
-      if (chain === Network.Stellar) return await this.stellar.parseDeposit(hash);
-      return await this.evm.parseDeposit(chain, hash);
+      if (chain === Network.Stellar) return await this.stellar().then((s) => s.parseDeposit(hash));
+      return await this.evm().then((s) => s.parseDeposit(chain, hash));
     };
 
     while (true) {
@@ -518,7 +532,8 @@ class HotBridge {
     if (options.chain === Network.Solana) throw new GaslessNotAvailableError(options.chain);
 
     if (options.chain === Network.Stellar) {
-      const exists = await this.stellar.isAccountExists(options.receiver);
+      const stellar = await this.stellar();
+      const exists = await stellar.isAccountExists(options.receiver);
       if (!exists) return { gasPrice: 11000000n, blockNumber: 0n };
       return { gasPrice: 1000000n, blockNumber: 0n };
     }
@@ -527,8 +542,9 @@ class HotBridge {
 
     if ([Network.Ton, Network.OmniTon].includes(options.chain)) return { gasPrice: 40000000n, blockNumber: 0n };
 
-    const { gasPrice } = await this.evm.getProvider(options.chain).getFeeData();
-    const blockNumber = await this.evm.getProvider(options.chain).getBlockNumber();
+    const evmBridge = await this.evm();
+    const { gasPrice } = await evmBridge.getProvider(options.chain).getFeeData();
+    const blockNumber = await evmBridge.getProvider(options.chain).getBlockNumber();
     const gasLimit = this.withdrawFees[options.chain] || this.defaultEvmWithdrawFee;
     const fee = (BigInt(gasPrice || 0n) * 130n) / 100n;
 
@@ -835,22 +851,22 @@ class HotBridge {
       if (fee) return new ReviewFee({ gasless: true, chain, baseFee: BigInt(fee.gasPrice) });
     }
 
-    if (isTon(chain)) return (await this.ton.getWithdrawFee()) as ReviewFee;
+    if (isTon(chain)) return (await this.ton().then((s) => s.getWithdrawFee())) as ReviewFee;
     if (isCosmos(chain)) return (await this.cosmos().then((s) => s.getWithdrawFee(chain))) as ReviewFee;
     if (chain === Network.Solana) return (await this.solana().then((s) => s.getWithdrawFee())) as ReviewFee;
-    if (chain === Network.Stellar) return (await this.stellar.getWithdrawFee()) as ReviewFee;
-    return (await this.evm.getWithdrawFee(chain)) as ReviewFee;
+    if (chain === Network.Stellar) return (await this.stellar().then((s) => s.getWithdrawFee())) as ReviewFee;
+    return (await this.evm().then((s) => s.getWithdrawFee(chain))) as ReviewFee;
   }
 
   async getDepositFee(options: { chain: number; token: string; amount: bigint; sender: string; intentAccount: string }): Promise<ReviewFee> {
     const { chain, token, amount, sender, intentAccount } = options;
     if (chain === Network.Hot) return new ReviewFee({ gasless: true, chain });
     if (chain === Network.Near) return new ReviewFee({ gasless: true, baseFee: NEAR_PER_GAS, gasLimit: 300n * TGAS, chain });
-    if (chain === Network.Stellar) return (await this.stellar.getDepositFee(sender, token, amount, intentAccount)) as ReviewFee;
+    if (chain === Network.Stellar) return (await this.stellar().then((s) => s.getDepositFee(sender, token, amount, intentAccount))) as ReviewFee;
     if (isCosmos(chain)) return (await this.cosmos().then((s) => s.getDepositFee(chain, sender, token, amount, intentAccount))) as ReviewFee;
     if (chain === Network.Solana) return (await this.solana().then((s) => s.getDepositFee(token))) as ReviewFee;
-    if (isTon(chain)) return (await this.ton.getDepositFee(token)) as ReviewFee;
-    return (await this.evm.getDepositFee(chain, token, amount, sender)) as ReviewFee;
+    if (isTon(chain)) return (await this.ton().then((s) => s.getDepositFee(token))) as ReviewFee;
+    return (await this.evm().then((s) => s.getDepositFee(chain, token, amount, sender))) as ReviewFee;
   }
 }
 

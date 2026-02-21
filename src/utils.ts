@@ -1,15 +1,16 @@
-import { getBytes, hexlify } from "ethers";
 import { baseDecode, baseEncode } from "@near-js/utils";
 import { Address as StellarAddress, xdr } from "@stellar/stellar-sdk";
 import { actionCreators } from "@near-js/transactions";
-import { base58, bech32 } from "@scure/base";
+import { base58, bech32, hex } from "@scure/base";
 import { Address } from "@ton/core";
 import crypto from "crypto";
 
-import TonOmniService from "./bridge-ton";
+import { TON_MINTER_TO_JETTON_MAPPER, TON_JETTON_TO_MINTER_MAPPER } from "./bridge-ton/jettons";
 import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
 import { Settings, INTENT_PREFIX } from "./env";
 import { Network } from "./types";
+
+export { Logger } from "./logger";
 
 const fromBech32 = (address: string, limit = Infinity) => {
   const decodedAddress = bech32.decode(address as `${string}1${string}`, limit);
@@ -106,7 +107,7 @@ export const encodeTokenAddress = (chain: Network, addr: string) => {
 
   if (isTon(chain)) {
     if (addr === "native") return baseEncode(createAddressRlp());
-    const decoded = TonOmniService.TON_MINTER_TO_JETTON_MAPPER[Address.parse(addr).toString({ bounceable: true })];
+    const decoded = TON_MINTER_TO_JETTON_MAPPER[Address.parse(addr).toString({ bounceable: true })];
     if (!decoded) throw "Unknown token address";
     return baseEncode(createAddressRlp(Address.parse(decoded)));
   }
@@ -122,7 +123,7 @@ export const encodeTokenAddress = (chain: Network, addr: string) => {
 
   // EVM
   if (addr === "native") return "11111111111111111111";
-  return baseEncode(getBytes(addr));
+  return baseEncode(hex.decode(addr.slice(2)));
 };
 
 /**
@@ -138,12 +139,12 @@ export const decodeTokenAddress = (chain: Network, addr: string) => {
 
   if (isTon(chain)) {
     try {
-      const decoded = TonOmniService.TON_JETTON_TO_MINTER_MAPPER[Address.parse(addr).toString({ bounceable: true })];
+      const decoded = TON_JETTON_TO_MINTER_MAPPER[Address.parse(addr).toString({ bounceable: true })];
       if (decoded) return decoded;
     } catch {}
 
     const token = parseAddressRlp(addr);
-    const decoded = TonOmniService.TON_JETTON_TO_MINTER_MAPPER[Address.parse(token).toString({ bounceable: true })];
+    const decoded = TON_JETTON_TO_MINTER_MAPPER[Address.parse(token).toString({ bounceable: true })];
     if (decoded) return decoded;
 
     console.error("Unknown token address, use TonOmniService.registerMinterJetton", addr);
@@ -153,7 +154,7 @@ export const decodeTokenAddress = (chain: Network, addr: string) => {
   if (chain === Network.Near) return Buffer.from(baseDecode(addr)).toString("utf8");
   if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(addr)))).toString();
   if (chain === Network.Solana) return addr;
-  return hexlify(baseDecode(addr));
+  return "0x" + hex.encode(baseDecode(addr));
 };
 
 /** Build ephemeral receiver for OMNI contract, its just a user 'proxy' address to send tokens directly to intents  */
@@ -185,7 +186,7 @@ export const encodeReceiver = (chain: Network, address: string) => {
 
   if (chain === Network.Stellar) return baseEncode(StellarAddress.fromString(address).toScVal().toXDR());
   if (isTon(chain)) return baseEncode(createAddressRlp(Address.parse(address)));
-  return baseEncode(getBytes(address));
+  return baseEncode(hex.decode(address.slice(2)));
 };
 
 export const decodeReceiver = (chain: Network, address: string) => {
@@ -199,17 +200,8 @@ export const decodeReceiver = (chain: Network, address: string) => {
 
   if (chain === Network.Stellar) return StellarAddress.fromScVal(xdr.ScVal.fromXDR(Buffer.from(baseDecode(address)))).toString();
   if (isTon(chain)) return parseAddressRlp(address);
-  return hexlify(baseDecode(address));
+  return "0x" + hex.encode(baseDecode(address));
 };
-
-export class Logger {
-  warn(...args: any[]) {
-    console.warn(...args);
-  }
-  log(...args: any[]) {
-    console.log(...args);
-  }
-}
 
 export const toReadableNumber = (decimals: number | bigint, number: bigint | string = "0"): string => {
   number = number.toString();
