@@ -1,9 +1,5 @@
 import { Network } from "./types";
 
-export const OMNI_HOT_V2 = "v2_1.omni.hot.tg";
-export const INTENT_PREFIX = "nep245:v2_1.omni.hot.tg:";
-export const INTENTS_CONTRACT = "intents.near";
-
 export interface CosmosConfig {
   contract: string;
   rpc: string;
@@ -13,7 +9,38 @@ export interface CosmosConfig {
   gasLimit: bigint;
 }
 
-export const Settings = {
+let _intentsContract = "intents.near";
+let _omniHotContract = "v2_1.omni.hot.tg";
+let _hotIntentPrefix = "nep245:v2_1.omni.hot.tg:";
+
+export const GlobalSettings = {
+  get intentsContract() {
+    return _intentsContract;
+  },
+
+  get omniHotContract() {
+    return _omniHotContract;
+  },
+
+  get hotIntentPrefix() {
+    return _hotIntentPrefix;
+  },
+
+  setIntentsContract(contract: string) {
+    console.warn(`YOU CHANGED INTENTS CONTRACT TO "${contract}". YOU MAY LOST YOUR FUNDS IF YOU ARE NOT SURE WHAT YOU ARE DOING`);
+    _intentsContract = contract;
+  },
+
+  setOmniHotContract(contract: string) {
+    console.warn(`YOU CHANGED OMNI HOT CONTRACT TO "${contract}". YOU MAY LOST YOUR FUNDS IF YOU ARE NOT SURE WHAT YOU ARE DOING`);
+    _omniHotContract = contract;
+  },
+
+  setHotIntentPrefix(prefix: string) {
+    console.warn(`YOU CHANGED HOT INTENT PREFIX TO "${prefix}". YOU MAY LOST YOUR FUNDS IF YOU ARE NOT SURE WHAT YOU ARE DOING`);
+    _hotIntentPrefix = prefix;
+  },
+
   cosmos: {
     [Network.Juno]: {
       contract: "juno1va9q7gma6l62aqq988gghv4r7u4hnlgm85ssmsdf9ypw77qfwa0qaz7ea4",

@@ -4,6 +4,7 @@ export { default as TonBridge } from "./bridge-ton";
 export { default as Api } from "./api";
 export { ReviewFee } from "./fee";
 
+export { GlobalSettings } from "./env";
 export { default as HotBridge } from "./bridge";
 export * as errors from "./errors";
 export * as utils from "./utils";

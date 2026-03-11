@@ -8,7 +8,7 @@ import crypto from "crypto";
 
 import TonOmniService from "./bridge-ton";
 import { createAddressRlp, parseAddressRlp } from "./bridge-ton/constants";
-import { Settings, INTENT_PREFIX } from "./env";
+import { GlobalSettings } from "./env";
 import { Network } from "./types";
 
 const fromBech32 = (address: string, limit = Infinity) => {
@@ -33,7 +33,7 @@ export const isTon = (id: number): id is Network.OmniTon | Network.Ton => {
 };
 
 export const isCosmos = (id: number) => {
-  return Settings.cosmos[id] !== undefined;
+  return GlobalSettings.cosmos[id] !== undefined;
 };
 
 /**
@@ -66,12 +66,12 @@ export const fromOmni = (id: string) => {
  */
 export const toOmni = (id: string | number, addr?: string) => {
   if (id.toString().startsWith("nep141:")) return id.toString();
-  if (id.toString().startsWith(INTENT_PREFIX)) return id.toString().replace(INTENT_PREFIX, "");
+  if (id.toString().startsWith(GlobalSettings.hotIntentPrefix)) return id.toString().replace(GlobalSettings.hotIntentPrefix, "");
   let [chain, address] = addr ? [id, addr] : String(id).split(/:(.*)/s);
 
   // From normal TON_ID to OMNI_TON
   if (+chain === 1111) chain = 1117;
-  if (+chain === Network.Hot) return address.replace(INTENT_PREFIX, "");
+  if (+chain === Network.Hot) return address.replace(GlobalSettings.hotIntentPrefix, "");
   if (+chain === Network.Near) return address;
   return `${chain}_${encodeTokenAddress(+chain, address)}`;
 };
@@ -90,7 +90,7 @@ export const toOmniIntent = (id: string | number, addr?: string): string => {
   // From normal TON_ID to OMNI_TON
   if (+chain === 1111) chain = 1117;
 
-  return `${INTENT_PREFIX}${chain}_${encodeTokenAddress(+chain, address)}`;
+  return `${GlobalSettings.hotIntentPrefix}${chain}_${encodeTokenAddress(+chain, address)}`;
 };
 
 /**
@@ -160,14 +160,14 @@ export const decodeTokenAddress = (chain: Network, addr: string) => {
 export const omniEphemeralReceiver = (intentAccount: string) => {
   return crypto
     .createHash("sha256")
-    .update(JSON.stringify({ account_id: "intents.near", msg: JSON.stringify({ receiver_id: intentAccount }) }))
+    .update(JSON.stringify({ account_id: GlobalSettings.intentsContract, msg: JSON.stringify({ receiver_id: intentAccount }) }))
     .digest();
 };
 
 export const legacyUnsafeOmniEphemeralReceiver = (intentAccount: string) => {
   return crypto
     .createHash("sha256")
-    .update(Buffer.from("intents.near", "utf8"))
+    .update(Buffer.from(GlobalSettings.intentsContract, "utf8"))
     .update(Buffer.from(JSON.stringify({ receiver_id: intentAccount }), "utf8"))
     .digest();
 };
@@ -193,7 +193,7 @@ export const decodeReceiver = (chain: Network, address: string) => {
   if (chain === Network.Solana) return address;
 
   if (isCosmos(chain)) {
-    const config = Settings.cosmos[chain];
+    const config = GlobalSettings.cosmos[chain];
     return bech32.encode(config.prefix, bech32.toWords(base58.decode(address)));
   }
 

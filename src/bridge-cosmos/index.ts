@@ -12,30 +12,29 @@ import { omniEphemeralReceiver } from "../utils";
 import { PendingDeposit, WithdrawArgs } from "../types";
 import OmniService from "../bridge";
 import { ReviewFee } from "../fee";
-import { smartQuery } from "./utils";
-import { Settings } from "../env";
+import { GlobalSettings } from "../env";
 
 export class CosmosService {
   constructor(readonly omni: OmniService) {}
 
   async getWithdrawFee(chain: number): Promise<ReviewFee> {
-    return new ReviewFee({ chain, gasLimit: Settings.cosmos[chain].gasLimit });
+    return new ReviewFee({ chain, gasLimit: GlobalSettings.cosmos[chain].gasLimit });
   }
 
   async getDepositFee(chain: number, sender: string, token: string, amount: bigint, intentAccount: string): Promise<ReviewFee> {
-    return new ReviewFee({ chain, gasLimit: Settings.cosmos[chain].gasLimit });
+    return new ReviewFee({ chain, gasLimit: GlobalSettings.cosmos[chain].gasLimit });
   }
 
   async isWithdrawUsed(chain: number, nonce: string): Promise<boolean> {
-    const rpcUrl = Settings.cosmos[chain].rpc;
-    const contractAddress = Settings.cosmos[chain].contract;
+    const rpcUrl = GlobalSettings.cosmos[chain].rpc;
+    const contractAddress = GlobalSettings.cosmos[chain].contract;
     const client = await CosmWasmClient.connect(rpcUrl);
     const result = await client.queryContractSmart(contractAddress, { is_executed: { nonce } });
     return result !== null;
   }
 
   convertAddress(chain: number, address: string) {
-    const prefix = Settings.cosmos[chain].prefix;
+    const prefix = GlobalSettings.cosmos[chain].prefix;
     if (address.startsWith(prefix)) return address;
     const { data } = fromBech32(address);
     return toBech32(prefix, data);
@@ -53,9 +52,9 @@ export class CosmosService {
     this.omni.api.registerDeposit(args.intentAccount);
     const receiver = omniEphemeralReceiver(args.intentAccount);
     const address = this.convertAddress(args.chain, args.sender);
-    const { nativeToken, chainId, gasLimit } = Settings.cosmos[args.chain];
+    const { nativeToken, chainId, gasLimit } = GlobalSettings.cosmos[args.chain];
 
-    const client = await StargateClient.connect(Settings.cosmos[args.chain].rpc);
+    const client = await StargateClient.connect(GlobalSettings.cosmos[args.chain].rpc);
     const account = await client.getAccount(address);
     if (account == null) throw new Error("Account not found");
 
@@ -63,7 +62,7 @@ export class CosmosService {
     const msg = {
       typeUrl: "/cosmwasm.wasm.v1.MsgExecuteContract",
       value: MsgExecuteContract.encode({
-        contract: Settings.cosmos[args.chain].contract,
+        contract: GlobalSettings.cosmos[args.chain].contract,
         msg: toUtf8(JSON.stringify({ deposit: { receiver_id: Buffer.from(receiver).toString("base64") } })),
         funds: [{ denom, amount: args.amount.toString() }],
         sender: address,
@@ -92,7 +91,7 @@ export class CosmosService {
     const signature = await this.omni.api.withdrawSign(args.nonce);
     const sign = Buffer.from(baseDecode(signature));
 
-    const { nativeToken, chainId, gasLimit, rpc, contract } = Settings.cosmos[args.chain];
+    const { nativeToken, chainId, gasLimit, rpc, contract } = GlobalSettings.cosmos[args.chain];
     const address = this.convertAddress(args.chain, args.sender);
 
     const client = await StargateClient.connect(rpc);
@@ -140,7 +139,7 @@ export class CosmosService {
   async clearDepositNonceIfNeeded(_: any) {}
 
   async parseDeposit(chain: number, hash: string): Promise<PendingDeposit> {
-    const client = await StargateClient.connect(Settings.cosmos[chain].rpc);
+    const client = await StargateClient.connect(GlobalSettings.cosmos[chain].rpc);
     const tx = await client.getTx(hash);
 
     const event = tx?.events.find((t) => t.type === "wasm");

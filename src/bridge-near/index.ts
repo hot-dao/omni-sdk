@@ -5,6 +5,7 @@ import { TGAS } from "../fee";
 import OmniService from "../bridge";
 import { functionCall } from "../utils";
 import NearRpcProvider from "./provider";
+import { GlobalSettings } from "../env";
 
 interface ViewFunctionCallOptions {
   contractId: string;
@@ -53,7 +54,7 @@ class NearBridge {
     const actions = [
       ...depositWnear,
       functionCall({
-        args: { amount: args.amount, receiver_id: "intents.near", msg: args.intentAccount },
+        args: { amount: args.amount, receiver_id: GlobalSettings.intentsContract, msg: args.intentAccount },
         methodName: "ft_transfer_call",
         gas: String(80n * TGAS),
         deposit: "1",

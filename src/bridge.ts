@@ -35,7 +35,7 @@ import {
 import { BridgeOptions, Network, PendingDepositWithIntent, PendingWidthdrawData, WithdrawArgsWithPending } from "./types";
 import OmniApi from "./api";
 
-import { INTENTS_CONTRACT, OMNI_HOT_V2, Settings } from "./env";
+import { GlobalSettings } from "./env";
 import { NEAR_PER_GAS, TGAS, ReviewFee } from "./fee";
 import type { SolanaOmniService } from "./bridge-solana";
 import type { CosmosService } from "./bridge-cosmos";
@@ -100,7 +100,7 @@ class HotBridge {
       rpc: options.tonRpc,
     });
 
-    Object.assign(Settings.cosmos, options.cosmos);
+    Object.assign(GlobalSettings.cosmos, options.cosmos);
   }
 
   _solana: SolanaOmniService | null = null;
@@ -293,10 +293,10 @@ class HotBridge {
     };
 
     const hash = await fetchResult();
-    return { sender: INTENTS_CONTRACT, hash };
+    return { sender: GlobalSettings.intentsContract, hash };
   };
 
-  async getAllIntentBalances(intentAccount: string, intentsContract = INTENTS_CONTRACT) {
+  async getAllIntentBalances(intentAccount: string, intentsContract = GlobalSettings.intentsContract) {
     const accounts = new Set<string>();
     const limit = 250;
     let fromIndex = 0n;
@@ -316,7 +316,7 @@ class HotBridge {
     return await this.getIntentBalances(Array.from(accounts), intentAccount, intentsContract);
   }
 
-  async getIntentBalances(intents: string[], intentAccount: string, intentsContract = INTENTS_CONTRACT) {
+  async getIntentBalances(intents: string[], intentAccount: string, intentsContract = GlobalSettings.intentsContract) {
     if (intents.length === 0) return {};
     const balances = await this.near.viewFunction({
       args: { token_ids: intents, account_id: intentAccount },
@@ -330,7 +330,7 @@ class HotBridge {
     }, {} as Record<string, bigint>);
   }
 
-  async getIntentBalance(intentId: string, intentAccount: string, intentsContract = INTENTS_CONTRACT) {
+  async getIntentBalance(intentId: string, intentAccount: string, intentsContract = GlobalSettings.intentsContract) {
     const balances = await this.getIntentBalances([intentId], intentAccount, intentsContract);
     return balances[intentId] || 0n;
   }
@@ -340,7 +340,7 @@ class HotBridge {
     const withdrawals = await this.near.viewFunction({
       args: { receiver_id: encodeReceiver(chain, receiver), chain_id: chain },
       methodName: "get_withdrawals_by_receiver",
-      contractId: OMNI_HOT_V2,
+      contractId: GlobalSettings.omniHotContract,
     });
 
     if (!withdrawals) return [];
@@ -384,14 +384,14 @@ class HotBridge {
     if (actions.length === 0) return null;
 
     if (!this.executeNearTransaction) throw "No executeNearTransaction";
-    return await this.executeNearTransaction({ receiverId: OMNI_HOT_V2, actions });
+    return await this.executeNearTransaction({ receiverId: GlobalSettings.omniHotContract, actions });
   }
 
   async isDepositUsed(chain: number, nonce: string): Promise<boolean> {
     return await this.near.viewFunction({
       args: { chain_id: chain, nonce: nonce },
       methodName: "is_executed",
-      contractId: OMNI_HOT_V2,
+      contractId: GlobalSettings.omniHotContract,
     });
   }
 
@@ -406,7 +406,7 @@ class HotBridge {
   async getPendingWithdrawal(nonce: string): Promise<WithdrawArgsWithPending> {
     this.logger?.log(`Getting withdrawal by nonce ${nonce}`);
     const transfer = await this.near.viewFunction({
-      contractId: OMNI_HOT_V2,
+      contractId: GlobalSettings.omniHotContract,
       methodName: "get_transfer",
       args: { nonce },
     });
@@ -495,7 +495,7 @@ class HotBridge {
       gas: String(80n * TGAS),
       deposit: "1",
       args: {
-        deposit_call_args: { account_id: INTENTS_CONTRACT, msg },
+        deposit_call_args: { account_id: GlobalSettings.intentsContract, msg },
         amount: deposit.amount,
         nonce: deposit.nonce,
         contract_id: token,
@@ -507,7 +507,7 @@ class HotBridge {
     try {
       this.logger?.log(`Calling deposit to omni and deposit to intents`);
       if (!this.executeNearTransaction) throw "No executeNearTransaction";
-      return await this.executeNearTransaction({ actions: [depositAction], receiverId: OMNI_HOT_V2 });
+      return await this.executeNearTransaction({ actions: [depositAction], receiverId: GlobalSettings.omniHotContract });
     } catch (e) {
       if (!e?.toString?.().includes("Nonce already used")) throw e;
       return null;
@@ -546,7 +546,7 @@ class HotBridge {
       return {
         intent: "mt_withdraw",
         amounts: [args.amount.toString()],
-        receiver_id: OMNI_HOT_V2,
+        receiver_id: GlobalSettings.omniHotContract,
         token_ids: [token_id],
         token: mt_contract,
         memo: receiver,

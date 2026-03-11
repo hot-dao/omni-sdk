@@ -1,3 +1,7 @@
+# 2.25.0
+
+- Add GlobalSettings.intentsContract
+
 # 2.24.8
 
 - Add apiKey in options
