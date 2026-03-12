@@ -1,3 +1,7 @@
+# 2.25.1
+
+- Add GONKA chain in globalconfig
+
 # 2.25.0
 
 - Add GlobalSettings.intentsContract
