@@ -50,5 +50,13 @@ export const GlobalSettings = {
       chainId: "juno-1",
       prefix: "juno",
     },
+    [Network.Gonka]: {
+      contract: "gonka15wng2302rhq5w8ddy3l3jslrhfcpufzfs6wc3zc6cxt8cpwrfp4qqgenkc",
+      rpc: `https://api0.herewallet.app/api/v1/evm/rpc/${Network.Gonka}`,
+      gasLimit: 200000n,
+      nativeToken: "ngonka",
+      chainId: "gonka-mainnet",
+      prefix: "gonka",
+    },
   } as Record<number, CosmosConfig>,
 };
