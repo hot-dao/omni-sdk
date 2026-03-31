@@ -784,7 +784,7 @@ class HotBridge {
     this.logger?.log(`Parsing withdrawal nonce`);
     const nonce = await this.near.parseWithdrawalNonce(tx.hash, tx.sender);
 
-    this.logger?.log(`Wait gasless withdraw`);
+    this.logger?.log(`Waiting for gasless withdrawal`);
     if (result.gasless) {
       await this.waitGaslessWithdraw(nonce, args.chain, args.receiver);
       return;
