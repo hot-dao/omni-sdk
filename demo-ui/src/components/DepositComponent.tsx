@@ -45,7 +45,7 @@ const DepositComponent = observer(() => {
 
       if (network === Network.Juno || network === Network.Gonka) {
         if (wibe3.cosmos == null) throw "Connect Cosmos to deposit";
-        const cosmosWallet = await wibe3.hotBridge.cosmos();
+        const cosmosWallet = await wibe3.exchange.bridge.cosmos();
         const hash = await cosmosWallet.deposit({
           chain: network,
           sender: wibe3.cosmos?.address,
@@ -56,12 +56,12 @@ const DepositComponent = observer(() => {
           token: token,
         });
 
-        const deposit = await wibe3.hotBridge.waitPendingDeposit(network, hash, wibe3.near?.omniAddress!);
-        await wibe3.hotBridge.finishDeposit(deposit);
+        const deposit = await wibe3.exchange.bridge.waitPendingDeposit(network, hash, wibe3.near?.omniAddress!);
+        await wibe3.exchange.bridge.finishDeposit(deposit);
       }
 
       if (network === Network.Ton) {
-        const hash = await wibe3.hotBridge.ton.deposit({
+        const hash = await wibe3.exchange.bridge.ton.deposit({
           sender: wibe3.ton?.address!,
           refundAddress: wibe3.ton?.address!,
           intentAccount: wibe3.near?.omniAddress!,
@@ -70,13 +70,13 @@ const DepositComponent = observer(() => {
           token: token,
         });
 
-        const deposit = await wibe3.hotBridge.waitPendingDeposit(network, hash, wibe3.near?.omniAddress!);
-        await wibe3.hotBridge.finishDeposit(deposit);
+        const deposit = await wibe3.exchange.bridge.waitPendingDeposit(network, hash, wibe3.near?.omniAddress!);
+        await wibe3.exchange.bridge.finishDeposit(deposit);
       }
 
       // Near
       else if (network === Network.Near) {
-        await wibe3.hotBridge.near.deposit({
+        await wibe3.exchange.bridge.near.deposit({
           sender: wibe3.near?.address!,
           intentAccount: wibe3.near?.omniAddress!,
           sendTransaction: (t: any) => wibe3.near?.sendTransaction(t) as any,
@@ -88,7 +88,7 @@ const DepositComponent = observer(() => {
       // Stellar
       else if (network === Network.Stellar) {
         console.log("Depositing to Stellar");
-        const tx = await wibe3.hotBridge.stellar.deposit({
+        const tx = await wibe3.exchange.bridge.stellar.deposit({
           sender: wibe3.stellar?.address!,
           intentAccount: wibe3.near?.omniAddress!,
           sendTransaction: (t: any) => wibe3.stellar?.sendTransaction(t) as any,
@@ -98,24 +98,24 @@ const DepositComponent = observer(() => {
 
         console.log("Deposit tx: ", tx);
         const controller = new AbortController();
-        const deposit = await wibe3.hotBridge.waitPendingDeposit(
+        const deposit = await wibe3.exchange.bridge.waitPendingDeposit(
           network,
           tx,
           wibe3.near.omniAddress,
           controller.signal
         );
 
-        await wibe3.hotBridge.finishDeposit(deposit);
+        await wibe3.exchange.bridge.finishDeposit(deposit);
       }
 
       // EVM
       else {
         if (wibe3.evm == null) throw "Connect EVM to deposit";
         console.log("Depositing to EVM", network, token);
-        const tx = await wibe3.hotBridge.evm.deposit({
+        const tx = await wibe3.exchange.bridge.evm.deposit({
           sender: wibe3.evm?.address!,
           intentAccount: wibe3.near?.omniAddress!,
-          sendTransaction: (t: any) => wibe3.evm?.sendTransaction(network, t) as any,
+          sendTransaction: (t: any) => wibe3.evm?.sendTransaction({ ...t, chainId: network }) as any,
           amount: BigInt(amount),
           chain: network,
           token: token,
@@ -123,14 +123,14 @@ const DepositComponent = observer(() => {
 
         if (tx) {
           const controller = new AbortController();
-          const deposit = await wibe3.hotBridge.waitPendingDeposit(
+          const deposit = await wibe3.exchange.bridge.waitPendingDeposit(
             network,
             tx,
             wibe3.near.omniAddress,
             controller.signal
           );
 
-          await wibe3.hotBridge.finishDeposit(deposit);
+          await wibe3.exchange.bridge.finishDeposit(deposit);
         }
       }
 

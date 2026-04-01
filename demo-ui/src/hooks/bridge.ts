@@ -5,6 +5,7 @@ import stellar from "@hot-labs/kit/stellar";
 import solana from "@hot-labs/kit/solana";
 import ton from "@hot-labs/kit/ton";
 import near from "@hot-labs/kit/near";
+import { Address } from "@ton/core";
 
 export const wibe3 = new HotConnector({
   connectors: [

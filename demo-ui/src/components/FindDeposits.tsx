@@ -44,7 +44,7 @@ const FindDeposits = observer(() => {
     setError(null);
 
     try {
-      const pending = await wibe3.hotBridge.waitPendingDeposit(chain, transactionHash, intentAccount);
+      const pending = await wibe3.exchange.bridge.waitPendingDeposit(chain, transactionHash, intentAccount);
       setDeposit(pending);
       setIsLoading(false);
       setError(null);
@@ -62,7 +62,7 @@ const FindDeposits = observer(() => {
     setError(null);
 
     try {
-      await wibe3.hotBridge.finishDeposit({ ...deposit, intentAccount });
+      await wibe3.exchange.bridge.finishDeposit({ ...deposit, intentAccount });
       setDeposit(null);
       setIntentAccount("");
       setTransactionHash("");

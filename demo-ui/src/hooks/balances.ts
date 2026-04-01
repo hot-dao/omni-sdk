@@ -19,7 +19,7 @@ export const useIntentBalances = (accountId?: string) => {
       setError(null);
 
       try {
-        const intentBalances = await wibe3.hotBridge.getAllIntentBalances(accountId);
+        const intentBalances = await wibe3.exchange.bridge.getAllIntentBalances(accountId);
         const balances = Object.entries(intentBalances)
           .filter(([intent]) => !intent.startsWith("nep171:"))
           .map(([intent, amount]) => ({

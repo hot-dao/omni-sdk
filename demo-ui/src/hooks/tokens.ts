@@ -7,7 +7,7 @@ let _tokens: { chain: number; address: string }[] = [];
 const getBridgableTokens = async () => {
   if (_tokens.length > 0) return _tokens;
 
-  const { groups } = await wibe3.hotBridge.api.getBridgeTokens();
+  const { groups } = await wibe3.exchange.bridge.api.getBridgeTokens();
   _tokens = Object.values(groups)
     .flatMap((list) => {
       try {
@@ -51,7 +51,7 @@ class Tokens {
       assets: observable,
     });
 
-    wibe3.hotBridge.api.getTokenAssets().then((assets) => {
+    wibe3.exchange.bridge.api.getTokenAssets().then((assets) => {
       runInAction(() => {
         this.assets = assets;
       });

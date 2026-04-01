@@ -46,11 +46,11 @@ const PendingWithdrawalsComponent = observer(() => {
     try {
       try {
         const address = utils.decodeReceiver(selectedNetwork as any, receiver);
-        const pending = await wibe3.hotBridge.getPendingWithdrawalsWithStatus(selectedNetwork, address);
+        const pending = await wibe3.exchange.bridge.getPendingWithdrawalsWithStatus(selectedNetwork, address);
         if (pending.length === 0) throw new Error("No pending withdrawals found");
         setPendingWithdraw(pending.filter((t) => !t.completed));
       } catch {
-        const pending = await wibe3.hotBridge.getPendingWithdrawalsWithStatus(selectedNetwork, receiver);
+        const pending = await wibe3.exchange.bridge.getPendingWithdrawalsWithStatus(selectedNetwork, receiver);
         setPendingWithdraw(pending.filter((t) => !t.completed));
       }
     } catch (err) {
@@ -67,13 +67,13 @@ const PendingWithdrawalsComponent = observer(() => {
     setError(null);
 
     try {
-      await wibe3.hotBridge.checkWithdrawNonce(withdraw.chain, withdraw.receiver, withdraw.nonce);
+      await wibe3.exchange.bridge.checkWithdrawNonce(withdraw.chain, withdraw.receiver, withdraw.nonce);
 
       if (withdraw.chain === Network.Juno || withdraw.chain === Network.Gonka) {
         if (!wibe3.cosmos) throw new Error("Cosmos wallet not connected");
         const sendTransaction = (t: any) => wibe3.cosmos!.sendTransaction(t) as any;
         const senderPublicKey = hex.decode(wibe3.cosmos.publicKey);
-        await wibe3.hotBridge.cosmos().then((s) =>
+        await wibe3.exchange.bridge.cosmos().then((s) =>
           s.withdraw({
             sendTransaction,
             sender: wibe3.cosmos!.address,
@@ -81,7 +81,7 @@ const PendingWithdrawalsComponent = observer(() => {
             ...withdraw,
           })
         );
-        await wibe3.hotBridge.clearPendingWithdrawals([withdraw]);
+        await wibe3.exchange.bridge.clearPendingWithdrawals([withdraw]);
         return;
       }
 
@@ -91,37 +91,37 @@ const PendingWithdrawalsComponent = observer(() => {
           if (!wibe3.ton?.address) throw new Error("Ton wallet not connected");
           const refundAddress = wibe3.ton?.address;
 
-          await wibe3.hotBridge.ton.withdraw({
+          await wibe3.exchange.bridge.ton.withdraw({
             sendTransaction: (t: any) => wibe3.ton?.sendTransaction([t]) as any,
             refundAddress,
             ...withdraw,
           });
 
-          await wibe3.hotBridge.clearPendingWithdrawals([withdraw]);
+          await wibe3.exchange.bridge.clearPendingWithdrawals([withdraw]);
           break;
         }
 
         case Network.Stellar: {
           if (!wibe3.stellar?.address) throw new Error("Stellar wallet not connected");
           const sender = wibe3.stellar?.address;
-          await wibe3.hotBridge.stellar.withdraw({
+          await wibe3.exchange.bridge.stellar.withdraw({
             sendTransaction: (t: any) => wibe3.stellar?.sendTransaction(t) as any,
             sender,
             ...withdraw,
           });
 
-          await wibe3.hotBridge.clearPendingWithdrawals([withdraw]);
+          await wibe3.exchange.bridge.clearPendingWithdrawals([withdraw]);
           break;
         }
 
         default: {
           if (!wibe3.evm?.address) throw new Error("EVM wallet not connected");
-          await wibe3.hotBridge.evm.withdraw({
-            sendTransaction: (t) => wibe3.evm?.sendTransaction(withdraw.chain, t) as any,
+          await wibe3.exchange.bridge.evm.withdraw({
+            sendTransaction: (t) => wibe3.evm?.sendTransaction({ ...t, chainId: withdraw.chain }) as any,
             ...withdraw,
           });
 
-          await wibe3.hotBridge.checkLocker(withdraw.chain, withdraw.receiver, withdraw.nonce);
+          await wibe3.exchange.bridge.checkLocker(withdraw.chain, withdraw.receiver, withdraw.nonce);
           break;
         }
       }

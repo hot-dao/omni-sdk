@@ -1,7 +1,7 @@
 {
   "name": "@hot-labs/omni-sdk",
   "description": "A fast and cheap bridge protocol over HOT Protocol that uses the NEAR Intents engine for exchange",
-  "version": "2.25.1",
+  "version": "2.25.2",
   "type": "module",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
@@ -21,8 +21,8 @@
   "author": "HOT Labs",
   "license": "MIT",
   "optionalDependencies": {
-    "@cosmjs/cosmwasm-stargate": "0.37.0",
     "@coral-xyz/anchor": "0.29.0",
+    "@cosmjs/cosmwasm-stargate": "0.37.0",
     "@cosmjs/stargate": "0.37.0",
     "@solana/spl-token": "0.4.13",
     "@solana/web3.js": "1.68.0",
@@ -38,7 +38,7 @@
     "@stellar/stellar-sdk": "14.1.1",
     "@ton-api/client": "0.4.0",
     "@ton-api/ton-adapter": "0.4.1",
-    "@ton/core": "0.60.1",
+    "@ton/core": "0.62.0",
     "@ton/crypto": "3.3.0",
     "@ton/ton": "15.2.1",
     "ethers": "6.15.0",

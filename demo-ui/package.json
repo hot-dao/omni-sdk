@@ -9,8 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@hot-labs/kit": "1.0.57",
-    "@hot-labs/omni-sdk": "2.21.1",
+    "@hot-labs/kit": "1.6.4",
     "@noble/hashes": "2.0.1",
     "@scure/bip32": "2.0.1",
     "@solana/web3.js": "1.98.4",
