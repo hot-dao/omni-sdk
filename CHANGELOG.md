@@ -1,3 +1,7 @@
+# 2.25.3
+
+- Fix NEAR RPC Provider
+
 # 2.25.1
 
 - Add GONKA chain in globalconfig
