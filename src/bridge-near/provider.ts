@@ -79,13 +79,19 @@ class NearRpcProvider extends JsonRpcProvider {
       signal: controller.signal,
       method: "POST",
     }).catch(() => {
-      clearInterval(timer);
-      if (controller.signal.aborted) throw new TimeoutNetworkError("RPC Network Error");
-      if (!window.navigator.onLine) throw new NetworkError(0, "RPC Network Error", "No internet connection");
+      clearTimeout(timer);
+      if (controller.signal.aborted) {
+        throw new TimeoutNetworkError("RPC Network Error");
+      }
+
+      if (typeof window !== "undefined" && !window.navigator.onLine) {
+        throw new NetworkError(0, "RPC Network Error", "No internet connection");
+      }
+
       throw new NetworkError(0, "RPC Network Error", "Unknown Near RPC Error, maybe connection unstable, try VPN");
     });
 
-    clearInterval(timer);
+    clearTimeout(timer);
     if (!req.ok) {
       const text = await req.text().catch(() => "Unknown error");
       throw new NetworkError(req.status, "RPC Network Error", text);
