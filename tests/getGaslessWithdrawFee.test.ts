@@ -54,7 +54,7 @@ describe("HotBridge.getGaslessWithdrawFee", () => {
       const MOCK_GAS_PRICE = 1000000000n;
       const MOCK_BLOCK_NUMBER = 99999n;
 
-      bridge.customWithdrawFees = { [Network.Eth]: 100_000n };
+      bridge.customEvmWithdrawGasLimit = { [Network.Eth]: 100_000n };
       bridge.evm.getProvider = vi.fn().mockReturnValue({
         getFeeData: vi.fn().mockResolvedValue({ gasPrice: MOCK_GAS_PRICE }),
         getBlockNumber: vi.fn().mockResolvedValue(MOCK_BLOCK_NUMBER),
@@ -70,11 +70,11 @@ describe("HotBridge.getGaslessWithdrawFee", () => {
       expect(result).toEqual({ gasPrice: expectedGasPrice, blockNumber: MOCK_BLOCK_NUMBER });
     }, 60000);
 
-    it("should calculate fee correctly for EVM chain with default gasLimit (1_000_000n)", async () => {
+    it("should calculate fee correctly for EVM chain with default gasLimit (200_000n)", async () => {
       const MOCK_GAS_PRICE = 1000000000n;
       const MOCK_BLOCK_NUMBER = 99999n;
 
-      bridge.customWithdrawFees = {};
+      bridge.customEvmWithdrawGasLimit = {};
       bridge.evm.getProvider = vi.fn().mockReturnValue({
         getFeeData: vi.fn().mockResolvedValue({ gasPrice: MOCK_GAS_PRICE }),
         getBlockNumber: vi.fn().mockResolvedValue(MOCK_BLOCK_NUMBER),
@@ -83,7 +83,7 @@ describe("HotBridge.getGaslessWithdrawFee", () => {
       const options = { chain: Network.Eth, token: "0x123", receiver: "0xabc" };
       const result = await bridge.getGaslessWithdrawFee(options);
 
-      const expectedGasLimit = 1_000_000n;
+      const expectedGasLimit = bridge.defaultEvmWithdrawGasLimit;
       const expectedFee = (MOCK_GAS_PRICE * 130n) / 100n;
       const expectedGasPrice = expectedFee * expectedGasLimit;
 

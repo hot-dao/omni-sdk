@@ -104,8 +104,8 @@ export interface BridgeOptions {
   mpcApi?: string[];
   api?: string[];
 
-  customWithdrawFees?: Record<number, bigint>;
-  defaultEvmWithdrawFee?: bigint;
+  customEvmWithdrawGasLimit?: Record<number, bigint>;
+  defaultEvmWithdrawGasLimit?: bigint;
 }
 
 export interface ContractTransferType {

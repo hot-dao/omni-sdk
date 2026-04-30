@@ -1,3 +1,10 @@
+# 2.25.5
+
+Rananem constants:
+
+- defaultEvmWithdrawGasLimit: 200_000n
+- customEvmWithdrawGasLimit: { [ID]: 200_000n }
+
 # 2.25.4
 
 New constants:
