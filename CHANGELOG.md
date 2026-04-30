@@ -1,3 +1,10 @@
+# 2.25.4
+
+New constants:
+
+- defaultEvmWithdrawFee: 200_000n
+- customWithdrawFees: { [ID]: 200_000n }
+
 # 2.25.3
 
 - Fix NEAR RPC Provider

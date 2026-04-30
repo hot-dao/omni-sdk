@@ -50,17 +50,8 @@ class HotBridge {
   executeNearTransaction?: ({ receiverId, actions }: { receiverId: string; actions: Action[] }) => Promise<{ sender: string; hash: string }>;
   publishIntents: (signedDatas: any[], quoteHashes: string[]) => Promise<{ sender: string; hash: string }>;
 
-  defaultEvmWithdrawFee: bigint = 1_000_000n;
-  withdrawFees: Record<number, bigint> = {
-    [Network.Bnb]: 200_000n,
-    [Network.Eth]: 200_000n,
-    [Network.Polygon]: 200_000n,
-    [Network.Avalanche]: 200_000n,
-    [Network.Base]: 200_000n,
-    [Network.Optimism]: 200_000n,
-    [Network.Xlayer]: 200_000n,
-    [Network.Monad]: 200_000n,
-  };
+  defaultEvmWithdrawFee: bigint = 200_000n;
+  customWithdrawFees: Record<number, bigint> = {};
 
   stellar: StellarService;
   ton: TonOmniService;
@@ -85,7 +76,7 @@ class HotBridge {
       rpcs: options.evmRpc,
     });
 
-    this.withdrawFees = Object.assign(this.withdrawFees, options.withdrawFees);
+    this.customWithdrawFees = Object.assign(this.customWithdrawFees, options.customWithdrawFees);
     this.defaultEvmWithdrawFee = options.defaultEvmWithdrawFee || 1_000_000n;
 
     this.stellar = new StellarService(this, {
@@ -529,7 +520,7 @@ class HotBridge {
 
     const { gasPrice } = await this.evm.getProvider(options.chain).getFeeData();
     const blockNumber = await this.evm.getProvider(options.chain).getBlockNumber();
-    const gasLimit = this.withdrawFees[options.chain] || this.defaultEvmWithdrawFee;
+    const gasLimit = this.customWithdrawFees[options.chain] ?? this.defaultEvmWithdrawFee;
     const fee = (BigInt(gasPrice || 0n) * 130n) / 100n;
 
     return { gasPrice: fee * gasLimit, blockNumber: BigInt(blockNumber) };

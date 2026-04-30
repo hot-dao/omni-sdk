@@ -104,7 +104,7 @@ export interface BridgeOptions {
   mpcApi?: string[];
   api?: string[];
 
-  withdrawFees?: Record<number, bigint>;
+  customWithdrawFees?: Record<number, bigint>;
   defaultEvmWithdrawFee?: bigint;
 }
 
